@@ -1,0 +1,10 @@
+type Int: Number
+
+Yellow(id)(meep) {
+    id: Number,
+    hi: "hello"?,
+    meep: Meep(id) {
+        id: 4,
+    }+,
+    user_id: User(id),
+}

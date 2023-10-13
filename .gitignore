@@ -1,0 +1,6 @@
+__pycache__
+.jupyter
+.ipynb_checkpoints
+.conda
+*.ipynb
+*.csv
