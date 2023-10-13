@@ -3,20 +3,18 @@ from lark import Transformer, visitors
 
 @visitors.v_args(inline=True)
 class TreeToKye(Transformer):    
-    def string(self, s):
+    def ESCAPED_STRING(self, s):
         return s[1:-1]
     
-    def number(self, n):
+    def SIGNED_NUMBER(self, n):
         return float(n)
     
-    def index(self, *ids):
-        return list(ids)
-
-    def type_const(self, value):
-        return Const(value=value)
+    @visitors.v_args(inline=False)
+    def index(self, edges):
+        return Index(edges=edges)
 
     def type_index(self, typ, index):
-        return Index(name=typ, index=index)
+        return TypeIndex(name=typ, index=index)
     
     def type_ref(self, name):
         return TypeRef(name=name)
@@ -33,17 +31,17 @@ class TreeToKye(Transformer):
     def edge(self, name, typ=None, cardinality=None):
         return Edge(name=name, typ=typ, cardinality=cardinality)
     
-    # def edges(self, *edges):
-    #     return list(edges)
-    
-    # def indexes(self, *indexes):
-    #     return list(indexes)
-    
     def alias(self, name, typ):
-        return Alias(name=name, typ=typ)
+        return TypeAlias(name=name, typ=typ)
     
-    def model(self, name, indexes, edges):
-        return Model(name=name, indexes=indexes, edges=edges)
+    @visitors.v_args(inline=False)
+    def model(self, children):
+        return Model(
+            name=children[0],
+            indexes=[child for child in children[1:] if isinstance(child, Index)],
+            edges=[child for child in children[1:] if isinstance(child, Edge)],
+        )
     
-    def start(self, *definitions):
+    @visitors.v_args(inline=False)
+    def start(self, definitions):
         return Script(definitions=definitions)

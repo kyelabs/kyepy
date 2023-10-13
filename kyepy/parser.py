@@ -7,7 +7,13 @@ DIR = Path(__file__).parent
 with open(DIR / 'grammar.lark') as f:
     grammar = f.read()
 
-parser = Lark(grammar, start='start', parser='lalr')
+parser = Lark(
+    grammar,
+    start='start',
+    parser='lalr',
+    strict=True,
+    propagate_positions=True
+)
 
 class Parent(Visitor):
     def __default__(self, tree):
@@ -25,6 +31,7 @@ if __name__ == '__main__':
     with open(file_path) as f:
         text = f.read()
     tree = parser.parse(text)
+    tree = Parent().visit_topdown(tree)
     print(tree.pretty())
     ast = transformer.transform(tree)
     print(ast)

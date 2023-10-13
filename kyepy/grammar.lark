@@ -4,57 +4,52 @@
 
 alias: "type" TYPE ":" type
 
-model: TYPE indexes edges
+model: TYPE _indexes _edges
 
-indexes: index*
+_indexes: index*
 index: "(" _delimited{ EDGE } ")"
 
 edge: EDGE
     | EDGE ":" type CARDINALITY?
 
-type: TYPE               -> type_ref
-    | _literal           -> type_const
-    | TYPE filter        -> type_filter
-    | TYPE index         -> type_index
-    | TYPE indexes edges -> model
+type: TYPE                 -> type_ref
+    // | LITERAL              -> type_const
+    | TYPE filter          -> type_filter
+    | TYPE index           -> type_index
+    | TYPE _indexes _edges -> model
 
 CARDINALITY: "*" | "?" | "+" | "!"
 
 select: "(" _delimited{ argument } ")"
 filter: "[" _delimited{ argument } "]"
-edges:  "{" _delimited{ edge } "}"
+_edges:  "{" _delimited{ edge } "}"
 
 argument: EDGE          -> arg
-        | EDGE ":" exp -> kwarg
+        // | EDGE ":" exp -> kwarg
 
-exp: var | _literal
+// exp: EDGE
 
 _delimited{item}: [ item ("," item)* ","? ]
-
-_literal: string | number
-string: ESCAPED_STRING
-number: SIGNED_NUMBER
-var: EDGE
 
 TYPE: /[A-Z][a-z][a-zA-Z]*/
 EDGE: /[a-z][a-z_]*/
 
 %import common.NEWLINE
 %import common.WS
-%import common.ESCAPED_STRING
+// %import common.ESCAPED_STRING
 %import common.SH_COMMENT
 %ignore WS
 %ignore SH_COMMENT
 
-DIGIT: "0".."9"
+// DIGIT: "0".."9"
 
-INT: DIGIT+
-SIGNED_INT: ["+"|"-"] INT
-DECIMAL: INT "." INT
+// INT: DIGIT+
+// SIGNED_INT: ["+"|"-"] INT
+// DECIMAL: INT "." INT
 
-_EXP: ("e"|"E") SIGNED_INT
-FLOAT: INT _EXP | DECIMAL _EXP?
-SIGNED_FLOAT: ["+"|"-"] FLOAT
+// _EXP: ("e"|"E") SIGNED_INT
+// FLOAT: INT _EXP | DECIMAL _EXP?
+// SIGNED_FLOAT: ["+"|"-"] FLOAT
 
-NUMBER: FLOAT | INT
-SIGNED_NUMBER: ["+"|"-"] NUMBER
+// NUMBER: FLOAT | INT
+// SIGNED_NUMBER: ["+"|"-"] NUMBER
