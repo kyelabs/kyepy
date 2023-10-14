@@ -1,11 +1,23 @@
 from __future__ import annotations
-from pydantic import BaseModel, model_validator, field_validator
+from typing_extensions import Annotated
+from pydantic import BaseModel, model_validator, field_validator, constr
 from typing import Optional, Literal, Union, Any
 
 TAB = '    '
 
+TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
+EDGE = constr(pattern=r'[a-z][a-z_]*')
+
 class AST(BaseModel):
-    _parent: Optional[AST]
+    _parent: Optional[AST] = None
+
+    # property setter for _parent
+    def set_parent(self, parent):
+        self._parent = parent
+        return self
+    
+    def get_parent(self):
+        return self._parent
 
 class Script(AST):
     definitions: list[Union[TypeAlias, Model]]
@@ -18,8 +30,16 @@ class Script(AST):
             if defn.name in type_names:
                 raise ValueError(f'Model name {defn.name} is duplicated in model {self.name}')
             type_names.add(defn.name)
+
+            defn.set_parent(self)
         return self
-    
+
+    def get_type(self, name):
+        for defn in self.definitions:
+            if defn.name == name:
+                return defn
+        return None
+
     @property
     def models(self):
         return [d for d in self.definitions if isinstance(d, Model)]
@@ -32,7 +52,7 @@ class Script(AST):
         return '\n\n'.join(defn.to_kye(depth) for defn in self.definitions)
 
 class Model(AST):
-    name: str
+    name: TYPE
     indexes: list[Index]
     edges: list[Edge]
 
@@ -44,12 +64,14 @@ class Model(AST):
             if edge.name in edge_names:
                 raise ValueError(f'Edge name {edge.name} is duplicated in model {self.name}')
             edge_names.add(edge.name)
+            edge.set_parent(self)
 
         for idx in self.indexes:
             for name in idx.edges:
                 # raise error if index name is not an edge name
                 if name not in edge_names:
                     raise ValueError(f'Index {name} is not an edge name in model {self.name}')
+            idx.set_parent(self)
         return self
     
     def get_edge(self, name):
@@ -75,7 +97,7 @@ class Model(AST):
         return self.name + indexes + edges
 
 class Index(AST):
-    edges: list[str]
+    edges: list[EDGE]
 
     def __repr__(self):
         return '(' + ','.join(self.edges) + ')'
@@ -84,9 +106,15 @@ class Index(AST):
         return '(' + ','.join(self.edges) + ')'
 
 class Edge(AST):
-    name: str
+    name: EDGE
     typ: Optional[Type]
     cardinality: Optional[Literal['*','?','+','!']]
+
+    @model_validator(mode='after')
+    def set_type_parent(self):
+        if self.typ:
+            self.typ.set_parent(self)
+        return self
 
     @field_validator('name')
     def validate_name(cls, v):
@@ -98,7 +126,7 @@ class Edge(AST):
         return f'{self.name}: {self.typ.to_kye(depth=depth)}{self.cardinality or ""}'
 
 class TypeRef(AST):
-    name: str
+    name: TYPE
 
     @field_validator('name')
     def validate_name(cls, v):
@@ -113,8 +141,8 @@ class TypeRef(AST):
         return self.name
 
 class TypeAlias(AST):
-    name: str
-    typ: Union[TypeAlias, Model, TypeLiteral, TypeIndex, TypeRef]
+    name: TYPE
+    typ: Union[TypeAlias, Model, TypeIndex, TypeRef]
     
     def __repr__(self):
         return 'Alias<' + self.name + ':' + repr(self.typ) + '>'
@@ -123,18 +151,10 @@ class TypeAlias(AST):
         return f'type {self.name}: {self.typ.to_kye()}'
 
 class TypeIndex(AST):
-    name: str
+    name: TYPE
     index: Index
     
     def to_kye(self, depth=0):
         return self.name + self.index.to_kye()
 
-class TypeLiteral(AST):
-    value: object
-    
-    def to_kye(self, depth=0):
-        if type(self.value) is str:
-            return f'"{self.value}"'
-        return str(self.value)
-
-Type = Union[TypeAlias, Model, TypeLiteral, TypeIndex, TypeRef]
+Type = Union[TypeAlias, Model, TypeIndex, TypeRef]

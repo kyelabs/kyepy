@@ -14,17 +14,17 @@ edge: EDGE
 
 type: TYPE                 -> type_ref
     // | LITERAL              -> type_const
-    | TYPE filter          -> type_filter
+    // | TYPE filter          -> type_filter
     | TYPE index           -> type_index
     | TYPE _indexes _edges -> model
 
 CARDINALITY: "*" | "?" | "+" | "!"
 
-select: "(" _delimited{ argument } ")"
-filter: "[" _delimited{ argument } "]"
+// select: "(" _delimited{ argument } ")"
+// filter: "[" _delimited{ argument } "]"
 _edges:  "{" _delimited{ edge } "}"
 
-argument: EDGE          -> arg
+// argument: EDGE          -> arg
         // | EDGE ":" exp -> kwarg
 
 // exp: EDGE
