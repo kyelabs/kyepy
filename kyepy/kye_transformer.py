@@ -14,7 +14,7 @@ class TreeToKye(Transformer):
         return Index(edges=edges)
 
     def type_index(self, typ, index):
-        return TypeIndex(name=typ, index=index)
+        return TypeIndex(typ=TypeRef(name=typ), index=index)
     
     def type_ref(self, name):
         return TypeRef(name=name)

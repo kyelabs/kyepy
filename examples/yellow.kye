@@ -1,3 +1,9 @@
+Number {}
+String {
+    length: Number
+}
+
+type User: Number
 type Int: Number
 
 Yellow(id)(meep) {

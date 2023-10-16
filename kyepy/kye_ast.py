@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing_extensions import Annotated
 from pydantic import BaseModel, model_validator, field_validator, constr
-from typing import Optional, Literal, Union, Any
+from typing import Optional, Literal, Union
 
 TAB = '    '
 
@@ -18,6 +17,30 @@ class AST(BaseModel):
     
     def get_parent(self):
         return self._parent
+
+    def get_edge(self, name):
+        return None
+
+    def get_type(self, name):
+        return None
+    
+    def lookup(self, name):
+        if hasattr(self, 'name') and self.name == name and not isinstance(self, TypeRef):
+            return self
+        
+        edge = self.get_edge(name)
+        if edge:
+            return edge
+        
+        typ = self.get_type(name)
+        if typ:
+            return typ
+        
+        parent = self.get_parent()
+        if parent:
+            return parent.lookup(name)
+
+        raise ValueError(f'"{name}" not defined')
 
 class Script(AST):
     definitions: list[Union[TypeAlias, Model]]
@@ -140,21 +163,30 @@ class TypeRef(AST):
     def to_kye(self, depth=0):
         return self.name
 
+    def get_edge(self, name):
+        return self.get_parent().lookup(self.name).get_edge(name)
+
 class TypeAlias(AST):
     name: TYPE
-    typ: Union[TypeAlias, Model, TypeIndex, TypeRef]
+    typ: Type
     
     def __repr__(self):
         return 'Alias<' + self.name + ':' + repr(self.typ) + '>'
     
     def to_kye(self, depth=0):
         return f'type {self.name}: {self.typ.to_kye()}'
+    
+    def get_edge(self, name):
+        return self.typ.get_edge(name)
 
 class TypeIndex(AST):
-    name: TYPE
+    typ: TypeRef
     index: Index
     
     def to_kye(self, depth=0):
         return self.name + self.index.to_kye()
+
+    def get_edge(self, name):
+        return self.typ.get_edge(name)
 
 Type = Union[TypeAlias, Model, TypeIndex, TypeRef]
