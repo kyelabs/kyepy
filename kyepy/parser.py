@@ -1,4 +1,4 @@
-from lark import Lark, Visitor, Tree
+from lark import Lark
 from pathlib import Path
 from kye_transformer import TreeToKye
 
@@ -15,23 +15,31 @@ parser = Lark(
     propagate_positions=True
 )
 
-class Parent(Visitor):
-    def __default__(self, tree):
-        for subtree in tree.children:
-            if isinstance(subtree, Tree):
-                assert not hasattr(subtree, 'parent')
-                subtree.parent = tree
-
 transformer = TreeToKye()
+
+class Parser:
+    def __init__(self, text):
+        self.text = text
+        self.tree = parser.parse(text)
+        self.ast = transformer.transform(self.tree)
+
+    @staticmethod
+    def from_text(text):
+        return Parser(text)
+    
+    @staticmethod
+    def from_file(file_path):
+        with open(file_path) as f:
+            text = f.read()
+        return Parser(text)
+
+    def print_tree(self):
+        print(self.tree.pretty())
 
 if __name__ == '__main__':
     import sys
     # file_path = sys.argv[1]
     file_path = DIR / '../examples/yellow.kye'
-    with open(file_path) as f:
-        text = f.read()
-    tree = parser.parse(text)
-    tree = Parent().visit_topdown(tree)
-    print(tree.pretty())
-    ast = transformer.transform(tree)
-    print(ast)
+    p = Parser.from_file(file_path)
+    p.print_tree()
+    print(p.ast)
