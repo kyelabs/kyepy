@@ -1,4 +1,4 @@
-from kye_ast import *
+from kyepy.kye_ast import *
 from lark import Transformer, visitors
 
 @visitors.v_args(inline=True)

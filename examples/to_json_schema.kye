@@ -1,0 +1,10 @@
+type User: Number
+
+Yellow(id)(meep) {
+    id: Number,
+    hi: String?,
+    meep: Meep(id) {
+        id: Number,
+    }+,
+    user_id: User(id),
+}

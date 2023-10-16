@@ -1,6 +1,6 @@
 from lark import Lark
 from pathlib import Path
-from kye_transformer import TreeToKye
+from kyepy.kye_transformer import TreeToKye
 
 DIR = Path(__file__).parent
 
@@ -35,11 +35,3 @@ class Parser:
 
     def print_tree(self):
         print(self.tree.pretty())
-
-if __name__ == '__main__':
-    import sys
-    # file_path = sys.argv[1]
-    file_path = DIR / '../examples/yellow.kye'
-    p = Parser.from_file(file_path)
-    p.print_tree()
-    print(p.ast)
