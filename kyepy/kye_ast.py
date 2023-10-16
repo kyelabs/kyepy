@@ -18,29 +18,27 @@ class AST(BaseModel):
     def get_parent(self):
         return self._parent
 
-    def get_edge(self, name):
-        return None
-
-    def get_type(self, name):
-        return None
+    def get_local_definitions(self):
+        return []
     
-    def lookup(self, name):
-        if hasattr(self, 'name') and self.name == name and not isinstance(self, TypeRef):
-            return self
-        
-        edge = self.get_edge(name)
-        if edge:
-            return edge
-        
-        typ = self.get_type(name)
-        if typ:
-            return typ
-        
+    def has_local_definition(self, name):
+        for defn in self.get_local_definitions():
+            if name == defn.name:
+                return True
+    
+    def get_local_definition(self, name):
+        for defn in self.get_local_definitions():
+            if name == defn.name:
+                return defn
+
+    def get_definition(self, name):
         parent = self.get_parent()
         if parent:
-            return parent.lookup(name)
-
-        raise ValueError(f'"{name}" not defined')
+            if parent.has_local_definition(name):
+                return parent.get_local_definition(name)
+            else:
+                return parent.get_definition(name)
+        return ValueError(f'"{name}" not defined')
 
 class Script(AST):
     definitions: list[Union[TypeAlias, Model]]
@@ -57,11 +55,8 @@ class Script(AST):
             defn.set_parent(self)
         return self
 
-    def get_type(self, name):
-        for defn in self.definitions:
-            if defn.name == name:
-                return defn
-        return None
+    def get_local_definitions(self):
+        return self.definitions
 
     @property
     def models(self):
@@ -97,11 +92,8 @@ class Model(AST):
             idx.set_parent(self)
         return self
     
-    def get_edge(self, name):
-        for edge in self.edges:
-            if edge.name == name:
-                return edge
-        return None
+    def get_local_definitions(self):
+        return self.edges
     
     def __repr__(self):
         indexes = ''.join(repr(idx) for idx in self.indexes)
@@ -162,31 +154,36 @@ class TypeRef(AST):
     
     def to_kye(self, depth=0):
         return self.name
-
-    def get_edge(self, name):
-        return self.get_parent().lookup(self.name).get_edge(name)
+    
+    def resolve(self):
+        return self.get_definition(self.name)
 
 class TypeAlias(AST):
     name: TYPE
     typ: Type
+
+    @model_validator(mode='after')
+    def set_type_parent(self):
+        self.typ.set_parent(self)
+        return self
     
     def __repr__(self):
         return 'Alias<' + self.name + ':' + repr(self.typ) + '>'
     
     def to_kye(self, depth=0):
         return f'type {self.name}: {self.typ.to_kye()}'
-    
-    def get_edge(self, name):
-        return self.typ.get_edge(name)
 
 class TypeIndex(AST):
     typ: TypeRef
     index: Index
+
+    @model_validator(mode='after')
+    def set_type_parent(self):
+        self.typ.set_parent(self)
+        self.index.set_parent(self)
+        return self
     
     def to_kye(self, depth=0):
         return self.name + self.index.to_kye()
-
-    def get_edge(self, name):
-        return self.typ.get_edge(name)
 
 Type = Union[TypeAlias, Model, TypeIndex, TypeRef]

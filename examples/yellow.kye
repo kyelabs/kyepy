@@ -1,10 +1,7 @@
-Number {}
-String {
-    length: Number
+User(id) {
+    id: Number,
+    name: String
 }
-
-type User: Number
-type Int: Number
 
 Yellow(id)(meep) {
     id: Number,
