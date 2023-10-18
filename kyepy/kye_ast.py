@@ -17,6 +17,16 @@ class AST(BaseModel):
     
     def get_parent(self):
         return self._parent
+    
+    def get_model_name(self):
+        parent = self.get_parent()
+        parent_name = parent.get_model_name() if parent else None
+        if isinstance(self, Model):
+            if parent_name is not None:
+                parent_name += '.' + self.name
+            else:
+                parent_name = self.name
+        return parent_name
 
     def get_local_definitions(self):
         return []
