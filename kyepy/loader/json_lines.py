@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import duckdb
 
 class JsonLineLoader:
     
@@ -28,6 +29,12 @@ class JsonLineLoader:
         self._is_closed = True
         for file in self.files.values():
             file.close()
+    
+    def load_duckdb(self, con):
+        assert self._is_closed, 'Cannot load to duckdb until the loader is closed'
+        assert len(self.files) > 0, 'Cannot load to duckdb until at least one model has been written'
+        for model_name, file in self.files.items():
+            con.read_json(file.name).to_table('"' + model_name + '"')
     
     def __enter__(self):
         return self

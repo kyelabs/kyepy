@@ -3,6 +3,7 @@ from kyepy.parser import Parser
 from kyepy.validate.python_row import validate_python
 from kyepy.loader.json_lines import JsonLineLoader
 from kyepy.transform.python_to_json import flatten_python_row
+import duckdb
 DIR = Path(__file__).parent
 
 if __name__ == '__main__':
@@ -21,7 +22,7 @@ if __name__ == '__main__':
         'meep': [{
             'id': 2,
         }],
-        'user_id': { 'id': 2 },
+        'user_id': { 'id': 2, 'missing': 'hi', 'name': 'ben' },
     }]
     with JsonLineLoader(DIR / 'data') as loader:
         for row in DATA:
@@ -31,5 +32,8 @@ if __name__ == '__main__':
                 print(e)
                 continue
             flatten_python_row(MODEL, row, loader)
+    con = duckdb.connect(':memory:')
+    loader.load_duckdb(con)
+
     # json_schema = to_json_schema(p.ast)
     # print(json_schema)

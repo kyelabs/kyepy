@@ -12,6 +12,9 @@ def validate_python(ast, data):
             if edge.name not in data:
                 continue
 
+            # TODO: Remove cardinality checks, they shouldn't be done
+            # until the data is grouped by the index, because they could
+            # become valid or become invalid based on other rows.
             if data[edge.name] is None:
                 if edge.cardinality in ('*', '?'):
                     continue
