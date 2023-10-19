@@ -4,8 +4,7 @@ def validate_python(ast, data):
     if isinstance(ast, Model):
         # TODO: Allow model to just be the index value without the dictionary model?
         assert type(data) is dict
-        keys = list({idx for idxs in ast.indexes for idx in idxs.edges})
-        for key_edge in keys:
+        for key_edge in ast.get_key_names():
             if key_edge not in data:
                 raise KeyError(f'"{key_edge}" is required')
 

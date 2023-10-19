@@ -1,7 +1,8 @@
 from pathlib import Path
 from kyepy.parser import Parser
-# from kyepy.translate.to_json_schema import to_json_schema
 from kyepy.validate.python_row import validate_python
+from kyepy.loader.json_lines import JsonLineLoader
+from kyepy.transform.python_to_json import flatten_python_row
 DIR = Path(__file__).parent
 
 if __name__ == '__main__':
@@ -12,13 +13,23 @@ if __name__ == '__main__':
     p = Parser.from_file(file_path)
     p.print_tree()
     print(p.ast)
-    validate_python(p.ast.get_local_definition('Yellow'), {
+
+    MODEL = p.ast.get_local_definition('Yellow')
+    DATA = [{
         'id': 1,
         'hi': None,
         'meep': [{
             'id': 2,
         }],
         'user_id': { 'id': 2 },
-    })
+    }]
+    with JsonLineLoader(DIR / 'data') as loader:
+        for row in DATA:
+            try:
+                validate_python(MODEL, row)
+            except Exception as e:
+                print(e)
+                continue
+            flatten_python_row(MODEL, row, loader)
     # json_schema = to_json_schema(p.ast)
     # print(json_schema)

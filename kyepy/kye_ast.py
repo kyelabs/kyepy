@@ -95,7 +95,7 @@ class Model(AST):
             edge.set_parent(self)
 
         for idx in self.indexes:
-            for name in idx.edges:
+            for name in idx.get_key_names():
                 # raise error if index name is not an edge name
                 if name not in edge_names:
                     raise ValueError(f'Index {name} is not an edge name in model {self.name}')
@@ -104,6 +104,9 @@ class Model(AST):
     
     def get_local_definitions(self):
         return self.edges
+    
+    def get_key_names(self):
+        return list({idx for idxs in self.indexes for idx in idxs.get_key_names()})
     
     def __repr__(self):
         indexes = ''.join(repr(idx) for idx in self.indexes)
@@ -126,6 +129,9 @@ class Index(AST):
 
     def __repr__(self):
         return '(' + ','.join(self.edges) + ')'
+
+    def get_key_names(self):
+        return self.edges
 
     def to_kye(self, depth=0):
         return '(' + ','.join(self.edges) + ')'
