@@ -1,6 +1,7 @@
 from lark import Lark
 from pathlib import Path
 from kyepy.kye_transformer import TreeToKye
+from lark import Transformer, Visitor, Tree, visitors
 
 DIR = Path(__file__).parent
 
@@ -16,12 +17,12 @@ parser = Lark(
 )
 
 transformer = TreeToKye()
-
 class Parser:
     def __init__(self, text):
         self.text = text
         self.tree = parser.parse(text)
         self.ast = transformer.transform(self.tree)
+        print('hi')
 
     @staticmethod
     def from_text(text):

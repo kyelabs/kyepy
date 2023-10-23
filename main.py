@@ -14,26 +14,29 @@ if __name__ == '__main__':
     p = Parser.from_file(file_path)
     p.print_tree()
     print(p.ast)
+    for path, node in p.ast.traverse(): 
+        print('    '*len(path) + repr(node))
+    print('hi')
 
-    MODEL = p.ast.get_local_definition('Yellow')
-    DATA = [{
-        'id': 1,
-        'hi': None,
-        'meep': [{
-            'id': 2,
-        }],
-        'user_id': { 'id': 2, 'missing': 'hi', 'name': 'ben' },
-    }]
-    with JsonLineLoader(DIR / 'data') as loader:
-        for row in DATA:
-            try:
-                validate_python(MODEL, row)
-            except Exception as e:
-                print(e)
-                continue
-            flatten_python_row(MODEL, row, loader)
-    con = duckdb.connect(':memory:')
-    loader.load_duckdb(con)
+    # MODEL = p.ast.get_local_definition('Yellow')
+    # DATA = [{
+    #     'id': 1,
+    #     'hi': None,
+    #     'meep': [{
+    #         'id': 2,
+    #     }],
+    #     'user_id': { 'id': 2, 'missing': 'hi', 'name': 'ben' },
+    # }]
+    # with JsonLineLoader(DIR / 'data') as loader:
+    #     for row in DATA:
+    #         try:
+    #             validate_python(MODEL, row)
+    #         except Exception as e:
+    #             print(e)
+    #             continue
+    #         flatten_python_row(MODEL, row, loader)
+    # con = duckdb.connect(':memory:')
+    # loader.load_duckdb(con)
 
     # json_schema = to_json_schema(p.ast)
     # print(json_schema)
