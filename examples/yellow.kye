@@ -1,12 +1,12 @@
-User(id) {
+model User(id) {
     id: Number,
     name: String
 }
 
-Yellow(id)(meep) {
+model Yellow(id)(meep) {
     id: Number,
     hi: String?,
-    meep: Meep(id) {
+    meep: model Meep(id) {
         id: Number,
     }+,
     user_id: User(id),

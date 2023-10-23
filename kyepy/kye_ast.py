@@ -1,15 +1,43 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, field_validator, constr
 from typing import Optional, Literal, Union
+from lark import tree
 
 TAB = '    '
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
 
+class TokenPosition(BaseModel):
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+    start_pos: int
+    end_pos: int
+
+    @model_validator(mode='before')
+    @classmethod
+    def from_meta(cls, meta):
+        if isinstance(meta, tree.Meta):
+            return {
+                'line': meta.line,
+                'column': meta.column,
+                'end_line': meta.end_line,
+                'end_column': meta.end_column,
+                'start_pos': meta.start_pos,
+                'end_pos': meta.end_pos,
+            }
+        return meta
+    
+    def __repr__(self):
+        end_line = f"{self.end_line}:" if self.end_line != self.line else ''
+        return f"{self.line}:{self.column}-{end_line}{self.end_column}"
+
 class AST(BaseModel):
     name: Optional[str] = None
     children: list[AST] = []
+    meta: TokenPosition
 
     def __str__(self):
         return self.name or super().__str__()
@@ -93,9 +121,17 @@ class Edge(AST):
 
 class TypeRef(AST):
     name: TYPE
+    index: Optional[Index] = None
+
+    @model_validator(mode='after')
+    def set_children(self):
+        if self.index:
+            self.children = [self.index]
+        return self
 
     def __repr__(self):
-        return self.name
+        return self.name + \
+            (repr(self.index) if self.index else '')
 
 class TypeAlias(AST):
     name: TYPE
@@ -109,17 +145,4 @@ class TypeAlias(AST):
     def __repr__(self):
         return f"{self.name}:{self.typ}"
 
-class TypeIndex(AST):
-    typ: TypeRef
-    index: Index
-
-    @model_validator(mode='after')
-    def set_children(self):
-        self.name = self.typ.name
-        self.children = [self.typ, self.index]
-        return self
-    
-    def __repr__(self):
-        return f"{self.name}{repr(self.index)}"
-
-Type = Union[TypeAlias, Model, TypeIndex, TypeRef]
+Type = Union[TypeAlias, Model, TypeRef]

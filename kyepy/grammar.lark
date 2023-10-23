@@ -4,7 +4,7 @@
 
 alias: "type" TYPE ":" type
 
-model: TYPE _indexes _edges
+model: "model" TYPE _indexes _edges
 
 _indexes: index*
 index: "(" _delimited{ EDGE } ")"
@@ -12,11 +12,11 @@ index: "(" _delimited{ EDGE } ")"
 edge: EDGE
     | EDGE ":" type CARDINALITY?
 
-type: TYPE                 -> type_ref
+?type: type_ref
     // | LITERAL              -> type_const
-    // | TYPE filter          -> type_filter
-    | TYPE index           -> type_index
-    | TYPE _indexes _edges -> model
+    // | type_ref filter      -> type_filter
+     | type_ref
+     | model
 
 CARDINALITY: "*" | "?" | "+" | "!"
 
@@ -30,6 +30,8 @@ _edges:  "{" _delimited{ edge } "}"
 // exp: EDGE
 
 _delimited{item}: [ item ("," item)* ","? ]
+
+type_ref: TYPE _indexes
 
 TYPE: /[A-Z][a-z][a-zA-Z]*/
 EDGE: /[a-z][a-z_]*/
