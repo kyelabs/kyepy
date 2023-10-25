@@ -1,6 +1,6 @@
 type Size: Number
 
-model User(id) {
+model User(id)(name) {
     id: Number,
     name: String
 }

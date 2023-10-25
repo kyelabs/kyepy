@@ -1,6 +1,6 @@
 from kyepy.kye_ast import *
 
-def flatten_ast(node: AST, models={}):
+def define_models(node: AST, models):
     
     if isinstance(node, Model):
         assert node.type_ref not in models
@@ -13,11 +13,15 @@ def flatten_ast(node: AST, models={}):
     elif isinstance(node, Edge):
         assert node.type_ref in models
         assert node.type_ref not in models[node.type_ref]['edges']
-        models[node.type_ref]['edges'][node.name] = {
+        edge = {
             'type': node.typ.type_ref,
-            'nullable': node.cardinality in ('?', '*'),
-            'multiple': node.cardinality in ('+', '*'),
         }
+        if node.cardinality in ('?', '*'):
+            edge['nullable'] = True
+        if node.cardinality in ('+', '*'):
+            edge['multiple'] = True
+
+        models[node.type_ref]['edges'][node.name] = edge
     
     elif isinstance(node, TypeRef):
         assert node.type_ref not in models
@@ -32,6 +36,30 @@ def flatten_ast(node: AST, models={}):
             models[node.type_ref]['indexes'] = [ node.index.edges ]
     
     for child in node.children:
-        flatten_ast(child, models)
+        define_models(child, models)
 
+    return models
+
+def simplify_models(models):
+    simplify = {}
+    for ref, model in models.items():
+        if set(model.keys()) == {'extends'}:
+            simplify[ref] = model['extends']
+        elif set(model.keys()) == {'extends','indexes'}:
+            assert len(model['indexes']) == 1
+            if tuple(models[model['extends']]['indexes'][0]) == tuple(model['indexes'][0]):
+                simplify[ref] = model['extends']
+
+    for model in models.values():
+        for edge in model.get('edges',{}).values():
+            if edge.get('type') in simplify:
+                edge['type'] = simplify[edge['type']]
+    
+    for ref in simplify.keys():
+        del models[ref]
+
+def flatten_ast(ast: AST):
+    models = {}
+    define_models(ast, models)
+    simplify_models(models)
     return models
