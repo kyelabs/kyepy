@@ -4,6 +4,7 @@ from kyepy.validate.python_row import validate_python
 from kyepy.loader.json_lines import JsonLineLoader
 from kyepy.transform.python_to_json import flatten_python_row
 from kyepy.assign_scopes import assign_scopes, Scope
+from kyepy.assign_type_refs import assign_type_refs
 import duckdb
 DIR = Path(__file__).parent
 
@@ -18,11 +19,12 @@ if __name__ == '__main__':
     for path, node in p.ast.traverse():
         print('    '*len(path) + repr(node))
 
-    GLOBAL_SCOPE = Scope(name='GLOBAL')
+    GLOBAL_SCOPE = Scope(name=None, parent=None)
     GLOBAL_SCOPE['Number'] = '<built-in type>'
     GLOBAL_SCOPE['String'] = '<built-in type>'
 
     assign_scopes(p.ast, scope=GLOBAL_SCOPE)
+    assign_type_refs(p.ast)
     print('hi')
 
     # MODEL = p.ast.get_local_definition('Yellow')

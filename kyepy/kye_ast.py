@@ -39,6 +39,7 @@ class AST(BaseModel):
     children: list[AST] = []
     meta: TokenPosition
     scope: Optional[dict] = None
+    type_ref: Optional[str] = None
 
     def __str__(self):
         return self.name or super().__str__()

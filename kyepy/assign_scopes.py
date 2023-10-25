@@ -2,16 +2,20 @@ from __future__ import annotations
 from kyepy.kye_ast import *
 
 class Scope:
-    def __init__(self, name, parent: Scope=None):
+    def __init__(self, name, parent: Scope):
+        if name is None or parent is None:
+            assert name is None and parent is None
+        else:
+            assert name is not None
+            assert parent is not None
         self.name = name
         self.parent = parent
         self.definitions = {}
     
     @property
     def path(self):
-        parent_name = self.parent.path if self.parent else None
-        if parent_name is not None:
-            return parent_name + '.' + self.name
+        if self.parent and self.parent.name:
+            return self.parent.path + '.' + self.name
         return self.name
     
     def __getitem__(self, key):
