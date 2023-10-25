@@ -3,9 +3,11 @@ from kyepy.kye_ast import *
 def get_defined_type_ref(node: AST):
     if isinstance(node, Model):
         return node.scope.path
+    if isinstance(node, TypeAlias):
+        return (node.scope.path + '.' if node.scope.path else '') + node.name
 
 def get_propagated_type_ref(node: AST):
-    if isinstance(node, (Edge, TypeAlias)):
+    if isinstance(node, Edge):
         return node.type_ref + '.' + node.name
     return node.type_ref
 

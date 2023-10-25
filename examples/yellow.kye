@@ -1,3 +1,5 @@
+type Size: Number
+
 model User(id) {
     id: Number,
     name: String
