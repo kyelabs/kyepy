@@ -3,6 +3,7 @@ from kyepy.parser import Parser
 from kyepy.validate.python_row import validate_python
 from kyepy.loader.json_lines import JsonLineLoader
 from kyepy.transform.python_to_json import flatten_python_row
+from kyepy.assign_scopes import assign_scopes, Scope
 import duckdb
 DIR = Path(__file__).parent
 
@@ -12,10 +13,16 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         file_path = sys.argv[1]
     p = Parser.from_file(file_path)
-    p.print_tree()
-    print(p.ast)
-    for path, node in p.ast.traverse(): 
+
+    type_refs = {}
+    for path, node in p.ast.traverse():
         print('    '*len(path) + repr(node))
+
+    GLOBAL_SCOPE = Scope(name='GLOBAL')
+    GLOBAL_SCOPE['Number'] = '<built-in type>'
+    GLOBAL_SCOPE['String'] = '<built-in type>'
+
+    assign_scopes(p.ast, scope=GLOBAL_SCOPE)
     print('hi')
 
     # MODEL = p.ast.get_local_definition('Yellow')

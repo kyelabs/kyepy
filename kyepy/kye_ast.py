@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, model_validator, field_validator, constr
+from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union
 from lark import tree
 
@@ -38,6 +38,7 @@ class AST(BaseModel):
     name: Optional[str] = None
     children: list[AST] = []
     meta: TokenPosition
+    scope: Optional[dict] = None
 
     def __str__(self):
         return self.name or super().__str__()
@@ -139,7 +140,7 @@ class TypeAlias(AST):
 
     @model_validator(mode='after')
     def set_children(self):
-        self.children.append(self.typ)
+        self.children = [self.typ]
         return self
     
     def __repr__(self):
