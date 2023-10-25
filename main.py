@@ -7,6 +7,7 @@ from kyepy.assign_scopes import assign_scopes, Scope
 from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
 from pprint import pprint
+from kyepy.dataset import Dataset
 import duckdb
 DIR = Path(__file__).parent
 
@@ -34,8 +35,9 @@ if __name__ == '__main__':
             '    '*(len(path)-1) + repr(node))
         )
 
-    models = flatten_ast(p.ast)
-    pprint(models)
+    raw_models = flatten_ast(p.ast)
+    pprint(raw_models)
+    models = Dataset(models=raw_models)
     print('hi')
 
     # MODEL = p.ast.get_local_definition('Yellow')
