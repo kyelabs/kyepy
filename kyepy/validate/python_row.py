@@ -1,50 +1,49 @@
-from kyepy.kye_ast import *
+# from kyepy.kye_ast import *
+from kyepy.dataset import Type, Edge
 
-def validate_python(ast, data):
-    if isinstance(ast, Model):
-        # TODO: Allow model to just be the index value without the dictionary model?
-        assert type(data) is dict
-        for key_edge in ast.get_key_names():
-            if key_edge not in data:
-                raise KeyError(f'"{key_edge}" is required')
+def validate_edge(model, edge_name, edge_value):
+    if edge_value is None:
+        return
+    if type(edge_value) is not list:
+        edge_value = [ edge_value ]
+    for val in edge_value:
+        validate_python(model.edges[edge_name]._type, val)
 
-        for edge in ast.edges:
-            if edge.name not in data:
-                continue
+def validate_python(model, data):
+    for parent_type in model.inheritance_chain:
+        name = parent_type.name
 
-            # TODO: Remove cardinality checks, they shouldn't be done
-            # until the data is grouped by the index, because they could
-            # become valid or become invalid based on other rows.
-            if data[edge.name] is None:
-                if edge.cardinality in ('*', '?'):
-                    continue
-                else:
-                    raise ValueError(f'"{edge.name}" cannot be null')
-            
-            # TODO: Allow list of models to use a map of index to model
-            # or maybe should have a Map type to explicitly allow those situations...
-            if type(data[edge.name]) is list:
-                if edge.cardinality in ('?', '!') and len(data[edge.name]) > 1:
-                    raise ValueError(f'"{edge.name}" cannot have multiple values')
-                if edge.cardinality in ('+',) and len(data[edge.name]) == 0:
-                    raise ValueError(f'"{edge.name}" cannot be an empty list')
-                for item in data[edge.name]:
-                    validate_python(edge.typ, item)
-            else:
-                validate_python(edge.typ, data[edge.name])
-    
-    elif isinstance(ast, TypeRef):
-        if ast.name == 'String':
-            if type(data) is not str:
-                raise ValueError(f'"{data}" is not a string')
-        
-        elif ast.name == 'Number':
+        if name == 'Number':
             if not isinstance(data, (int, float)):
                 raise ValueError(f'"{data}" is not a number')
         
-        else:
-            validate_python(ast.resolve(), data)
+        if name == 'String':
+            if type(data) is not str:
+                raise ValueError(f'"{data}" is not a string')
+            validate_edge(model, 'length', len(data))
         
-    # TODO: allow TypeIndex to just be the index value without the dictionary model
-    elif isinstance(ast, (TypeAlias, TypeIndex)):
-        validate_python(ast.typ, data)
+        if name == 'Boolean':
+            if type(data) is not bool:
+                raise ValueError(f'"{data}" is not a boolean')
+        
+        if name == 'Struct':
+            if type(data) is not dict:
+                raise ValueError(f'"{data}" is not a struct')
+            for edge_name, edge in model.edges.items():
+                validate_edge(model, edge_name, data.get(edge_name))
+        
+        if name == 'Model':
+            def has_any_index():
+                def has_index(index):
+                    for edge_name in index:
+                        if edge_name not in data:
+                            return False
+                    return True
+                
+                for index in model.indexes:
+                    if has_index(index):
+                        return True
+                return False
+
+            if not has_any_index():
+                raise ValueError(f'"{data}" is missing index fields')

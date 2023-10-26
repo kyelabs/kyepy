@@ -7,7 +7,7 @@ from kyepy.assign_scopes import assign_scopes, Scope
 from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
 from pprint import pprint
-from kyepy.dataset import Dataset
+from kyepy.dataset import Dataset, GLOBALS
 import duckdb
 DIR = Path(__file__).parent
 
@@ -19,8 +19,8 @@ if __name__ == '__main__':
     p = Parser.from_file(file_path)
 
     GLOBAL_SCOPE = Scope(name=None, parent=None)
-    GLOBAL_SCOPE['Number'] = '<built-in type>'
-    GLOBAL_SCOPE['String'] = '<built-in type>'
+    for global_type in GLOBALS.keys():
+        GLOBAL_SCOPE[global_type] = '<built-in type>'
 
     assign_scopes(p.ast, scope=GLOBAL_SCOPE)
     assign_type_refs(p.ast)
@@ -38,27 +38,27 @@ if __name__ == '__main__':
     raw_models = flatten_ast(p.ast)
     pprint(raw_models)
     models = Dataset(models=raw_models)
-    print('hi')
 
-    # MODEL = p.ast.get_local_definition('Yellow')
-    # DATA = [{
-    #     'id': 1,
-    #     'hi': None,
-    #     'meep': [{
-    #         'id': 2,
-    #     }],
-    #     'user_id': { 'id': 2, 'missing': 'hi', 'name': 'ben' },
-    # }]
+    MODEL = models['Yellow']
+    DATA = [{
+        'id': 1,
+        'hi': 1,
+        'meep': [{
+            'id': 2,
+        }],
+        'user': { 'id': 1, '_': 'hi' },
+    }]
     # with JsonLineLoader(DIR / 'data') as loader:
-    #     for row in DATA:
-    #         try:
-    #             validate_python(MODEL, row)
-    #         except Exception as e:
-    #             print(e)
-    #             continue
+    for row in DATA:
+        # try:
+        validate_python(MODEL, row)
+        # except Exception as e:
+        #     print(e)
+        #     continue
     #         flatten_python_row(MODEL, row, loader)
     # con = duckdb.connect(':memory:')
     # loader.load_duckdb(con)
 
     # json_schema = to_json_schema(p.ast)
     # print(json_schema)
+    print('hi')

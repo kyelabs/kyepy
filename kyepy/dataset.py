@@ -25,6 +25,21 @@ class Type(BaseModel):
     indexes: list[list[EDGE]] = []
     edges: dict[EDGE, Edge] = {}
 
+    @property
+    def inheritance_chain(self):
+        if self._extends is None:
+            return [self]
+        return self._extends.inheritance_chain + [self]
+
+    @model_validator(mode='before')
+    @classmethod
+    def determine_extends(self, data):
+        if type(data) is dict:
+            if data.get('extends') is None:
+                if len(data.get('indexes',[])) > 0:
+                    data['extends'] = "Model"
+        return data
+
     def __getitem__(self, name: EDGE):
         return self.edges[name]
 
@@ -34,20 +49,33 @@ class Type(BaseModel):
     def __repr__(self):
         all_indexes = [idx for idxs in self.indexes for idx in idxs]
         non_index_edges = [edge for edge in self.edges.keys() if edge not in all_indexes]
-        return "Type<{}{}{}>".format(
+        return "Type<{}{}{}{}>".format(
             self.name or '',
+            ':' + self._extends.name if self._extends and self._extends.name else '',
             ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
 GLOBALS = {
     'Number': Type(name='Number'),
+    'Boolean': Type(name='Boolean'),
     'String': Type(name='String', edges={'length': Edge(type='Number')}),
+    'Struct': Type(name='Struct'),
+    'Model': Type(name='Model', extends='Struct'),
 }
 
 class Dataset(BaseModel):
 
     models: dict[TYPE_REF, Type] = {}
+
+    @model_validator(mode='before')
+    @classmethod
+    def add_globals(self, data):
+        if type(data) is dict:
+            for name, model in GLOBALS.items():
+                if name not in data['models']:
+                    data['models'][name] = model
+        return data
 
     @model_validator(mode='after')
     def resolve_references(self):
@@ -56,19 +84,16 @@ class Dataset(BaseModel):
                 model._extends = self[model.extends]
             for edge in model.edges.values():
                 edge._type = self[edge.type]
+        return self
     
     def __getitem__(self, ref: TYPE_REF):
-        if ref in self.models:
-            return self.models[ref]
-        if ref in GLOBALS:
-            return GLOBALS[ref]
-        raise KeyError(ref)
+        return self.models[ref]
 
     def __contains__(self, ref: TYPE_REF):
-        return ref in self.models or ref in GLOBALS
+        return ref in self.models
 
     def __repr__(self):
         return "Dataset<{}>".format(
-            ','.join(ref + (':' + model.name if model.name and model.name != ref else '') for ref, model in self.models.items()),
+            ','.join(ref + (':' + model.name if model.name and model.name != ref else '') for ref, model in self.models.items() if ref not in GLOBALS),
         )
 
