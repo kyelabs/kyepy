@@ -44,22 +44,30 @@ def simplify_models(models):
     simplify = {}
     for ref, model in models.items():
         if set(model.keys()) == {'extends'}:
-            simplify[ref] = model['extends']
+            if model['extends'] not in models:
+                simplify[ref] = model['extends']
         elif set(model.keys()) == {'extends','indexes'}:
             assert len(model['indexes']) == 1
             if tuple(models[model['extends']]['indexes'][0]) == tuple(model['indexes'][0]):
                 simplify[ref] = model['extends']
 
     for model in models.values():
+        if 'extends' in model and model['extends'] in simplify:
+            model['extends'] = simplify[model['extends']]
         for edge in model.get('edges',{}).values():
             if edge.get('type') in simplify:
                 edge['type'] = simplify[edge['type']]
     
     for ref in simplify.keys():
         del models[ref]
+    
+    return len(simplify)
 
 def flatten_ast(ast: AST):
     models = {}
     define_models(ast, models)
-    simplify_models(models)
+    ebrake = 10
+    while simplify_models(models) != 0 and ebrake > 0:
+        ebrake -= 1
+    assert ebrake > 0, "Simplify loop ebrake triggered"
     return models
