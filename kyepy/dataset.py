@@ -9,6 +9,10 @@ class Edge(BaseModel):
     type: TYPE_REF
     nullable: bool = False
     multiple: bool = False
+    # TODO: Maybe this reference to the environment doesn't get added until
+    # the type/edge is accessed through that environment?
+    # Might allow for the type to switch environments, but I'm not sure if
+    # that is something I'll ever need.
     _dataset: dict = None
 
     @property
