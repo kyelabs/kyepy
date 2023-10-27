@@ -7,9 +7,13 @@ TYPE_REF = constr(pattern=r'[A-Z][a-z][a-zA-Z]*(\.[A-Za-z]+)*')
 
 class Edge(BaseModel):
     type: TYPE_REF
-    _type: Type = None
     nullable: bool = False
     multiple: bool = False
+    _dataset: dict = None
+
+    @property
+    def _type(self):
+        return self._dataset.get(self.type)
 
     def __repr__(self):
         return "Edge<{}{}>".format(
@@ -21,9 +25,13 @@ class Edge(BaseModel):
 class Type(BaseModel):
     name: TYPE = None
     extends: TYPE_REF = None
-    _extends: Type = None
     indexes: list[list[EDGE]] = []
     edges: dict[EDGE, Edge] = {}
+    _dataset: dict = None
+
+    @property
+    def _extends(self):
+        return self._dataset.get(self.extends)
 
     @property
     def inheritance_chain(self):
@@ -65,7 +73,6 @@ GLOBALS = {
 }
 
 class Dataset(BaseModel):
-
     models: dict[TYPE_REF, Type] = {}
 
     @model_validator(mode='before')
@@ -80,11 +87,13 @@ class Dataset(BaseModel):
     @model_validator(mode='after')
     def resolve_references(self):
         for model in self.models.values():
-            if model.extends is not None:
-                model._extends = self[model.extends]
+            model._dataset = self
             for edge in model.edges.values():
-                edge._type = self[edge.type]
+                edge._dataset = self
         return self
+    
+    def get(self, ref: TYPE_REF, default=None):
+        return self.models.get(ref, default)
     
     def __getitem__(self, ref: TYPE_REF):
         return self.models[ref]
