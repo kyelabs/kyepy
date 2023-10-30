@@ -13,6 +13,7 @@ class Edge(BaseModel):
     # the type/edge is accessed through that environment?
     # Might allow for the type to switch environments, but I'm not sure if
     # that is something I'll ever need.
+    # Or just create another class that wraps this one and adds the environment
     _dataset: dict = None
 
     @property

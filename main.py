@@ -8,6 +8,7 @@ from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
 from pprint import pprint
 from kyepy.dataset import Dataset, GLOBALS
+from kyepy.from_json import JsonFormat
 import duckdb
 DIR = Path(__file__).parent
 
@@ -51,7 +52,8 @@ if __name__ == '__main__':
     # with JsonLineLoader(DIR / 'data') as loader:
     for row in DATA:
         # try:
-        validate_python(MODEL, row)
+        JsonFormat().load(models['Struct'], {'id': 1})
+        # validate_python(MODEL, row)
         # except Exception as e:
         #     print(e)
         #     continue
