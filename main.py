@@ -8,7 +8,6 @@ from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
 from pprint import pprint
 from kyepy.dataset import Dataset, GLOBALS
-from kyepy.from_json import JsonFormat
 import duckdb
 DIR = Path(__file__).parent
 
@@ -45,19 +44,12 @@ if __name__ == '__main__':
         'id': 1,
         'hi': 1,
         'meep': [{
-            'id': 2,
+            'id': 1,
         }],
         'user': { 'id': 1, '_': 'hi' },
     }]
-    # with JsonLineLoader(DIR / 'data') as loader:
-    for row in DATA:
-        # try:
-        JsonFormat().load(models['Struct'], {'id': 1})
-        # validate_python(MODEL, row)
-        # except Exception as e:
-        #     print(e)
-        #     continue
-    #         flatten_python_row(MODEL, row, loader)
+    with JsonLineLoader(models, DIR / 'data') as loader:
+        loader.write('Yellow', DATA)
     # con = duckdb.connect(':memory:')
     # loader.load_duckdb(con)
 

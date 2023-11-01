@@ -43,6 +43,13 @@ class Type(BaseModel):
         if self._extends is None:
             return [self]
         return self._extends.inheritance_chain + [self]
+    
+    def issubclass(self, other: TYPE_REF):
+        if self.name == other:
+            return True
+        if self._extends is None:
+            return False
+        return self._extends.issubclass(other)
 
     @model_validator(mode='before')
     @classmethod
