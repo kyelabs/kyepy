@@ -2,7 +2,6 @@ from pathlib import Path
 from kyepy.parser import Parser
 from kyepy.validate.python_row import validate_python
 from kyepy.loader.json_lines import JsonLineLoader
-from kyepy.transform.python_to_json import flatten_python_row
 from kyepy.assign_scopes import assign_scopes, Scope
 from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
@@ -43,10 +42,12 @@ if __name__ == '__main__':
     DATA = [{
         'id': 1,
         'hi': 1,
-        'meep': [{
-            'id': 1,
-        }],
+        'meep': {
+            "id": 1,
+        },
         'user': { 'id': 1, '_': 'hi' },
+    }, {
+        'id': 1,
     }]
     with JsonLineLoader(models, DIR / 'data') as loader:
         loader.write('Yellow', DATA)

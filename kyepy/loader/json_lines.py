@@ -4,45 +4,61 @@ from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
 from typing import Any
 
 def normalize_value(typ: Type, data: Any):
+    if data is None:
+        return None
+
+    # TODO: reshape id maps { [id]: { ... } } to [ { id, ... } ]
+    # not sure if we want to do that auto-magically or have it explicitly
+    # defined as part of the schema
     if typ.issubclass('Struct'):
-        # TODO: better error handling
+        # TODO: better error handling, i.e trace location in data
+        # so that we can report the location of the error
         assert type(data) is dict
-        return {
-            edge_name: normalize_edge(edge, data.get(edge_name))
-            for edge_name, edge in typ.edges.items()
-                if data.get(edge_name) is not None
-        }
+
+        edges = {}
+        for edge_name, edge in typ.edges.items():
+            if edge_name not in data:
+                continue
+
+            val = normalize_edge(edge, data.get(edge_name))
+            if val is not None:
+                edges[edge_name] = val
+
+        if len(edges) == 0:
+            return None
+        
+        return edges
 
     assert type(data) is not dict
     return str(data)
 
-def normalize_edge(edge: Edge, data: Any):
-    """
-    Handle zero or many values, calling `normalize_value`
-    on each singular item.
-    """
-    if edge.multiple:
-        if data is None:
-            return []
-        if type(data) is not list:
-            data = [ data ]
-        return [
-            normalize_value(edge._type, item) for item in data
-            if item is not None
-        ]
-    
-    assert type(data) is not list
-
+def normalize_values(typ: Type, data: Any):
     if data is None:
         return None
 
-    return normalize_value(edge._type, data)
-
-def normalize_json(typ: Type, data: Any):
     if type(data) is not list:
         data = [ data ]
-    return [ normalize_value(typ, item) for item in data ]
 
+    values = []
+    for item in data:
+        val = normalize_value(typ, item)
+        if val is not None:
+            values.append(val)
+    
+    if len(values) == 0:
+        return None
+    
+    return values
+
+def normalize_edge(edge: Edge, data: Any):
+    if data is None:
+        return None
+
+    if edge.multiple:
+        return normalize_values(edge._type, data)
+    
+    assert type(data) is not list
+    return normalize_value(edge._type, data)
 
 class JsonLineLoader:
     
@@ -66,7 +82,7 @@ class JsonLineLoader:
         assert not self._is_closed, 'Cannot write to a closed loader'
         f = self._get_file_handler(type_ref)
         assert type_ref in self.models
-        for row in normalize_json(self.models[type_ref], data):
+        for row in normalize_values(self.models[type_ref], data):
             json.dump(row, f)
             f.write('\n')
 
