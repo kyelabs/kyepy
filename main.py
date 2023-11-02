@@ -1,12 +1,12 @@
 from pathlib import Path
 from kyepy.parser import Parser
-from kyepy.validate.python_row import validate_python
 from kyepy.loader.json_lines import JsonLineLoader
 from kyepy.assign_scopes import assign_scopes, Scope
 from kyepy.assign_type_refs import assign_type_refs
 from kyepy.flatten_ast import flatten_ast
 from pprint import pprint
 from kyepy.dataset import Dataset, GLOBALS
+from kyepy.validate.duckdb import get_duckdb
 import duckdb
 DIR = Path(__file__).parent
 
@@ -45,15 +45,15 @@ if __name__ == '__main__':
         'meep': {
             "id": 1,
         },
-        'user': { 'id': 1, '_': 'hi' },
+        # 'user': { 'id': 1, '_': 'hi' },
     }, {
         'id': 1,
     }]
     with JsonLineLoader(models, DIR / 'data') as loader:
         loader.write('Yellow', DATA)
-    # con = duckdb.connect(':memory:')
-    # loader.load_duckdb(con)
+    con = duckdb.connect(':memory:')
+    loader.load_duckdb(con)
 
-    # json_schema = to_json_schema(p.ast)
-    # print(json_schema)
+    r = get_duckdb(MODEL, con.table('Yellow'))
+    print(r)
     print('hi')
