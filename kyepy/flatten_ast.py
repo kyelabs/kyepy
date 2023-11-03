@@ -44,11 +44,11 @@ def simplify_models(models):
     simplify = {}
     for ref, model in models.items():
         if set(model.keys()) == {'extends'}:
-            if model['extends'] not in models:
-                simplify[ref] = model['extends']
+            simplify[ref] = model['extends']
         elif set(model.keys()) == {'extends','indexes'}:
             assert len(model['indexes']) == 1
-            if tuple(models[model['extends']]['indexes'][0]) == tuple(model['indexes'][0]):
+            referenced_indexes = models[model['extends']]['indexes']
+            if len(referenced_indexes) == 1 and tuple(referenced_indexes[0]) == tuple(model['indexes'][0]):
                 simplify[ref] = model['extends']
 
     for model in models.values():

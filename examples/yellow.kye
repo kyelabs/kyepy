@@ -7,9 +7,9 @@ model User(id)(name) {
 
 model Yellow(id) {
     id: Number,
-    size: Size,
+    size: Size?,
     meep: model Meep(id) {
         id: Number,
     }+,
-    user: User(id),
+    user: User,
 }

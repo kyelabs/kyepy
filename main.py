@@ -48,7 +48,7 @@ if __name__ == '__main__':
         'user': { 
             'id': 1,
             '_': 'hi',
-            # 'name': 'ben',
+            'name': 'ben',
         },
     }, {
         'id': 1,
