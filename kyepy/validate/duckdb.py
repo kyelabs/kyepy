@@ -1,5 +1,5 @@
 from duckdb import DuckDBPyConnection, DuckDBPyRelation, ColumnExpression
-from kyepy.kye_ast import *
+from kyepy.parser.kye_ast import *
 from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
 
 def get_struct_keys(r: DuckDBPyRelation):

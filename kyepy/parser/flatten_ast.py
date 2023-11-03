@@ -1,4 +1,4 @@
-from kyepy.kye_ast import *
+from kyepy.parser.kye_ast import *
 
 def define_models(node: AST, models):
     
