@@ -5,7 +5,7 @@ model User(id)(name) {
     name: String
 }
 
-model Yellow(id, size) {
+model Yellow(id) {
     id: Number,
     size: Size,
     meep: model Meep(id) {

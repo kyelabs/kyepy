@@ -2,22 +2,28 @@ from duckdb import DuckDBPyConnection, DuckDBPyRelation, ColumnExpression
 from kyepy.kye_ast import *
 from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
 
+def get_struct_keys(r: DuckDBPyRelation):
+    assert r.columns[1] == 'val'
+    assert r.dtypes[1].id == 'struct'
+    return [col[0] for col in r.dtypes[1].children]
+
 def struct_pack(typ: Type, r: DuckDBPyRelation):
-    struct_edges = {}
-    for edge_name in typ.edges.keys():
-        if edge_name not in r.columns:
-            struct_edges[edge_name] = 'NULL'
-        else:
-            struct_edges[edge_name] = f'"{edge_name}"'
-    return 'struct_pack(' + ','.join(f'''"{name}":={val}''' for name, val in struct_edges.items()) + ')'
+    return 'struct_pack(' + ','.join(
+        f'''"{edge_name}":="{edge_name}"'''
+        for edge_name in typ.edges.keys()
+            if edge_name in r.columns
+    ) + ')'
 
 def get_value(typ: Type, r: DuckDBPyRelation):
     if typ.issubclass('Struct'):
         edges = r.select('_')
         for edge_name, edge in typ.edges.items():
-            edge_rel = get_edge(edge, r.select(f'''list_append(_, '{edge_name}') as _, val.{edge_name} as val''')).set_alias(r.alias + '.' + edge_name)
-            edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
-            edges = edges.join(edge_rel, '_', how='left')
+            if edge_name in get_struct_keys(r):
+                edge_rel = get_edge(edge, r.select(f'''list_append(_, '{edge_name}') as _, val.{edge_name} as val''')).set_alias(r.alias + '.' + edge_name)
+                edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
+                edges = edges.join(edge_rel, '_', how='left')
+            else:
+                edges = edges.select(f'*, NULL as {edge_name}')
         return edges.select(f'''_, {struct_pack(typ, edges)} as val''')
     
     return r
