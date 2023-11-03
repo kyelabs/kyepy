@@ -1,13 +1,15 @@
-User(id) {
+type Size: Number
+
+model User(id)(name) {
     id: Number,
     name: String
 }
 
-Yellow(id)(meep) {
+model Yellow(id) {
     id: Number,
-    hi: String?,
-    meep: Meep(id) {
+    size: Size?,
+    meep: model Meep(id) {
         id: Number,
     }+,
-    user_id: User(id),
+    user: User,
 }

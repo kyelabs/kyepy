@@ -1,83 +1,70 @@
 from __future__ import annotations
-from pydantic import BaseModel, model_validator, field_validator, constr
+from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union
+from lark import tree
 
 TAB = '    '
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
 
+class TokenPosition(BaseModel):
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+    start_pos: int
+    end_pos: int
+
+    @model_validator(mode='before')
+    @classmethod
+    def from_meta(cls, meta):
+        if isinstance(meta, tree.Meta):
+            return {
+                'line': meta.line,
+                'column': meta.column,
+                'end_line': meta.end_line,
+                'end_column': meta.end_column,
+                'start_pos': meta.start_pos,
+                'end_pos': meta.end_pos,
+            }
+        return meta
+    
+    def __repr__(self):
+        end_line = f"{self.end_line}:" if self.end_line != self.line else ''
+        return f"{self.line}:{self.column}-{end_line}{self.end_column}"
+
 class AST(BaseModel):
-    _parent: Optional[AST] = None
+    name: Optional[str] = None
+    children: list[AST] = []
+    meta: TokenPosition
+    scope: Optional[dict] = None
+    type_ref: Optional[str] = None
 
-    # property setter for _parent
-    def set_parent(self, parent):
-        self._parent = parent
-        return self
-    
-    def get_parent(self):
-        return self._parent
-    
-    def get_model_name(self):
-        parent = self.get_parent()
-        parent_name = parent.get_model_name() if parent else None
-        if isinstance(self, Model):
-            if parent_name is not None:
-                parent_name += '.' + self.name
-            else:
-                parent_name = self.name
-        return parent_name
+    def __str__(self):
+        return self.name or super().__str__()
 
-    def get_local_definitions(self):
-        return []
-    
-    def has_local_definition(self, name):
-        for defn in self.get_local_definitions():
-            if name == defn.name:
-                return True
-    
-    def get_local_definition(self, name):
-        for defn in self.get_local_definitions():
-            if name == defn.name:
-                return defn
-
-    def get_definition(self, name):
-        parent = self.get_parent()
-        if parent:
-            if parent.has_local_definition(name):
-                return parent.get_local_definition(name)
-            else:
-                return parent.get_definition(name)
-        return ValueError(f'"{name}" not defined')
+    def traverse(self, path=tuple()):
+        path = path + (self,)
+        for child in self.children:
+            yield path, child
+            yield from child.traverse(path=path)
 
 class Script(AST):
-    definitions: list[Union[TypeAlias, Model]]
+    children: list[Union[TypeAlias, Model]]
 
     @model_validator(mode='after')
     def validate_definitions(self):
         type_names = set()
-        for defn in self.definitions:
+        for child in self.children:
             # raise error if definition name is duplicated
-            if defn.name in type_names:
-                raise ValueError(f'Model name {defn.name} is duplicated in model {self.name}')
-            type_names.add(defn.name)
-
-            defn.set_parent(self)
+            if child.name in type_names:
+                raise ValueError(f'Model name {child.name} is duplicated in model {self.name}')
+            type_names.add(child.name)
         return self
-
-    def get_local_definitions(self):
-        return self.definitions
-
-    @property
-    def models(self):
-        return [d for d in self.definitions if isinstance(d, Model)]
     
-    @property
-    def aliases(self):
-        return [d for d in self.definitions if isinstance(d, TypeAlias)]
-    
-    def to_kye(self, depth=0):
-        return '\n\n'.join(defn.to_kye(depth) for defn in self.definitions)
+    def __repr__(self):
+        return f"Script<{','.join(child.name for child in self.children)}>"
 
 class Model(AST):
     name: TYPE
@@ -86,55 +73,39 @@ class Model(AST):
 
     @model_validator(mode='after')
     def validate_indexes(self):
+        # self.children.extend(self.indexes)
+        self.children = self.edges
         edge_names = set()
         for edge in self.edges:
             # raise error if edge name is duplicated
             if edge.name in edge_names:
                 raise ValueError(f'Edge name {edge.name} is duplicated in model {self.name}')
             edge_names.add(edge.name)
-            edge.set_parent(self)
-
+        
+        idx_names = set()
         for idx in self.indexes:
-            for name in idx.get_key_names():
+            for name in idx.edges:
                 # raise error if index name is not an edge name
                 if name not in edge_names:
                     raise ValueError(f'Index {name} is not an edge name in model {self.name}')
-            idx.set_parent(self)
+                if name in idx_names:
+                    raise ValueError(f'Index Edge {name} is in multiple indexes in model {self.name}')
+                idx_names.add(name)
         return self
-    
-    def get_local_definitions(self):
-        return self.edges
-    
-    def get_key_names(self):
-        return list({idx for idxs in self.indexes for idx in idxs.get_key_names()})
-    
+
     def __repr__(self):
-        indexes = ''.join(repr(idx) for idx in self.indexes)
-        return 'Model<' + self.name + indexes + '>'
-    
-    def to_kye(self, depth=0):
-        indexes = ''.join(idx.to_kye() for idx in self.indexes)
-        edges = ''
-        if len(self.edges) == 0:
-            edges = ' {}'
-        else:
-            edges = ' {\n'
-            for edge in self.edges:
-                edges += TAB*(depth+1) + edge.to_kye(depth+1) + ',\n'
-            edges += TAB*depth + '}'
-        return self.name + indexes + edges
+        return self.name + \
+            ''.join(repr(idx) for idx in self.indexes) + \
+            "{" + ','.join(edge.name for edge in self.edges) + "}"
 
 class Index(AST):
     edges: list[EDGE]
 
+    def __str__(self):
+        return f"({','.join(self.edges)})"
+
     def __repr__(self):
-        return '(' + ','.join(self.edges) + ')'
-
-    def get_key_names(self):
-        return self.edges
-
-    def to_kye(self, depth=0):
-        return '(' + ','.join(self.edges) + ')'
+        return str(self)
 
 class Edge(AST):
     name: EDGE
@@ -142,64 +113,38 @@ class Edge(AST):
     cardinality: Optional[Literal['*','?','+','!']]
 
     @model_validator(mode='after')
-    def set_type_parent(self):
+    def set_children(self):
         if self.typ:
-            self.typ.set_parent(self)
+            self.children = [self.typ]
         return self
 
-    @field_validator('name')
-    def validate_name(cls, v):
-        if v[0].isupper():
-            raise ValueError('Edge names must start with an lowercase letter')
-        return v
-    
-    def to_kye(self, depth=0):
-        return f'{self.name}: {self.typ.to_kye(depth=depth)}{self.cardinality or ""}'
+    def __repr__(self):
+        return f"{self.name}:{self.typ or ''}{self.cardinality or ''}"
 
 class TypeRef(AST):
     name: TYPE
+    index: Optional[Index] = None
 
-    @field_validator('name')
-    def validate_name(cls, v):
-        if v[0].islower():
-            raise ValueError('Type names must start with an uppercase letter')
-        return v
-    
+    @model_validator(mode='after')
+    def set_children(self):
+        if self.index:
+            self.children = [self.index]
+        return self
+
     def __repr__(self):
-        return 'Ref<' + self.name + '>'
-    
-    def to_kye(self, depth=0):
-        return self.name
-    
-    def resolve(self):
-        return self.get_definition(self.name)
+        return self.name + \
+            (repr(self.index) if self.index else '')
 
 class TypeAlias(AST):
     name: TYPE
     typ: Type
 
     @model_validator(mode='after')
-    def set_type_parent(self):
-        self.typ.set_parent(self)
+    def set_children(self):
+        self.children = [self.typ]
         return self
     
     def __repr__(self):
-        return 'Alias<' + self.name + ':' + repr(self.typ) + '>'
-    
-    def to_kye(self, depth=0):
-        return f'type {self.name}: {self.typ.to_kye()}'
+        return f"{self.name}:{self.typ}"
 
-class TypeIndex(AST):
-    typ: TypeRef
-    index: Index
-
-    @model_validator(mode='after')
-    def set_type_parent(self):
-        self.typ.set_parent(self)
-        self.index.set_parent(self)
-        return self
-    
-    def to_kye(self, depth=0):
-        return self.name + self.index.to_kye()
-
-Type = Union[TypeAlias, Model, TypeIndex, TypeRef]
+Type = Union[TypeAlias, Model, TypeRef]
