@@ -23,7 +23,13 @@ def normalize_value(typ: Type, data: Any):
             val = normalize_edge(edge, data.get(edge_name))
             if val is not None:
                 edges[edge_name] = val
-
+        
+        if typ.issubclass('Model'):
+            # not sure if it should also check if the index value is not null,
+            # haven't decided if null indexes should be allowed yet
+            # check for nulls would also require checking type defined nulls like empty string
+            assert any(all(edge in edges for edge in idx) for idx in typ.indexes), f'No index found for {repr(typ)}'
+        
         if len(edges) == 0:
             return None
         

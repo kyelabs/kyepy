@@ -41,13 +41,18 @@ if __name__ == '__main__':
     MODEL = models['Yellow']
     DATA = [{
         'id': 1,
-        'hi': 1,
+        'size': 1,
         'meep': {
             "id": 1,
         },
-        # 'user': { 'id': 1, '_': 'hi' },
+        'user': { 
+            'id': 1,
+            '_': 'hi',
+            'name': 'ben',
+        },
     }, {
         'id': 1,
+        'size': 1,
     }]
     with JsonLineLoader(models, DIR / 'data') as loader:
         loader.write('Yellow', DATA)

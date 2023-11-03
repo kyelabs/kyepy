@@ -5,9 +5,9 @@ model User(id)(name) {
     name: String
 }
 
-model Yellow(id)(meep) {
+model Yellow(id, size) {
     id: Number,
-    hi: Size?,
+    size: Size,
     meep: model Meep(id) {
         id: Number,
     }+,
