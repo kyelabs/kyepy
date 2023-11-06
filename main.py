@@ -7,7 +7,7 @@ from kyepy.parser.flatten_ast import flatten_ast
 from pprint import pprint
 from kyepy.compiled import CompiledDataset
 from kyepy.dataset import Models
-from kyepy.validate.duckdb import get_duckdb
+from kyepy.validate.staging import Staging
 import duckdb
 DIR = Path(__file__).parent
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     models = CompiledDataset(models=raw_models)
     models = Models(models)
 
-    MODEL = models['Yellow']
+    MODEL_NAME = 'Yellow'
     DATA = [{
         'id': 1,
         # 'size': 1,
@@ -62,10 +62,10 @@ if __name__ == '__main__':
         'id': 1,
     }]
     with JsonLineLoader(models, DIR / 'data') as loader:
-        loader.write('Yellow', DATA)
+        loader.write(MODEL_NAME, DATA)
     con = duckdb.connect(':memory:')
     loader.load_duckdb(con)
 
-    r = get_duckdb(MODEL, con.table('Yellow'))
-    print(r)
+    staging = Staging(models[MODEL_NAME], con.table(MODEL_NAME))
+    print(staging[MODEL_NAME])
     print('hi')

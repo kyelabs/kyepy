@@ -25,6 +25,7 @@ class Edge:
 
 class Type:
     def __init__(self, name: TYPE_REF):
+        self.ref = name
         self.name = name
         self.indexes = []
         self.extends = None
