@@ -1,6 +1,6 @@
 from lark import Lark
 from pathlib import Path
-from kyepy.kye_transformer import TreeToKye
+from kyepy.parser.kye_transformer import TreeToKye
 from lark import Transformer, Visitor, Tree, visitors
 
 DIR = Path(__file__).parent

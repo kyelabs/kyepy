@@ -1,24 +1,21 @@
 from pathlib import Path
-from kyepy.parser import Parser
+from kyepy.parser.parser import Parser
 from kyepy.loader.json_lines import JsonLineLoader
-from kyepy.assign_scopes import assign_scopes, Scope
-from kyepy.assign_type_refs import assign_type_refs
-from kyepy.flatten_ast import flatten_ast
+from kyepy.parser.assign_scopes import assign_scopes, Scope
+from kyepy.parser.assign_type_refs import assign_type_refs
+from kyepy.parser.flatten_ast import flatten_ast
 from pprint import pprint
-from kyepy.dataset import Dataset, GLOBALS
+from kyepy.compiled import CompiledDataset
+from kyepy.dataset import Models
 from kyepy.validate.duckdb import get_duckdb
 import duckdb
 DIR = Path(__file__).parent
 
-if __name__ == '__main__':
-    import sys
-    file_path = DIR / 'examples/yellow.kye'
-    if len(sys.argv) > 1:
-        file_path = sys.argv[1]
+def compile(file_path):
     p = Parser.from_file(file_path)
 
     GLOBAL_SCOPE = Scope(name=None, parent=None)
-    for global_type in GLOBALS.keys():
+    for global_type in ['Number','String','Boolean','Struct','Model']:
         GLOBAL_SCOPE[global_type] = '<built-in type>'
 
     assign_scopes(p.ast, scope=GLOBAL_SCOPE)
@@ -36,7 +33,18 @@ if __name__ == '__main__':
 
     raw_models = flatten_ast(p.ast)
     pprint(raw_models)
-    models = Dataset(models=raw_models)
+    return raw_models
+
+
+if __name__ == '__main__':
+    import sys
+    file_path = DIR / 'examples/yellow.kye'
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    
+    raw_models = compile(file_path)
+    models = CompiledDataset(models=raw_models)
+    models = Models(models)
 
     MODEL = models['Yellow']
     DATA = [{

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
+from kyepy.dataset import Type, Edge, Models, TYPE_REF
 from typing import Any
 
 def normalize_value(typ: Type, data: Any):
@@ -10,7 +10,7 @@ def normalize_value(typ: Type, data: Any):
     # TODO: reshape id maps { [id]: { ... } } to [ { id, ... } ]
     # not sure if we want to do that auto-magically or have it explicitly
     # defined as part of the schema
-    if typ.issubclass('Struct'):
+    if typ.has_edges:
         # TODO: better error handling, i.e trace location in data
         # so that we can report the location of the error
         assert type(data) is dict
@@ -24,7 +24,7 @@ def normalize_value(typ: Type, data: Any):
             if val is not None:
                 edges[edge_name] = val
         
-        if typ.issubclass('Model'):
+        if typ.has_index:
             # not sure if it should also check if the index value is not null,
             # haven't decided if null indexes should be allowed yet
             # check for nulls would also require checking type defined nulls like empty string
@@ -61,14 +61,14 @@ def normalize_edge(edge: Edge, data: Any):
         return None
 
     if edge.multiple:
-        return normalize_values(edge._type, data)
+        return normalize_values(edge.type, data)
     
     assert type(data) is not list
-    return normalize_value(edge._type, data)
+    return normalize_value(edge.type, data)
 
 class JsonLineLoader:
     
-    def __init__(self, models: Dataset, directory: str):
+    def __init__(self, models: Models, directory: str):
         self.models = models
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-from kyepy.kye_ast import *
+from kyepy.parser.kye_ast import *
 
 def define_models(node: AST, models):
     
@@ -40,7 +40,7 @@ def define_models(node: AST, models):
 
     return models
 
-def simplify_models(models):
+def get_models_to_simplify(models):
     simplify = {}
     for ref, model in models.items():
         if set(model.keys()) == {'extends'}:
@@ -50,24 +50,36 @@ def simplify_models(models):
             referenced_indexes = models[model['extends']]['indexes']
             if len(referenced_indexes) == 1 and tuple(referenced_indexes[0]) == tuple(model['indexes'][0]):
                 simplify[ref] = model['extends']
+    
+    return simplify
 
+def update_models(models, simplify):
     for model in models.values():
         if 'extends' in model and model['extends'] in simplify:
             model['extends'] = simplify[model['extends']]
         for edge in model.get('edges',{}).values():
             if edge.get('type') in simplify:
                 edge['type'] = simplify[edge['type']]
-    
+
     for ref in simplify.keys():
-        del models[ref]
+        if ref in models:
+            del models[ref]
     
-    return len(simplify)
+EBRAKE = 10
+
+def simplify_models(models):
+    simplify = {}
+    ebrake = EBRAKE
+    while ebrake == EBRAKE or (len(to_simplify) > 0 and ebrake > 0):
+        to_simplify = get_models_to_simplify(models)
+        simplify.update(to_simplify)
+        update_models(models, simplify)
+        ebrake -= 1
+    
+    assert ebrake > 0, "Simplify loop ebrake triggered"
 
 def flatten_ast(ast: AST):
     models = {}
     define_models(ast, models)
-    ebrake = 10
-    while simplify_models(models) != 0 and ebrake > 0:
-        ebrake -= 1
-    assert ebrake > 0, "Simplify loop ebrake triggered"
+    simplify_models(models)
     return models
