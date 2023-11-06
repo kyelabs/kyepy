@@ -9,6 +9,14 @@ class Edge:
         self._models = models
     
     @property
+    def multiple(self):
+        return self._edge.multiple
+    
+    @property
+    def nullable(self):
+        return self._edge.nullable
+    
+    @property
     def type(self):
         return self._models[self._edge.type]
     
@@ -21,6 +29,14 @@ class Type:
         self.indexes = []
         self.extends = None
         self.edges = {}
+    
+    @property
+    def has_edges(self):
+        return len(self.edges) > 0
+    
+    @property
+    def has_index(self):
+        return len(self.indexes) > 0
     
     def __getitem__(self, name: EDGE):
         return self.edges[name]
@@ -78,14 +94,6 @@ class Models:
     def __init__(self, models: CompiledDataset):
         self._models = models
 
-        # self.models = {
-        #     **self.globals,
-        #     **{
-        #         name: DefinedType(name, type, self)
-        #         for name, type in self._models.models.items()
-        #     }
-        # }
-
     def __getitem__(self, ref: TYPE_REF):
         if ref in self.globals:
             return self.globals[ref]
@@ -94,7 +102,7 @@ class Models:
         raise KeyError(ref)
 
     def __contains__(self, ref: TYPE_REF):
-        return ref in self.globals or ref in self.models
+        return ref in self.globals or ref in self._models
     
     def __repr__(self):
         return repr(self._models)
