@@ -7,12 +7,24 @@ def get_struct_keys(r: DuckDBPyRelation):
     assert r.dtypes[1].id == 'struct'
     return [col[0] for col in r.dtypes[1].children]
 
-def struct_pack(typ: Type, r: DuckDBPyRelation):
+def struct_pack(edges: list[str], r: DuckDBPyRelation):
     return 'struct_pack(' + ','.join(
         f'''"{edge_name}":="{edge_name}"'''
-        for edge_name in typ.edges.keys()
+        for edge_name in edges
             if edge_name in r.columns
     ) + ')'
+
+def get_index(typ: Type, r: DuckDBPyRelation):
+    if len(typ.indexes) == 1:
+        index = typ.indexes[0]
+        if len(index) == 1:
+            return r.select(f'''{index[0]} as _index, *''')
+        else:
+            return r.select(f'''list_value({','.join(index)}) as _index, *''')
+    else:
+        # flatten indexes
+        index = [idx for idxs in typ.indexes for idx in idxs]
+        return r.select(f'''{struct_pack(index, r)} as _index, *''')
 
 def get_value(typ: Type, r: DuckDBPyRelation):
     if typ.has_edges:
@@ -24,7 +36,12 @@ def get_value(typ: Type, r: DuckDBPyRelation):
                 edges = edges.join(edge_rel, '_', how='left')
             else:
                 edges = edges.select(f'*, NULL as {edge_name}')
-        return edges.select(f'''_, {struct_pack(typ, edges)} as val''')
+        
+        if typ.has_index:
+            edges = get_index(typ, edges)
+            return edges.select(f'''_, _index as val''')
+        else:
+            return edges.select(f'''_, {struct_pack(typ.edges.keys(), edges)} as val''')
     
     return r
 
@@ -42,5 +59,5 @@ def get_edge(edge: Edge, r: DuckDBPyRelation):
 def get_duckdb(typ: Type, r: DuckDBPyRelation):
     assert typ.has_index
     
-    r = get_value(typ, r.select(f'list_value(ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ, r)} as val'))
-    return r.select('val.*')
+    r = get_value(typ, r.select(f'list_value(ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val'))
+    return r
