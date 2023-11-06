@@ -11,5 +11,5 @@ model Yellow(id) {
     meep: model Meep(id) {
         id: Number,
     }+,
-    user: User,
+    user: User(name),
 }

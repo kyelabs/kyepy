@@ -1,20 +1,20 @@
 from duckdb import DuckDBPyConnection, DuckDBPyRelation, ColumnExpression
 from kyepy.parser.kye_ast import *
-from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
+from kyepy.compiled import CompiledType, CompiledEdge, CompiledDataset, TYPE_REF
 
 def get_struct_keys(r: DuckDBPyRelation):
     assert r.columns[1] == 'val'
     assert r.dtypes[1].id == 'struct'
     return [col[0] for col in r.dtypes[1].children]
 
-def struct_pack(typ: Type, r: DuckDBPyRelation):
+def struct_pack(typ: CompiledType, r: DuckDBPyRelation):
     return 'struct_pack(' + ','.join(
         f'''"{edge_name}":="{edge_name}"'''
         for edge_name in typ.edges.keys()
             if edge_name in r.columns
     ) + ')'
 
-def get_value(typ: Type, r: DuckDBPyRelation):
+def get_value(typ: CompiledType, r: DuckDBPyRelation):
     if typ.issubclass('Struct'):
         edges = r.select('_')
         for edge_name, edge in typ.edges.items():
@@ -28,7 +28,7 @@ def get_value(typ: Type, r: DuckDBPyRelation):
     
     return r
 
-def get_edge(typ: Edge, r: DuckDBPyRelation):
+def get_edge(typ: CompiledEdge, r: DuckDBPyRelation):
     if typ.multiple:
         r = r.select('''list_append(_, ROW_NUMBER() OVER () - 1) as _, unnest(val) as val''')
 
@@ -39,7 +39,7 @@ def get_edge(typ: Edge, r: DuckDBPyRelation):
 
     return r
 
-def get_duckdb(typ: Type, r: DuckDBPyRelation):
+def get_duckdb(typ: CompiledType, r: DuckDBPyRelation):
     assert typ.issubclass('Model')
     
     r = get_value(typ, r.select(f'list_value(ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ, r)} as val'))

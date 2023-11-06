@@ -5,7 +5,8 @@ from kyepy.parser.assign_scopes import assign_scopes, Scope
 from kyepy.parser.assign_type_refs import assign_type_refs
 from kyepy.parser.flatten_ast import flatten_ast
 from pprint import pprint
-from kyepy.dataset import Dataset
+from kyepy.compiled import CompiledDataset
+from kyepy.dataset import Models
 from kyepy.validate.duckdb import get_duckdb
 import duckdb
 DIR = Path(__file__).parent
@@ -42,7 +43,8 @@ if __name__ == '__main__':
         file_path = sys.argv[1]
     
     raw_models = compile(file_path)
-    models = Dataset(models=raw_models)
+    models = CompiledDataset(models=raw_models)
+    models = Models(models)
 
     MODEL = models['Yellow']
     DATA = [{

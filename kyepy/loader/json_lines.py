@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
-from kyepy.dataset import Type, Edge, Dataset, TYPE_REF
+from kyepy.compiled import CompiledType, CompiledEdge, CompiledDataset, TYPE_REF
 from typing import Any
 
-def normalize_value(typ: Type, data: Any):
+def normalize_value(typ: CompiledType, data: Any):
     if data is None:
         return None
 
@@ -38,7 +38,7 @@ def normalize_value(typ: Type, data: Any):
     assert type(data) is not dict
     return str(data)
 
-def normalize_values(typ: Type, data: Any):
+def normalize_values(typ: CompiledType, data: Any):
     if data is None:
         return None
 
@@ -56,7 +56,7 @@ def normalize_values(typ: Type, data: Any):
     
     return values
 
-def normalize_edge(edge: Edge, data: Any):
+def normalize_edge(edge: CompiledEdge, data: Any):
     if data is None:
         return None
 
@@ -68,7 +68,7 @@ def normalize_edge(edge: Edge, data: Any):
 
 class JsonLineLoader:
     
-    def __init__(self, models: Dataset, directory: str):
+    def __init__(self, models: CompiledDataset, directory: str):
         self.models = models
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
