@@ -2,7 +2,8 @@ type Size: Number
 
 model User(id)(name) {
     id: Number,
-    name: String
+    name: String,
+    admin: Boolean,
 }
 
 model Yellow(id) {
@@ -11,5 +12,5 @@ model Yellow(id) {
     meep: model Meep(id) {
         id: Number,
     }+,
-    user: User(name),
+    user: User,
 }

@@ -49,14 +49,14 @@ if __name__ == '__main__':
     MODEL_NAME = 'Yellow'
     DATA = [{
         'id': 1,
-        # 'size': 1,
+        'size': 1,
         'meep': {
             "id": 1,
         },
         'user': { 
             'id': 1,
-            '_': 'hi',
-            'name': 'ben',
+            'admin': True,
+            'name': 'hi',
         },
     }, {
         'id': 1,

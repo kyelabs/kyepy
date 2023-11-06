@@ -1,28 +1,6 @@
 from __future__ import annotations
 from kyepy.compiled import CompiledDataset, CompiledEdge, CompiledType, TYPE_REF, EDGE
 
-
-class Edge:
-    def __init__(self, name: EDGE, edge: CompiledEdge, models: Models):
-        self.name = name
-        self._edge = edge
-        self._models = models
-    
-    @property
-    def multiple(self):
-        return self._edge.multiple
-    
-    @property
-    def nullable(self):
-        return self._edge.nullable
-    
-    @property
-    def type(self):
-        return self._models[self._edge.type]
-    
-    def __repr__(self):
-        return repr(self._edge)
-
 class Type:
     def __init__(self, name: TYPE_REF):
         self.ref = name
@@ -38,6 +16,11 @@ class Type:
     @property
     def has_index(self):
         return len(self.indexes) > 0
+
+    @property
+    def index(self):
+        """ Flatten the 2d list of indexes """
+        return [idx for idxs in self.indexes for idx in idxs]
     
     def __getitem__(self, name: EDGE):
         return self.edges[name]
@@ -45,8 +28,36 @@ class Type:
     def __contains__(self, name: EDGE):
         return name in self.edges
     
+    def __iter__(self):
+        return iter(self.edges.values())
+    
     def __repr__(self):
         return "Type<{}>".format(self.name)
+
+class Edge:
+    def __init__(self, name: EDGE, edge: CompiledEdge, model: DefinedType):
+        self.name = name
+        self._edge = edge
+        self._model = model
+    
+    @property
+    def multiple(self):
+        return self._edge.multiple
+    
+    @property
+    def nullable(self):
+        return self._edge.nullable
+    
+    @property
+    def is_index(self):
+        return self.name in self._model.index
+    
+    @property
+    def type(self):
+        return self._model._models[self._edge.type]
+    
+    def __repr__(self):
+        return repr(self._edge)
 
 class DefinedType(Type):
     def __init__(self, ref: TYPE_REF, type: CompiledType, models: Models):
@@ -55,7 +66,7 @@ class DefinedType(Type):
         self._models = models
 
         self.edges = {
-            name: Edge(name, edge, models)
+            name: Edge(name, edge, self)
             for name, edge in self._type.edges.items()
         }
         for parent in self.parents():

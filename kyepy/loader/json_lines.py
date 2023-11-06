@@ -16,19 +16,17 @@ def normalize_value(typ: Type, data: Any):
         assert type(data) is dict
 
         edges = {}
-        for edge_name, edge in typ.edges.items():
-            if edge_name not in data:
+        for edge in typ:
+            if edge.name not in data:
                 continue
 
-            val = normalize_edge(edge, data.get(edge_name))
+            val = normalize_edge(edge, data.get(edge.name))
             if val is not None:
-                edges[edge_name] = val
+                edges[edge.name] = val
         
         if typ.has_index:
-            # not sure if it should also check if the index value is not null,
-            # haven't decided if null indexes should be allowed yet
-            # check for nulls would also require checking type defined nulls like empty string
-            assert any(all(edge in edges for edge in idx) for idx in typ.indexes), f'No index found for {repr(typ)}'
+            missing_indexes = [key for key in typ.index if key not in edges]
+            assert len(missing_indexes) == 0, f'Missing indexes for {repr(typ)}: {",".join(missing_indexes)}'
         
         if len(edges) == 0:
             return None
