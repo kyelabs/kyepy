@@ -14,16 +14,19 @@ def struct_pack(edges: list[str], r: DuckDBPyRelation):
     ) + ')'
 
 def get_index(typ: Type, r: DuckDBPyRelation):
-    if len(typ.indexes) == 1:
-        index = typ.indexes[0]
-        if len(index) == 1:
-            return r.select(f'''{index[0]} as _index, *''')
-        else:
-            return r.select(f'''list_value({','.join(index)}) as _index, *''')
+    # Only one edge is an index
+    if len(typ.index) == 1:
+        r = r.select(f'''{typ.index[0]} as _index, *''')
+    # Only has one set of indexes
+    elif len(typ.indexes) == 1:
+        r = r.select(f'''list_value({','.join(typ.index)}) as _index, *''')
+    # Multiple indexes
     else:
-        # flatten indexes
-        index = [idx for idxs in typ.indexes for idx in idxs]
-        return r.select(f'''{struct_pack(index, r)} as _index, *''')
+        r = r.select(f'''{struct_pack(typ.index, r)} as _index, *''')
+    
+    # Filter out null indexes
+    r = r.filter(f'''{' AND '.join(edge  + ' IS NOT NULL' for edge in typ.index)}''')
+    return r
 
 class Staging:
     def __init__(self, typ: DefinedType, r: DuckDBPyRelation):
