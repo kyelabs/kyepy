@@ -14,16 +14,9 @@ def struct_pack(edges: list[str], r: DuckDBPyRelation):
     ) + ')'
 
 def get_index(typ: Type, r: DuckDBPyRelation):
-    # Only one edge is an index
-    if len(typ.index) == 1:
-        r = r.select(f'''{typ.index[0]} as _index, *''')
-    # Only has one set of indexes
-    elif len(typ.indexes) == 1:
-        r = r.select(f'''list_value({','.join(typ.index)}) as _index, *''')
-    # Multiple indexes
-    else:
-        r = r.select(f'''{struct_pack(typ.index, r)} as _index, *''')
-    
+    # Hash the index columns
+    r = r.select(f'''hash({struct_pack(sorted(typ.index), r)}) as _index, *''')
+
     # Filter out null indexes
     r = r.filter(f'''{' AND '.join(edge  + ' IS NOT NULL' for edge in typ.index)}''')
     return r
@@ -53,6 +46,25 @@ class Staging:
             else:
                 return edges.select(f'''_, {struct_pack(typ.edges.keys(), edges)} as val''')
         
+        # did not get auto-converted to a number
+        else:
+            dtype = r.dtypes[1].id
+            base_type = typ.base.name
+            converted = True
+            if base_type == 'Boolean' and dtype != 'boolean':
+                r = r.select(f'''_, TRY_CAST(val AS BOOLEAN) as val, val as raw''')
+            elif base_type == 'Number' and dtype == 'varchar':
+                r = r.select(f'''_, TRY_CAST(val AS DOUBLE) as val, val as raw''')
+            elif base_type == 'String' and dtype != 'varchar':
+                r = r.select(f'''_, CAST(val AS VARCHAR) as val, val as raw''')
+            else:
+                converted = False
+
+            if converted:
+                errors = r.filter('val IS NULL AND raw IS NOT NULL')
+                if errors.shape[0] > 0:
+                    path, bad, raw = errors.fetchone()
+                    raise ValueError(f'''Invalid value for {repr(typ)}: ({'.'.join(path)}) "{raw}"''')
         return r
     
     def get_edge(self, edge: Edge, r: DuckDBPyRelation):
@@ -75,3 +87,6 @@ class Staging:
 
     def __contains__(self, ref: TYPE_REF):
         return ref in self.tables
+    
+    def __repr__(self):
+        return f"<Staging {','.join(self.tables.keys())}>"

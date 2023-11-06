@@ -55,11 +55,11 @@ if __name__ == '__main__':
         },
         'user': { 
             'id': 1,
-            'admin': True,
-            'name': 'hi',
+            'admin': 1,
+            'name': 1,
         },
     }, {
-        'id': 1,
+        'id': '1.0',
     }]
     with JsonLineLoader(models, DIR / 'data') as loader:
         loader.write(MODEL_NAME, DATA)

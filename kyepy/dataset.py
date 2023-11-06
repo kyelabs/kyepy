@@ -16,6 +16,10 @@ class Type:
     @property
     def has_index(self):
         return len(self.indexes) > 0
+    
+    @property
+    def base(self):
+        return self.extends if self.extends else self
 
     @property
     def index(self):
