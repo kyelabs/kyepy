@@ -1,13 +1,12 @@
 from pathlib import Path
 from kyepy.parser.parser import Parser
-from kyepy.loader.json_lines import JsonLineLoader
 from kyepy.parser.assign_scopes import assign_scopes, Scope
 from kyepy.parser.assign_type_refs import assign_type_refs
 from kyepy.parser.flatten_ast import flatten_ast
 from pprint import pprint
 from kyepy.compiled import CompiledDataset
 from kyepy.dataset import Models
-from kyepy.validate.staging import Staging
+from kyepy.loader.loader import Loader
 import duckdb
 DIR = Path(__file__).parent
 
@@ -46,8 +45,9 @@ if __name__ == '__main__':
     models = CompiledDataset(models=raw_models)
     models = Models(models)
 
-    MODEL_NAME = 'Yellow'
-    DATA = [{
+    loader = Loader(models)
+
+    loader.from_json('Yellow', [{
         'id': 1,
         'size': 1,
         'meep': {
@@ -58,14 +58,11 @@ if __name__ == '__main__':
             'admin': 1,
             'name': 1,
         },
-    }, {
-        'id': '1.0',
-    }]
-    with JsonLineLoader(models, DIR / 'data') as loader:
-        loader.write(MODEL_NAME, DATA)
-    con = duckdb.connect(':memory:')
-    loader.load_duckdb(con)
+    }])
 
-    staging = Staging(models[MODEL_NAME], con.table(MODEL_NAME))
-    print(staging[MODEL_NAME])
+    loader.from_json('Yellow', [{
+        'id': 1.0,
+        'size': 2,
+    }])
+
     print('hi')

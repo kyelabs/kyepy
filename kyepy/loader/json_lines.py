@@ -2,6 +2,11 @@ import json
 from pathlib import Path
 from kyepy.dataset import Type, Edge, Models, TYPE_REF
 from typing import Any
+from duckdb import DuckDBPyConnection, DuckDBPyRelation
+
+DIR = Path(__file__).parent.parent.parent / 'data'
+DIR.mkdir(parents=True, exist_ok=True)
+assert DIR.is_dir()
 
 def normalize_value(typ: Type, data: Any):
     if data is None:
@@ -64,45 +69,12 @@ def normalize_edge(edge: Edge, data: Any):
     assert type(data) is not list
     return normalize_value(edge.type, data)
 
-class JsonLineLoader:
-    
-    def __init__(self, models: Models, directory: str):
-        self.models = models
-        self.directory = Path(directory)
-        self.directory.mkdir(parents=True, exist_ok=True)
-        assert self.directory.is_dir()
-        self.files = {}
-        self._is_closed = False
-    
-    def _get_file_path(self, type_ref: TYPE_REF):
-        return self.directory / f'{type_ref}.json'
+def from_json(typ: Type, data: list[dict], con: DuckDBPyConnection) -> DuckDBPyRelation:
+    file_path = DIR / f'{typ.ref}.jsonl'
 
-    def _get_file_handler(self, type_ref: TYPE_REF):
-        if type_ref not in self.files:
-            self.files[type_ref] = self._get_file_path(type_ref).open('w', encoding='utf-8')
-        return self.files[type_ref]
-
-    def write(self, type_ref: TYPE_REF, data: Any):
-        assert not self._is_closed, 'Cannot write to a closed loader'
-        f = self._get_file_handler(type_ref)
-        assert type_ref in self.models
-        for row in normalize_values(self.models[type_ref], data):
+    with file_path.open('w', encoding='utf-8') as f:
+        for row in normalize_values(typ, data):
             json.dump(row, f)
             f.write('\n')
-
-    def close(self):
-        self._is_closed = True
-        for file in self.files.values():
-            file.close()
     
-    def load_duckdb(self, con):
-        assert self._is_closed, 'Cannot load to duckdb until the loader is closed'
-        assert len(self.files) > 0, 'Cannot load to duckdb until at least one model has been written'
-        for type_ref, file in self.files.items():
-            con.read_json(file.name).to_table('"' + type_ref + '"')
-    
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.close()
+    return con.read_json(str(file_path))

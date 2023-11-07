@@ -21,11 +21,12 @@ def get_index(typ: Type, r: DuckDBPyRelation):
     r = r.filter(f'''{' AND '.join(edge  + ' IS NOT NULL' for edge in typ.index)}''')
     return r
 
-class Staging:
+class Format:
+    tables: dict[TYPE_REF, DuckDBPyRelation]
+
     def __init__(self, typ: DefinedType, r: DuckDBPyRelation):
         assert typ.has_index
         self.tables = {}
-        self.models = typ._models
         self.get_value(typ, r.select(f'list_value(ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val'))
 
     def get_value(self, typ: Type, r: DuckDBPyRelation):
@@ -46,7 +47,6 @@ class Staging:
             else:
                 return edges.select(f'''_, {struct_pack(typ.edges.keys(), edges)} as val''')
         
-        # did not get auto-converted to a number
         else:
             dtype = r.dtypes[1].id
             base_type = typ.base.name
@@ -89,4 +89,4 @@ class Staging:
         return ref in self.tables
     
     def __repr__(self):
-        return f"<Staging {','.join(self.tables.keys())}>"
+        return f"<Format {','.join(self.tables.keys())}>"
