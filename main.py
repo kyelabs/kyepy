@@ -58,11 +58,19 @@ if __name__ == '__main__':
             'admin': 1,
             'name': 1,
         },
-    }])
+    },
+    # {
+    #     'id': 1.0,
+    #     'size': 2,
+    # }
+    ])
 
-    loader.from_json('Yellow', [{
+    loader.from_json('Yellow', [
+        {
         'id': 1.0,
         'size': 2,
-    }])
+    }
+    ])
 
+    print(loader['Yellow'])
     print('hi')
