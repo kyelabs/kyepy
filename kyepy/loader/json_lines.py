@@ -3,6 +3,7 @@ from pathlib import Path
 from kyepy.dataset import Type, Edge, Models, TYPE_REF
 from typing import Any
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
+import re
 
 DIR = Path(__file__).parent.parent.parent / 'data'
 DIR.mkdir(parents=True, exist_ok=True)
@@ -39,6 +40,10 @@ def normalize_value(typ: Type, data: Any):
         return edges
 
     assert type(data) is not dict
+
+    if type(data) is float:
+        return re.sub(r'\.0$', '', str(data))
+
     return str(data)
 
 def normalize_values(typ: Type, data: Any):
