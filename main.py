@@ -7,6 +7,7 @@ from pprint import pprint
 from kyepy.compiled import CompiledDataset
 from kyepy.dataset import Models
 from kyepy.loader.loader import Loader
+from kyepy.validate import Validate
 import duckdb
 DIR = Path(__file__).parent
 
@@ -49,7 +50,7 @@ if __name__ == '__main__':
 
     loader.from_json('Yellow', [{
         'id': 1,
-        # 'size': 1,
+        'size': 1,
         'meep': {
             "id": 1,
         },
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     },
     {
         'id': 2,
-        # 'size': 2,
+        'size': 2,
         'mother': { 
             'id': 3,
             'admin': True,
@@ -111,11 +112,19 @@ if __name__ == '__main__':
 
     loader.from_json('Yellow', [{
         'id': 1.0,
-        # 'size': 2,
+        'size': None,
         'tags': ['hi', 'meep']
+    }, {
+        'id': 2,
+        'size': 3,
     }])
+    
+    validate = Validate(loader)
 
-    for table_name, table in loader.tables.items():
-        print(table_name)
+    for model_name, table in validate.tables.items():
+        print(model_name)
         print(table)
+
+    print('Errors:')
+    print(validate.errors)
     print('hi')

@@ -36,10 +36,11 @@ class Type:
         return iter(self.edges.values())
     
     def __repr__(self):
-        return "Type<{}>".format(self.name)
+        return "Type<{}>".format(self.ref)
 
 class Edge:
     def __init__(self, name: EDGE, edge: CompiledEdge, model: DefinedType):
+        self.ref = model.ref + '.' + name
         self.name = name
         self._edge = edge
         self._model = model
@@ -61,7 +62,12 @@ class Edge:
         return self._model._models[self._edge.type]
     
     def __repr__(self):
-        return repr(self._edge)
+        return 'Edge<{}:{}{}>'.format(
+            self.ref,
+            self.type.name or '',
+            ([['' ,'+'],
+              ['?','*']])[int(self.nullable)][int(self.multiple)]
+        )
 
 class DefinedType(Type):
     def __init__(self, ref: TYPE_REF, type: CompiledType, models: Models):
