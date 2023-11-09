@@ -52,7 +52,7 @@ class Loader:
                     edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
                     edges = edges.join(edge_rel, '_', how='left')
                 else:
-                    edges = edges.select(f'*, NULL as {edge_name}')
+                    edges = edges.select(f'*, CAST(NULL as VARCHAR) as {edge_name}')
             
             if typ.has_index:
                 edges = get_index(typ, edges)
