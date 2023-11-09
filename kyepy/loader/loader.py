@@ -31,6 +31,7 @@ class Loader:
         self.tables = {}
         self.models = models
         self.db = duckdb.connect(':memory:')
+        self.chunks = {}
 
     def _insert(self, model_name: TYPE_REF, r: duckdb.DuckDBPyRelation):
         table_name = f'"{model_name}.staging"'
@@ -41,7 +42,10 @@ class Loader:
             r.insert_into(table_name)
 
     def _load(self, typ: DefinedType, r: duckdb.DuckDBPyRelation):
-        self._get_value(typ, r.select(f'list_value(ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val'))
+        chunk_id = typ.name + '_' + str(len(self.chunks) + 1)
+        chunk = r.select(f'''list_value('{chunk_id}', ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val''').set_alias(chunk_id)
+        self.chunks[chunk_id] = chunk
+        self._get_value(typ, chunk)
 
     def _get_value(self, typ: Type, r: DuckDBPyRelation):
         if typ.has_edges:
@@ -64,6 +68,8 @@ class Loader:
         elif r.dtypes[1].id != 'varchar':
             dtype = r.dtypes[1].id
             r = r.select(f'''_, CAST(val AS VARCHAR) as val''')
+            # remove trailing '.0' from decimals so that
+            # they will match integers of the same value
             if dtype in ['double','decimal','real']:
                 r = r.select(f'''_, REGEXP_REPLACE(val, '\\.0$', '') as val''')
         # else:
@@ -88,7 +94,7 @@ class Loader:
     
     def _get_edge(self, edge: Edge, r: DuckDBPyRelation):
         if edge.multiple:
-            r = r.select('''list_append(_, ROW_NUMBER() OVER () - 1) as _, unnest(val) as val''')
+            r = r.select('''_, unnest(val) as val''').select('list_append(_, ROW_NUMBER() OVER (PARTITION BY _) - 1) as _, val')
 
         r = self._get_value(edge.type, r)
 
