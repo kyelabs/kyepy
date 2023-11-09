@@ -53,7 +53,7 @@ if __name__ == '__main__':
         'meep': {
             "id": 1,
         },
-        'parents': [{ 
+        'mother': { 
             'id': 1,
             'admin': True,
             'name': 'Joe',
@@ -64,7 +64,8 @@ if __name__ == '__main__':
                 'id': 4,
                 'name': 'Sally',
             }]
-        },{
+        },
+        'father': {
             'id': 2,
             'admin': False,
             'name': 'Mary',
@@ -75,13 +76,13 @@ if __name__ == '__main__':
                 'id': 4,
                 'name': 'Sally',
             }]
-        }],
+        },
         'tags': [1, 'hi', 'bye']
     },
     {
         'id': 2,
         # 'size': 2,
-        'parents': [{ 
+        'mother': { 
             'id': 3,
             'admin': True,
             'name': 'Bob',
@@ -92,7 +93,8 @@ if __name__ == '__main__':
                 'id': 4,
                 'name': 'Sally',
             }]
-        },{
+        },
+        'father': {
             'id': 4,
             'admin': False,
             'name': 'Sarah',
@@ -103,7 +105,7 @@ if __name__ == '__main__':
                 'id': 4,
                 'name': 'Sally',
             }]
-        }],
+        },
     }
     ])
 

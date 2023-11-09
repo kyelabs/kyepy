@@ -25,6 +25,16 @@ def get_index(typ: Type, r: DuckDBPyRelation):
     return r
 
 class Loader:
+    """
+    The loader is responsible for normalizing the shape of the data. It makes sure that
+    all of the columns are present (filling in nulls where necessary) and also computes
+    the index hash for each row so that it is easy to join the data together later.
+    
+    The loader operates for each chunk of the data while it is loading. So it does not
+    do any cross table aggregations or validation.
+
+    Any value normalization needs to be done here so that the index hash is consistent.
+    """
     tables: dict[TYPE_REF, duckdb.DuckDBPyRelation]
 
     def __init__(self, models: Models):
