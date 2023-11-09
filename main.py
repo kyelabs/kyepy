@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     loader.from_json('Yellow', [{
         'id': 1,
-        'size': 1,
+        # 'size': 1,
         'meep': {
             "id": 1,
         },
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     },
     {
         'id': 2,
-        'size': 2,
+        # 'size': 2,
         'mother': { 
             'id': 3,
             'admin': True,
