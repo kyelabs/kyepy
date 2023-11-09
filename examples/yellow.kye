@@ -4,6 +4,7 @@ model User(id, name) {
     id: Number,
     name: String,
     admin: Boolean,
+    friends: User*,
 }
 
 model Yellow(id) {
@@ -12,5 +13,7 @@ model Yellow(id) {
     meep: model Meep(id) {
         id: Number,
     }+,
-    user: User,
+    mother: User,
+    father: User,
+    tags: String*,
 }
