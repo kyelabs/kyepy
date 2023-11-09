@@ -49,28 +49,73 @@ if __name__ == '__main__':
 
     loader.from_json('Yellow', [{
         'id': 1,
-        'size': 1,
+        # 'size': 1,
         'meep': {
             "id": 1,
         },
-        'user': { 
+        'mother': { 
             'id': 1,
-            'admin': 1,
-            'name': 1,
+            'admin': True,
+            'name': 'Joe',
+            'friends': [{
+                'id': 3,
+                'name': 'Bob',
+            },{
+                'id': 4,
+                'name': 'Sally',
+            }]
         },
+        'father': {
+            'id': 2,
+            'admin': False,
+            'name': 'Mary',
+            'friends': [{
+                'id': 5,
+                'name': 'Susan',
+            },{
+                'id': 4,
+                'name': 'Sally',
+            }]
+        },
+        'tags': [1, 'hi', 'bye']
     },
-    # {
-    #     'id': 1.0,
-    #     'size': 2,
-    # }
-    ])
-
-    loader.from_json('Yellow', [
-        {
-        'id': 1.0,
-        'size': 2,
+    {
+        'id': 2,
+        # 'size': 2,
+        'mother': { 
+            'id': 3,
+            'admin': True,
+            'name': 'Bob',
+            'friends': [{
+                'id': 3,
+                'name': 'Bob',
+            },{
+                'id': 4,
+                'name': 'Sally',
+            }]
+        },
+        'father': {
+            'id': 4,
+            'admin': False,
+            'name': 'Sarah',
+            'friends': [{
+                'id': 5,
+                'name': 'Susan',
+            },{
+                'id': 4,
+                'name': 'Sally',
+            }]
+        },
     }
     ])
 
-    print(loader['Yellow'])
+    loader.from_json('Yellow', [{
+        'id': 1.0,
+        # 'size': 2,
+        'tags': ['hi', 'meep']
+    }])
+
+    for table_name, table in loader.tables.items():
+        print(table_name)
+        print(table)
     print('hi')
