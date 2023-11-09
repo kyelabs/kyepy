@@ -1,7 +1,14 @@
 from __future__ import annotations
 from kyepy.compiled import CompiledDataset, CompiledEdge, CompiledType, TYPE_REF, EDGE
+from typing import Optional
 
 class Type:
+    ref: TYPE_REF
+    name: str
+    indexes: list[list[EDGE]]
+    extends: Optional[Type]
+    edges: dict[EDGE, Edge]
+
     def __init__(self, name: TYPE_REF):
         self.ref = name
         self.name = name
@@ -10,54 +17,56 @@ class Type:
         self.edges = {}
     
     @property
-    def has_edges(self):
+    def has_edges(self) -> bool:
         return len(self.edges) > 0
     
     @property
-    def has_index(self):
+    def has_index(self) -> bool:
         return len(self.indexes) > 0
     
     @property
-    def base(self):
+    def base(self) -> Optional[Type]:
         return self.extends if self.extends else self
 
     @property
-    def index(self):
+    def index(self) -> list[EDGE]:
         """ Flatten the 2d list of indexes """
         return [idx for idxs in self.indexes for idx in idxs]
     
-    def __getitem__(self, name: EDGE):
+    def __getitem__(self, name: EDGE) -> Edge:
         return self.edges[name]
 
-    def __contains__(self, name: EDGE):
+    def __contains__(self, name: EDGE) -> bool:
         return name in self.edges
     
-    def __iter__(self):
+    def __iter__(self) -> iter[Edge]:
         return iter(self.edges.values())
     
     def __repr__(self):
         return "Type<{}>".format(self.name)
 
 class Edge:
+    name: EDGE
+
     def __init__(self, name: EDGE, edge: CompiledEdge, model: DefinedType):
         self.name = name
         self._edge = edge
         self._model = model
     
     @property
-    def multiple(self):
+    def multiple(self) -> bool:
         return self._edge.multiple
     
     @property
-    def nullable(self):
+    def nullable(self) -> bool:
         return self._edge.nullable
     
     @property
-    def is_index(self):
+    def is_index(self) -> bool:
         return self.name in self._model.index
     
     @property
-    def type(self):
+    def type(self) -> Type:
         return self._model._models[self._edge.type]
     
     def __repr__(self):
