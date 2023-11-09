@@ -1,8 +1,38 @@
 import duckdb
-from duckdb import DuckDBPyRelation
+from duckdb import DuckDBPyRelation, DuckDBPyConnection
 from kyepy.dataset import Models
 from kyepy.loader.json_lines import from_json
 from kyepy.dataset import Type, DefinedType, Edge, TYPE_REF
+
+def get_dtypes(r: DuckDBPyRelation):
+    return dict(zip(r.columns, r.dtypes))
+
+def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
+    """
+    This function will not be needed in the future if we can figure out a standard way
+    to create the staging tables with the correct types before any data is uploaded.
+    """
+    orig_dtypes = get_dtypes(orig)
+    new_dtypes = get_dtypes(new)
+
+    # Check that the types of the columns match
+    for col in set(orig_dtypes) & set(new_dtypes):
+        if orig_dtypes[col] != new_dtypes[col]:
+            raise ValueError(f'''Column {col} has conflicting types: {orig_dtypes[col]} != {new_dtypes[col]}''')
+
+    # Alter the original table to include any new columns
+    for col in set(new_dtypes) - set(orig_dtypes):
+        con.sql(f'''ALTER TABLE "{orig.alias}" ADD COLUMN {col} {new_dtypes[col]}''')
+
+    # preserve the order of columns from the original table
+    # and cast any new columns to null
+    new = new.select(', '.join(
+        col if col in new_dtypes
+            else f'CAST(NULL as {orig_dtypes[col]}) as {col}'
+        for col in con.table(f'"{orig.alias}"').columns
+    ))
+    
+    new.insert_into(f'"{orig.alias}"')
 
 def get_struct_keys(r: DuckDBPyRelation):
     assert r.columns[1] == 'val'
@@ -47,9 +77,9 @@ class Loader:
         table_name = f'"{model_name}.staging"'
         if model_name not in self.tables:
             r.create(table_name)
-            self.tables[model_name] = self.db.table(table_name)
         else:
-            r.insert_into(table_name)
+            append_table(self.db, self.tables[model_name], r)
+        self.tables[model_name] = self.db.table(table_name)
 
     def _load(self, typ: DefinedType, r: duckdb.DuckDBPyRelation):
         chunk_id = typ.name + '_' + str(len(self.chunks) + 1)
@@ -62,11 +92,9 @@ class Loader:
             edges = r.select('_')
             for edge_name, edge in typ.edges.items():
                 if edge_name in get_struct_keys(r):
-                    edge_rel = self._get_edge(edge, r.select(f'''list_append(_, '{edge_name}') as _, val.{edge_name} as val''')).set_alias(typ.ref + '.' + edge_name)
+                    edge_rel = self._get_edge(edge, r.select(f'''list_append(_, '{edge_name}') as _, val.{edge_name} as val''')).set_alias(edge.ref)
                     edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
                     edges = edges.join(edge_rel, '_', how='left')
-                else:
-                    edges = edges.select(f'*, CAST(NULL as VARCHAR) as {edge_name}')
             
             if typ.has_index:
                 edges = get_index(typ, edges)
