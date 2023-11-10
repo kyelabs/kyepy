@@ -1,9 +1,9 @@
 type Size: Number
 
-model User(id, name) {
+model User(id)(name) {
     id: Number,
     name: String,
-    admin: Boolean,
+    admin: Boolean?,
     friends: User*,
 }
 

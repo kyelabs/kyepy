@@ -4,14 +4,16 @@ from kyepy.dataset import Models
 from kyepy.loader.json_lines import from_json
 from kyepy.dataset import Type, DefinedType, Edge, TYPE_REF
 
-def get_dtypes(r: DuckDBPyRelation):
-    return dict(zip(r.columns, r.dtypes))
 
 def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
     """
     This function will not be needed in the future if we can figure out a standard way
     to create the staging tables with the correct types before any data is uploaded.
     """
+
+    def get_dtypes(r: DuckDBPyRelation):
+        return dict(zip(r.columns, r.dtypes))
+
     orig_dtypes = get_dtypes(orig)
     new_dtypes = get_dtypes(new)
 

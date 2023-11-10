@@ -98,7 +98,7 @@ if __name__ == '__main__':
         'father': {
             'id': 4,
             'admin': False,
-            'name': 'Sarah',
+            'name': 'Sally',
             'friends': [{
                 'id': 5,
                 'name': 'Susan',
@@ -117,6 +117,7 @@ if __name__ == '__main__':
     }, {
         'id': 2,
         'size': 3,
+        'meep': { 'id': 3 },
     }])
     
     validate = Validate(loader)
