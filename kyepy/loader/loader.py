@@ -112,24 +112,6 @@ class Loader:
             # they will match integers of the same value
             if dtype in ['double','decimal','real']:
                 r = r.select(f'''_, REGEXP_REPLACE(val, '\\.0$', '') as val''')
-        # else:
-        #     dtype = r.dtypes[1].id
-        #     base_type = typ.base.name
-        #     converted = True
-        #     if base_type == 'Boolean' and dtype != 'boolean':
-        #         r = r.select(f'''_, TRY_CAST(val AS BOOLEAN) as val, val as raw''')
-        #     elif base_type == 'Number' and dtype == 'varchar':
-        #         r = r.select(f'''_, TRY_CAST(val AS DOUBLE) as val, val as raw''')
-        #     elif base_type == 'String' and dtype != 'varchar':
-        #         r = r.select(f'''_, CAST(val AS VARCHAR) as val, val as raw''')
-        #     else:
-        #         converted = False
-
-        #     if converted:
-        #         errors = r.filter('val IS NULL AND raw IS NOT NULL')
-        #         if errors.shape[0] > 0:
-        #             path, bad, raw = errors.fetchone()
-        #             raise ValueError(f'''Invalid value for {repr(typ)}: ({'.'.join(path)}) "{raw}"''')
         return r
     
     def _get_edge(self, edge: Edge, r: DuckDBPyRelation):

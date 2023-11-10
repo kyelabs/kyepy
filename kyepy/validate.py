@@ -29,7 +29,7 @@ class Validate:
 
     def _add_errors_where(self, r: DuckDBPyRelation, condition: str, rule_ref: str, error_type: str):
         err = r.filter(condition)
-        err = err.select(f''' '{rule_ref}' as rule_ref, '{error_type}' as error_type, _index as object_id, val''')
+        err = err.select(f''' '{rule_ref}' as rule_ref, '{error_type}' as error_type, _index as object_id, to_json(val) as val''')
         err.insert_into('errors')
         return r.filter(f'''NOT ({condition})''')
 
@@ -72,7 +72,27 @@ class Validate:
         if not edge.multiple:
             r = self._add_errors_where(r, 'len(val) > 1', edge.ref, 'NOT_MULTIPLE')
             r = r.select(f'''_index, val[1] as val''')
+        else:
+            r = r.select(f'''_index, unnest(val) as val''')
         
+        r = r.filter('val IS NOT NULL')
+        r = self._validate_value(edge.type, r)
+
+        if edge.multiple:
+            r = r.aggregate('_index, list(val) as val')
+        
+        return r
+    
+    def _validate_value(self, typ: Type, r: DuckDBPyRelation):
+        # TODO: Look up object references and see if they exist
+
+        base_type = typ.base.name
+
+        if base_type == 'Boolean':
+            r = self._add_errors_where(r, 'TRY_CAST(val as BOOLEAN) IS NULL', typ.ref, 'INVALID_BOOLEAN')
+        elif base_type == 'Number':
+            r = self._add_errors_where(r, 'TRY_CAST(val AS DOUBLE) IS NULL', typ.ref, 'INVALID_NUMBER')
+
         return r
 
     def __getitem__(self, model_name: TYPE_REF):

@@ -56,7 +56,7 @@ if __name__ == '__main__':
         },
         'mother': { 
             'id': 1,
-            'admin': True,
+            'admin': False,
             'name': 'Joe',
             'friends': [{
                 'id': 3,
