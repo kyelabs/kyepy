@@ -1,5 +1,5 @@
 from __future__ import annotations
-from kyepy.parser.kye_ast import *
+from kye.parser.kye_ast import *
 
 class Scope:
     def __init__(self, name, parent: Scope):

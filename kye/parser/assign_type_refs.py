@@ -1,4 +1,4 @@
-from kyepy.parser.kye_ast import *
+from kye.parser.kye_ast import *
 
 def get_defined_type_ref(node: AST):
     if isinstance(node, Model):

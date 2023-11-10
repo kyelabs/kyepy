@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from kyepy.dataset import Type, Edge, Models, TYPE_REF
+from kye.dataset import Type, Edge, Models, TYPE_REF
 from typing import Any
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 import re

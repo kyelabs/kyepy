@@ -1,13 +1,13 @@
 from pathlib import Path
-from kyepy.parser.parser import Parser
-from kyepy.parser.assign_scopes import assign_scopes, Scope
-from kyepy.parser.assign_type_refs import assign_type_refs
-from kyepy.parser.flatten_ast import flatten_ast
+from kye.parser.parser import Parser
+from kye.parser.assign_scopes import assign_scopes, Scope
+from kye.parser.assign_type_refs import assign_type_refs
+from kye.parser.flatten_ast import flatten_ast
 from pprint import pprint
-from kyepy.compiled import CompiledDataset
-from kyepy.dataset import Models
-from kyepy.loader.loader import Loader
-from kyepy.validate import Validate
+from kye.compiled import CompiledDataset
+from kye.dataset import Models
+from kye.loader.loader import Loader
+from kye.validate import Validate
 import duckdb
 DIR = Path(__file__).parent
 

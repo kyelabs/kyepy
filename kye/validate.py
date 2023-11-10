@@ -1,5 +1,5 @@
-from kyepy.dataset import Models, Type, Edge, TYPE_REF, EDGE
-from kyepy.loader.loader import Loader, struct_pack
+from kye.dataset import Models, Type, Edge, TYPE_REF, EDGE
+from kye.loader.loader import Loader, struct_pack
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
 class Validate:

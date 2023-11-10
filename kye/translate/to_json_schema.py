@@ -1,4 +1,4 @@
-from kyepy.parser.kye_ast import *
+from kye.parser.kye_ast import *
 
 def to_json_schema(ast):
     # TODO: don't assume using last definition as root

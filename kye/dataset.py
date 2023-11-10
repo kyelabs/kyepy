@@ -1,5 +1,5 @@
 from __future__ import annotations
-from kyepy.compiled import CompiledDataset, CompiledEdge, CompiledType, TYPE_REF, EDGE
+from kye.compiled import CompiledDataset, CompiledEdge, CompiledType, TYPE_REF, EDGE
 from typing import Optional
 
 class Type:

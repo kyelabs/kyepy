@@ -1,8 +1,8 @@
 import duckdb
 from duckdb import DuckDBPyRelation, DuckDBPyConnection
-from kyepy.dataset import Models
-from kyepy.loader.json_lines import from_json
-from kyepy.dataset import Type, DefinedType, Edge, TYPE_REF
+from kye.dataset import Models
+from kye.loader.json_lines import from_json
+from kye.dataset import Type, DefinedType, Edge, TYPE_REF
 
 
 def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
