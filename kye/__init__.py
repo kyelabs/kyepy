@@ -1,0 +1,1 @@
+from kye.api import compile
