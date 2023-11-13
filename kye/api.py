@@ -42,6 +42,9 @@ class Api:
 
     def is_valid(self):
         return self.validate.is_valid()
+    
+    def from_records(self, model_name: str, json: Any):
+        return getattr(self, model_name).from_records(json)
 
 def compile(text) -> Api:
     return Api(text)

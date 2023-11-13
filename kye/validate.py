@@ -60,7 +60,8 @@ class Validate:
             edges = self.check_for_index_collision(typ, r)
 
         for edge_name, edge in typ.edges.items():
-            edge_rel = self._validate_edge(edge, r.select(f'''_index, {edge_name} as val''')).set_alias(edge.ref)
+            edge_rel = r.select(f'''_index, {edge_name if edge_name in r.columns else 'CAST(NULL as VARCHAR)'} as val''')
+            edge_rel = self._validate_edge(edge, edge_rel).set_alias(edge.ref)
             edge_rel = edge_rel.select(f'''_index, val as {edge_name}''')
             edges = edges.join(edge_rel, '_index', how='left')
         return edges
@@ -92,9 +93,9 @@ class Validate:
         base_type = typ.base.name
 
         if base_type == 'Boolean':
-            r = self._add_errors_where(r, 'TRY_CAST(val as BOOLEAN) IS NULL', typ.ref, 'INVALID_BOOLEAN')
+            r = self._add_errors_where(r, 'TRY_CAST(val as BOOLEAN) IS NULL', typ.ref, 'INVALID_VALUE')
         elif base_type == 'Number':
-            r = self._add_errors_where(r, 'TRY_CAST(val AS DOUBLE) IS NULL', typ.ref, 'INVALID_NUMBER')
+            r = self._add_errors_where(r, 'TRY_CAST(val AS DOUBLE) IS NULL', typ.ref, 'INVALID_VALUE')
 
         return r
 
