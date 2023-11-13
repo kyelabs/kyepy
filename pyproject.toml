@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kye"
+dynamic = ["version"]
+description = 'A Data Validation Framework'
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Benjamin Earl", email = "14208829+benjameep@users.noreply.github.com" },
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+  "pydantic",
+  "duckdb",
+  "lark",
+  "lark[interegular]",
+]
+
+[project.urls]
+Documentation = "https://github.com/kyelabs/kyepy#readme"
+Issues = "https://github.com/kyelabs/kyepy/issues"
+Source = "https://github.com/kyelabs/kyepy"
+
+[tool.hatch.version]
+path = "kye/__about__.py"

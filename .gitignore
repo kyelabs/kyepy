@@ -5,3 +5,4 @@ __pycache__
 *.ipynb
 *.csv
 .coverage
+dist/
