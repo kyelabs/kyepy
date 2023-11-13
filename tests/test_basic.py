@@ -11,8 +11,10 @@ def is_valid(text, data):
 
 def test_value_is_coercible():
     USER = '''
+    type UserId: Number
+
     model User(id) {
-        id: Number,
+        id: UserId,
         name: String,
         is_admin: Boolean,
     }
@@ -125,4 +127,22 @@ def test_conflicting_loads():
 
     assert api.errors == {
         ('User.name', 'NOT_MULTIPLE')
+    }
+
+def test_index_collision():
+    USER = '''
+    model User(id)(name) {
+        id: Number,
+        name: String,
+    }
+    '''
+
+    assert get_errors(USER, [{
+        'id': 1,
+        'name': 'Joe',
+    }, {
+        'id': 2,
+        'name': 'Joe', # two people are not allowed to have the same name of Joe
+    }]) == {
+        ('User', 'NON_UNIQUE_INDEX'),
     }

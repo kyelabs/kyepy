@@ -19,9 +19,6 @@ class Validate:
             table.create(table_name)
             self.tables[model_name] = self.db.table(table_name)
     
-    def is_valid(self):
-        return self.errors.shape[0] == 0
-    
     @property
     def db(self) -> DuckDBPyConnection:
         return self.loader.db

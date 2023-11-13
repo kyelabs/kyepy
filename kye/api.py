@@ -39,9 +39,6 @@ class Api:
     @property
     def tables(self):
         return self.validate.tables
-
-    def is_valid(self):
-        return self.validate.is_valid()
     
     def from_records(self, model_name: str, json: Any):
         getattr(self, model_name).from_records(json)
