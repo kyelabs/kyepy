@@ -4,8 +4,7 @@ def get_errors(text, data):
     api = kye.compile(text)
     model_name = list(api.compiled.keys())[0]
     api.from_records(model_name, data)
-    errors = set(api.errors.aggregate(f"rule_ref, error_type").fetchall())
-    return errors
+    return api.errors
 
 def is_valid(text, data):
     return len(get_errors(text, data)) == 0
@@ -82,4 +81,48 @@ def test_validate_cardinality():
     }]) == {
         ('User.name', 'NOT_NULLABLE'),
         ('User.age', 'NOT_MULTIPLE'),
+    }
+
+def test_validate_recursive():
+    USER = '''
+    model User(id) {
+        id: Number,
+        friends: User*,
+    }
+    '''
+
+    assert is_valid(USER, [{
+        'id': 1,
+        'friends': [{
+            'id': 2,
+            'friends': [{ 'id': 1 }],
+        },{
+            'id': 3,
+            'friends': [{ 'id': 1 }, { 'id': 2 }],
+        }],
+    }])
+
+def test_conflicting_loads():
+    api = kye.compile('''
+    model User(id) {
+        id: Number,
+        name: String,
+    }
+    ''')
+
+    api.from_records('User', [{
+        'id': 1,
+        'name': 'Joe',
+    }, {
+        'id': 2,
+        'name': 'Bill',
+    }])
+
+    api.from_records('User', [{
+        'id': 1,
+        'name': 'Joey', # conflicting name
+    }])
+
+    assert api.errors == {
+        ('User.name', 'NOT_MULTIPLE')
     }

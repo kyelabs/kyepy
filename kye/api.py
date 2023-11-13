@@ -34,7 +34,7 @@ class Api:
     
     @property
     def errors(self):
-        return self.validate.errors
+        return set(self.validate.errors.aggregate(f"rule_ref, error_type").fetchall())
 
     @property
     def tables(self):
@@ -44,7 +44,8 @@ class Api:
         return self.validate.is_valid()
     
     def from_records(self, model_name: str, json: Any):
-        return getattr(self, model_name).from_records(json)
+        getattr(self, model_name).from_records(json)
+        return self
 
 def compile(text) -> Api:
     return Api(text)
