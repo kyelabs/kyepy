@@ -2,7 +2,7 @@ from kye.parser.kye_ast import *
 
 def define_models(node: AST, models):
     
-    if isinstance(node, Model):
+    if isinstance(node, ModelDefinition):
         assert node.type_ref not in models
         models[node.type_ref] = {
             'name': node.name,
@@ -10,7 +10,7 @@ def define_models(node: AST, models):
             'edges': {},
         }
     
-    elif isinstance(node, Edge):
+    elif isinstance(node, EdgeDefinition):
         assert node.type_ref in models
         assert node.type_ref not in models[node.type_ref]['edges']
         edge = {

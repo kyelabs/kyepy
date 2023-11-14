@@ -49,9 +49,16 @@ class AST(BaseModel):
         for child in self.children:
             yield path, child
             yield from child.traverse(path=path)
+    
+    def __repr__(self):
+        end_line = f"-{self.meta.end_line}" if self.meta.end_line != self.meta.line else ''
+        return f"{self.__class__.__name__}<{self.__repr_value__()}>:{self.meta.line}{end_line}"
+    
+    def __repr_value__(self):
+        return ''
 
-class Script(AST):
-    children: list[Union[TypeAlias, Model]]
+class Definitions(AST):
+    children: list[Union[AliasDefinition, ModelDefinition]]
 
     @model_validator(mode='after')
     def validate_definitions(self):
@@ -63,13 +70,29 @@ class Script(AST):
             type_names.add(child.name)
         return self
     
-    def __repr__(self):
-        return f"Script<{','.join(child.name for child in self.children)}>"
+    def __repr_value__(self):
+        return f"{','.join(child.name for child in self.children)}"
 
-class Model(AST):
+class Definition(AST):
+    name: Union[TYPE, EDGE]
+
+class TypeDefinition(Definition):
     name: TYPE
-    indexes: list[Index]
-    edges: list[Edge]
+
+class AliasDefinition(TypeDefinition):
+    typ: Expression
+
+    @model_validator(mode='after')
+    def set_children(self):
+        self.children = [self.typ]
+        return self
+    
+    def __repr_value__(self):
+        return f"{self.name}:{self.typ}"
+
+class ModelDefinition(TypeDefinition):
+    indexes: list[list[EDGE]]
+    edges: list[EdgeDefinition]
 
     @model_validator(mode='after')
     def validate_indexes(self):
@@ -84,7 +107,7 @@ class Model(AST):
         
         idx_names = set()
         for idx in self.indexes:
-            for name in idx.edges:
+            for name in idx:
                 # raise error if index name is not an edge name
                 if name not in edge_names:
                     raise ValueError(f'Index {name} is not an edge name in model {self.name}')
@@ -93,58 +116,62 @@ class Model(AST):
                 idx_names.add(name)
         return self
 
-    def __repr__(self):
+    def __repr_value__(self):
+        def format_index(idx):
+            return "(" + ','.join(idx) + ")"
+
         return self.name + \
-            ''.join(repr(idx) for idx in self.indexes) + \
+            ''.join(format_index(idx) for idx in self.indexes) + \
             "{" + ','.join(edge.name for edge in self.edges) + "}"
 
-class Index(AST):
-    edges: list[EDGE]
-
-    def __str__(self):
-        return f"({','.join(self.edges)})"
-
-    def __repr__(self):
-        return str(self)
-
-class Edge(AST):
+class EdgeDefinition(Definition):
     name: EDGE
-    typ: Optional[Type]
     cardinality: Optional[Literal['*','?','+','!']]
-
-    @model_validator(mode='after')
-    def set_children(self):
-        if self.typ:
-            self.children = [self.typ]
-        return self
-
-    def __repr__(self):
-        return f"{self.name}:{self.typ or ''}{self.cardinality or ''}"
-
-class TypeRef(AST):
-    name: TYPE
-    index: Optional[Index] = None
-
-    @model_validator(mode='after')
-    def set_children(self):
-        if self.index:
-            self.children = [self.index]
-        return self
-
-    def __repr__(self):
-        return self.name + \
-            (repr(self.index) if self.index else '')
-
-class TypeAlias(AST):
-    name: TYPE
-    typ: Type
+    typ: Expression
 
     @model_validator(mode='after')
     def set_children(self):
         self.children = [self.typ]
         return self
-    
-    def __repr__(self):
-        return f"{self.name}:{self.typ}"
 
-Type = Union[TypeAlias, Model, TypeRef]
+    def __repr_value__(self):
+        return f"{self.name}{self.cardinality or ''}"
+
+class Expression(AST):
+    pass
+
+class Identifier(Expression):
+    name: str
+
+    def __repr_value__(self):
+        return self.name
+
+class LiteralExpression(Expression):
+    value: Union[str, float, bool]
+
+    def __repr_value__(self):
+        return repr(self.value)
+
+class Operation(Expression):
+    _OP_NAMES = {
+        '!': 'not', '~': 'invert',
+        '!=': 'ne', '==': 'eq', 
+        '>=': 'gte', '<=': 'lte', 
+        '>': 'gt', '<': 'lt',
+        '+': 'add', '-': 'sub',
+        '*': 'mul', '/': 'div', '%': 'mod',
+        '|': 'or', '&': 'and', '^': 'xor',
+        '[]': 'filter', '.': 'dot',
+    }
+
+    op: Literal[
+        '!','~',
+        '!=','==','>=','<=','>','<',
+        '+','-','*','/','%',
+        '|','&','^',
+        '[]','.'
+    ]
+    children: list[Expression]
+
+    def __repr_value__(self):
+        return self._OP_NAMES[self.op]
