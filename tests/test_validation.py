@@ -104,6 +104,38 @@ def test_validate_recursive():
         }],
     }])
 
+def test_load_different_types():
+    api = kye.compile('''
+    model User(id) {
+        id: Number,
+        name: String,
+        admin: Boolean,
+    }
+    ''')
+
+    api.from_records('User', [{
+        'id': 1,
+        'name': 'Joe',
+        'admin': True,
+    }, {
+        'id': 2,
+        'name': 'Bill',
+        'admin': False,
+    }])
+
+    # Second load uses different types
+    # but the 1.0 record should match with the 1 record
+    api.from_records('User', [{
+        'id': 1.0,
+        'name': 'Joe',
+    }, {
+        'id': 1.2,
+        'name': 'Sally',
+        'admin': False,
+    }])
+
+    assert api.errors == set()
+
 def test_conflicting_loads():
     api = kye.compile('''
     model User(id) {
