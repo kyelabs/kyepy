@@ -146,3 +146,24 @@ def test_index_collision():
     }]) == {
         ('User', 'NON_UNIQUE_INDEX'),
     }
+
+def test_ambiguous_index():
+    USER = '''
+    model User(id)(employee_id) {
+        id: Number,
+        employee_id: Number,
+    }
+    '''
+
+    assert get_errors(USER, [{
+        'id': 1,
+        'employee_id': 10001,
+    }, {
+        'id': 2,
+        'employee_id': 10002,
+    }, {
+        'id': 3,
+        'employee_id': 2, # Not allowed because it could be confused with the id of a different user
+    }]) == {
+        ('User', 'NON_UNIQUE_INDEX'),
+    }
