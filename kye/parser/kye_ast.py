@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union
-from lark import tree
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
@@ -13,20 +12,7 @@ class TokenPosition(BaseModel):
     end_column: int
     start_pos: int
     end_pos: int
-
-    @model_validator(mode='before')
-    @classmethod
-    def from_meta(cls, meta):
-        if isinstance(meta, tree.Meta):
-            return {
-                'line': meta.line,
-                'column': meta.column,
-                'end_line': meta.end_line,
-                'end_column': meta.end_column,
-                'start_pos': meta.start_pos,
-                'end_pos': meta.end_pos,
-            }
-        return meta
+    text: str
     
     def __repr__(self):
         end_line = f"{self.end_line}:" if self.end_line != self.line else ''

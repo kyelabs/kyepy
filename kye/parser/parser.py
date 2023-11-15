@@ -46,7 +46,7 @@ def print_ast(ast):
 
 def kye_to_ast(text):
     tree = definitions_parser.parse(text)
-    ast = transform(tree)
+    ast = transform(tree, script=text)
     assign_scopes(ast, scope=GLOBAL_SCOPE)
     # assign_type_refs(ast)
     print_ast(ast)

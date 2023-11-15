@@ -1,6 +1,6 @@
 from typing import Any
 from kye.parser.kye_ast import *
-from lark import Transformer, visitors, Token, Tree
+from lark import Token, Tree
 
 OPERATORS_MAP = {
     'or_exp': '|',
@@ -10,7 +10,7 @@ OPERATORS_MAP = {
     'filter_exp': '[]',
 }
 
-def transform(token: Union[Tree, Token]):
+def transform(token: Union[Tree, Token], script=str):
 
     if isinstance(token, Token):
         kind = token.type
@@ -20,7 +20,17 @@ def transform(token: Union[Tree, Token]):
     elif isinstance(token, Tree):
         kind = token.data
         meta = token.meta
-        children = [transform(child) for child in token.children]
+        children = [transform(child, script) for child in token.children]
+    
+    meta = TokenPosition(
+        line=meta.line,
+        column=meta.column,
+        end_line=meta.end_line,
+        end_column=meta.end_column,
+        start_pos=meta.start_pos,
+        end_pos=meta.end_pos,
+        text=script[meta.start_pos:meta.end_pos],
+    )
 
     # Lark prefixes imported rules with '<module_name>__'
     # we will just make sure that we don't have any name conflicts
@@ -29,6 +39,7 @@ def transform(token: Union[Tree, Token]):
     # was imported
     if '__' in kind:
         kind = kind.split('__')[-1]
+        assert kind != '', 'Did not expect rule name to end with a double underscore'
 
     if kind == 'SIGNED_NUMBER':
         return float(value)
