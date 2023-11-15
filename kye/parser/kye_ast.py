@@ -3,8 +3,6 @@ from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union
 from lark import tree
 
-TAB = '    '
-
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
 
@@ -92,12 +90,12 @@ class AliasDefinition(TypeDefinition):
 
 class ModelDefinition(TypeDefinition):
     indexes: list[list[EDGE]]
-    edges: list[EdgeDefinition]
     subtypes: list[TypeDefinition]
+    edges: list[EdgeDefinition]
 
     @model_validator(mode='after')
     def validate_indexes(self):
-        self.children = self.edges + self.subtypes
+        self.children = self.subtypes + self.edges
         edge_names = set()
         for edge in self.edges:
             # raise error if edge name is duplicated

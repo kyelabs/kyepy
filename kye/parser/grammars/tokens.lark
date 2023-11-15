@@ -1,0 +1,19 @@
+TYPE: /[A-Z][a-z][a-zA-Z]*/
+EDGE: /[a-z][a-z_]*/
+
+DIGIT: "0".."9"
+
+INT: DIGIT+
+SIGNED_INT: ["+"|"-"] INT
+DECIMAL: INT "." INT
+
+_EXP: ("e"|"E") SIGNED_INT
+FLOAT: INT _EXP | DECIMAL _EXP?
+SIGNED_FLOAT: ["+"|"-"] FLOAT
+
+NUMBER: FLOAT | INT
+SIGNED_NUMBER: ["+"|"-"] NUMBER
+
+%import common.WS
+%import common.ESCAPED_STRING -> STRING
+%import common.SH_COMMENT -> COMMENT

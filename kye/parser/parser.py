@@ -1,29 +1,37 @@
 from lark import Lark
+from lark.load_grammar import FromPackageLoader
 from pathlib import Path
-from kye.parser.kye_transformer import TreeToKye
+from kye.parser.kye_transformer import transform
 from kye.parser.assign_scopes import assign_scopes, Scope
 from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
 from kye.dataset import Models
 
-DIR = Path(__file__).parent
-
-with open(DIR / 'grammar.lark') as f:
-    grammar = f.read()
+GRAMMAR_DIR = Path(__file__).parent / 'grammars'
 
 GLOBAL_SCOPE = Scope(name=None, parent=None)
 for global_type in Models.globals.keys():
     GLOBAL_SCOPE[global_type] = '<built-in type>'
 
-parser = Lark(
-    grammar,
-    start='definitions',
-    parser='lalr',
-    strict=True,
-    propagate_positions=True
-)
+def get_parser(grammar_file, start_rule):
+    return Lark(
+        f"""
+        %import {grammar_file}.{start_rule}
+        %import tokens (WS, COMMENT)
+        %ignore WS
+        %ignore COMMENT
+        """,
+        start=start_rule,
+        parser='lalr',
+        strict=True,
+        propagate_positions=True,
+        import_paths=[FromPackageLoader(__name__, ('grammars',))],
+    )
 
-transformer = TreeToKye()
+definitions_parser = get_parser('definitions', 'definitions')
+expressions_parser = get_parser('expressions', 'exp')
+
+# transformer = TreeToKye()
 
 def print_ast(ast):
     FORMAT = '{:<20} {:<20} {}'
@@ -37,10 +45,10 @@ def print_ast(ast):
         )
 
 def kye_to_ast(text):
-    tree = parser.parse(text)
-    ast = transformer.transform(tree)
+    tree = definitions_parser.parse(text)
+    ast = transform(tree)
     assign_scopes(ast, scope=GLOBAL_SCOPE)
-    assign_type_refs(ast)
+    # assign_type_refs(ast)
     print_ast(ast)
     return ast
 

@@ -1,57 +1,69 @@
+from typing import Any
 from kye.parser.kye_ast import *
-from lark import Transformer, visitors
+from lark import Transformer, visitors, Token, Tree
 
-def binary_expression(_, meta, children):
-    return Operation(op=children[1].value, children=[children[0], children[2]], meta=meta)
+OPERATORS_MAP = {
+    'or_exp': '|',
+    'xor_exp': '^',
+    'and_exp': '&',
+    'dot_exp': '.',
+    'filter_exp': '[]',
+}
 
-def binary_expression_using(op):
-    def _binary_expression(_, meta, children):
-        return Operation(op=op, children=children, meta=meta)
-    return _binary_expression
+def transform(token: Union[Tree, Token]):
 
-@visitors.v_args(meta=True)
-class TreeToKye(Transformer):
-    def ESCAPED_STRING(self, n):
-        return n[1:-1]
-    
-    def SIGNED_NUMBER(self, n):
-        return float(n)
-    
-    def identifier(self, meta, children):
-        return Identifier(name=children[0].value, meta=meta)
-    
-    def literal(self, meta, children):
+    if isinstance(token, Token):
+        kind = token.type
+        meta = token
+        value = token.value
+        children = [ value ]
+    elif isinstance(token, Tree):
+        kind = token.data
+        meta = token.meta
+        children = [transform(child) for child in token.children]
+
+    # Lark prefixes imported rules with '<module_name>__'
+    # we will just make sure that we don't have any name conflicts
+    # across grammar files and remove the prefixes so that we can
+    # use the same transformer independently of how the grammar
+    # was imported
+    if '__' in kind:
+        kind = kind.split('__')[-1]
+
+    if kind == 'SIGNED_NUMBER':
+        return float(value)
+    if kind == 'ESCAPED_STRING':
+        return value[1:-1]
+    if kind == 'identifier':
+        return Identifier(name=children[0], meta=meta)
+    if kind == 'literal':
         return LiteralExpression(value=children[0], meta=meta)
+    if kind in ('comp_exp', 'mult_exp', 'add_exp'):
+        return Operation(op=children[1], children=[children[0], children[2]], meta=meta)
+    if kind in OPERATORS_MAP:
+        return Operation(op=OPERATORS_MAP[kind], children=children, meta=meta)
+    if kind == 'unary_expression':
+        Operation(op=children[0], children=[children[1]], meta=meta)
 
-    comp_exp = binary_expression
-    mult_exp = binary_expression
-    add_exp = binary_expression
-    or_exp = binary_expression_using('|')
-    xor_exp = binary_expression_using('^')
-    and_exp = binary_expression_using('&')
-    dot_exp = binary_expression_using('.')
-    filter_exp = binary_expression_using('[]')
-    
-    def unary_expression(self, meta, children):
-        return Operation(op=children[0].value, children=[children[1]], meta=meta)
-        
-    def edge_def(self, meta, children):
-        cardinality = None
+    if kind == 'alias_def':
+        name, typ = children
+        return AliasDefinition(name=name, typ=typ, meta=meta)
+
+    if kind == 'edge_def':
         if len(children) == 3:
             name, cardinality, typ = children
-            cardinality = cardinality.value
         elif len(children) == 2:
             name, typ = children
+            cardinality = None
         else:
             raise ValueError('Invalid edge definition')
         
-        return EdgeDefinition(name=name.value, typ=typ, cardinality=cardinality, meta=meta)
-    
-    def alias_def(self, meta, children):
-        name, typ = children
-        return AliasDefinition(name=name, typ=typ, meta=meta)
-    
-    def model_def(self, meta, children):
+        return EdgeDefinition(name=name, typ=typ, cardinality=cardinality, meta=meta)
+
+    if kind == 'index':
+        return children
+
+    if kind == 'model_def':
         indexes = []
         edges = []
         subtypes = []
@@ -61,16 +73,21 @@ class TreeToKye(Transformer):
             elif isinstance(child, TypeDefinition):
                 subtypes.append(child)
             else:
-                assert child.data.value == 'index'
-                indexes.append([idx.value for idx in child.children])
+                assert type(child) is list
+                indexes.append(child)
 
         return ModelDefinition(
-            name=children[0].value,
+            name=children[0],
             indexes=indexes,
             edges=edges,
             subtypes=subtypes,
             meta=meta
         )
-    
-    def definitions(self, meta, children):
+
+    if kind == 'definitions':
         return Definitions(children=children, meta=meta)
+
+    if isinstance(token, Token):
+        return value
+    else:
+        raise Exception(f'Unknown rule: {kind}')
