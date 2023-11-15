@@ -14,24 +14,27 @@ for global_type in Models.globals.keys():
     GLOBAL_SCOPE[global_type] = '<built-in type>'
 
 def get_parser(grammar_file, start_rule):
-    return Lark(
-        f"""
-        %import {grammar_file}.{start_rule}
-        %import tokens (WS, COMMENT)
-        %ignore WS
-        %ignore COMMENT
-        """,
-        start=start_rule,
-        parser='lalr',
-        strict=True,
-        propagate_positions=True,
-        import_paths=[FromPackageLoader(__name__, ('grammars',))],
-    )
+    def parse(text):
+        parser = Lark(
+            f"""
+            %import {grammar_file}.{start_rule}
+            %import tokens (WS, COMMENT)
+            %ignore WS
+            %ignore COMMENT
+            """,
+            start=start_rule,
+            parser='lalr',
+            strict=True,
+            propagate_positions=True,
+            import_paths=[FromPackageLoader(__name__, ('grammars',))],
+        )
+        tree = parser.parse(text)
+        ast = transform(tree, text)
+        return ast
+    return parse
 
-definitions_parser = get_parser('definitions', 'definitions')
-expressions_parser = get_parser('expressions', 'exp')
-
-# transformer = TreeToKye()
+parse_definitions = get_parser('definitions', 'definitions')
+parse_expression = get_parser('expressions', 'exp')
 
 def print_ast(ast):
     FORMAT = '{:<20} {:<20} {}'
@@ -45,8 +48,7 @@ def print_ast(ast):
         )
 
 def kye_to_ast(text):
-    tree = definitions_parser.parse(text)
-    ast = transform(tree, script=text)
+    ast = parse_definitions(text)
     assign_scopes(ast, scope=GLOBAL_SCOPE)
     # assign_type_refs(ast)
     print_ast(ast)
