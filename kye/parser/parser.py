@@ -26,23 +26,22 @@ parser = Lark(
 transformer = TreeToKye()
 
 def print_ast(ast):
-    # FORMAT = '{:<20} {:<20} {}'
-    # print(FORMAT.format('Scope', 'Type', 'Node'))
-    FORMAT = '{}'
+    FORMAT = '{:<20} {:<20} {}'
+    print(FORMAT.format('Scope', 'Type', 'Node'))
     print('-'*80)
     for path, node in ast.traverse():
         print(FORMAT.format(
-            # getattr(node.scope, 'path', '') or '',
-            # node.type_ref or '',
+            getattr(node.scope, 'path', '') or '',
+            node.type_ref or '',
             '    '*(len(path)-1) + repr(node))
         )
 
 def kye_to_ast(text):
     tree = parser.parse(text)
     ast = transformer.transform(tree)
+    assign_scopes(ast, scope=GLOBAL_SCOPE)
+    assign_type_refs(ast)
     print_ast(ast)
-    # assign_scopes(ast, scope=GLOBAL_SCOPE)
-    # assign_type_refs(ast)
     return ast
 
 def compile(text):

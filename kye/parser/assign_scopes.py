@@ -37,7 +37,7 @@ class Scope:
 def assign_scopes(node: AST, scope):
     assert scope is not None
     # Add definition to parent's scope
-    if isinstance(node, (ModelDefinition, EdgeDefinition, AliasDefinition)):
+    if isinstance(node, Definition):
         scope[node.name] = node
     # Create new child scope for model
     if isinstance(node, ModelDefinition):

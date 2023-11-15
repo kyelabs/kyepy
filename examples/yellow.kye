@@ -1,3 +1,8 @@
+type Hello: Meep
 model User(id) {
-    id: Meep.name.length
+    type Name: String
+    model Type(id) { id: Number }
+    kind: Type
+    id: (3)[length > 2].name[hello].length
+    hi: 3
 }

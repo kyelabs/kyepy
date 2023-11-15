@@ -93,11 +93,11 @@ class AliasDefinition(TypeDefinition):
 class ModelDefinition(TypeDefinition):
     indexes: list[list[EDGE]]
     edges: list[EdgeDefinition]
+    subtypes: list[TypeDefinition]
 
     @model_validator(mode='after')
     def validate_indexes(self):
-        # self.children.extend(self.indexes)
-        self.children = self.edges
+        self.children = self.edges + self.subtypes
         edge_names = set()
         for edge in self.edges:
             # raise error if edge name is duplicated
@@ -122,7 +122,7 @@ class ModelDefinition(TypeDefinition):
 
         return self.name + \
             ''.join(format_index(idx) for idx in self.indexes) + \
-            "{" + ','.join(edge.name for edge in self.edges) + "}"
+            "{" + ','.join(edge.name for edge in self.children) + "}"
 
 class EdgeDefinition(Definition):
     name: EDGE

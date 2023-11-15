@@ -52,17 +52,25 @@ class TreeToKye(Transformer):
         return AliasDefinition(name=name, typ=typ, meta=meta)
     
     def model_def(self, meta, children):
-        name = children[0].value
         indexes = []
         edges = []
+        subtypes = []
         for child in children[1:]:
             if isinstance(child, EdgeDefinition):
                 edges.append(child)
+            elif isinstance(child, TypeDefinition):
+                subtypes.append(child)
             else:
                 assert child.data.value == 'index'
                 indexes.append([idx.value for idx in child.children])
 
-        return ModelDefinition(name=name,indexes=indexes,edges=edges, meta=meta)
+        return ModelDefinition(
+            name=children[0].value,
+            indexes=indexes,
+            edges=edges,
+            subtypes=subtypes,
+            meta=meta
+        )
     
     def definitions(self, meta, children):
         return Definitions(children=children, meta=meta)

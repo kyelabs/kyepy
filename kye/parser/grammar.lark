@@ -1,15 +1,18 @@
-definitions: type_def*
-
+// Templates
 _binary_exp{child,op}: child | child op child
 _delimited_exp{child,op}: child | child (op child)+
 _comma_delimited{item}: [ item ("," item)* ","? ]
+_line_delimited{item}: [ item (","? item)* ","? ]
 
 // Definitions
-?type_def: alias_def | model_def
+definitions: _line_delimited{ _script_definition }
+_script_definition: model_def | alias_def
 
 alias_def: "type" TYPE ":" exp
 
-model_def: "model" TYPE index+ "{" _comma_delimited{ edge_def } "}"
+model_def: "model" TYPE index+ "{" _line_delimited{ _model_definition } "}"
+
+_model_definition: model_def | alias_def | edge_def
 
 index: "(" _comma_delimited{ EDGE } ")"
 
@@ -36,18 +39,20 @@ MULTIPLICATION_OP: "*" | "/" | "%"
 ?add_exp: _binary_exp{unary_exp, ADDITION_OP}
 ADDITION_OP: "+" | "-"
 
-?unary_exp: atom_exp
-          | UNARY_OP atom_exp
+?unary_exp: value_exp
+          | UNARY_OP value_exp
 UNARY_OP: "!" | "~"
 
-?atom_exp: dot_exp
-        | literal
-        | "(" exp ")"
+?value_exp: dot_exp
+          | literal
 
 ?dot_exp: _delimited_exp{filter_exp, "."}
 
-?filter_exp: identifier
-           | identifier "[" [ exp ] "]"
+?filter_exp: atom_exp
+           | atom_exp "[" [ exp ] "]"
+
+?atom_exp: identifier
+         | "(" exp ")"
 
 // General
 identifier: TYPE | EDGE
