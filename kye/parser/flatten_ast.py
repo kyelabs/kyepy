@@ -14,7 +14,7 @@ def define_models(node: AST, models):
         assert node.type_ref in models
         assert node.type_ref not in models[node.type_ref]['edges']
         edge = {
-            'type': node.typ.type_ref,
+            'type': node.type.type_ref,
         }
         if node.cardinality in ('?', '*'):
             edge['nullable'] = True

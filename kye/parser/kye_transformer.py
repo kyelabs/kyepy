@@ -58,7 +58,7 @@ def transform(token: Union[Tree, Token], script=str):
 
     if kind == 'alias_def':
         name, typ = children
-        return AliasDefinition(name=name, typ=typ, meta=meta)
+        return AliasDefinition(name=name, type=typ, meta=meta)
 
     if kind == 'edge_def':
         if len(children) == 3:
@@ -69,7 +69,7 @@ def transform(token: Union[Tree, Token], script=str):
         else:
             raise ValueError('Invalid edge definition')
         
-        return EdgeDefinition(name=name, typ=typ, cardinality=cardinality, meta=meta)
+        return EdgeDefinition(name=name, type=typ, cardinality=cardinality, meta=meta)
 
     if kind == 'index':
         return children
@@ -96,7 +96,7 @@ def transform(token: Union[Tree, Token], script=str):
         )
 
     if kind == 'definitions':
-        return Definitions(children=children, meta=meta)
+        return ModuleDefinitions(children=children, name='main', meta=meta)
 
     if isinstance(token, Token):
         return value

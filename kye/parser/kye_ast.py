@@ -41,8 +41,25 @@ class AST(BaseModel):
     def __repr_value__(self):
         return ''
 
-class Definitions(AST):
-    children: list[Union[AliasDefinition, ModelDefinition]]
+class Definition(AST):
+    """ Abstract class for all AST nodes that define a name """
+    name: Union[TYPE, EDGE]
+
+class TypeDefinition(Definition):
+    """ Abstract class for all AST nodes that define a type """
+    name: TYPE
+
+class ExpressionDefinition(Definition):
+    """ Abstract class for all AST nodes who's type is an expression """
+    type: Expression
+
+class ContainedDefinitions(Definition):
+    """ Abstract class for all AST nodes that have child definitions """
+    children: list[Definition]
+
+class ModuleDefinitions(ContainedDefinitions):
+    name: Literal['main']
+    children: list[TypeDefinition]
 
     @model_validator(mode='after')
     def validate_definitions(self):
@@ -50,31 +67,24 @@ class Definitions(AST):
         for child in self.children:
             # raise error if definition name is duplicated
             if child.name in type_names:
-                raise ValueError(f'Model name {child.name} is duplicated in model {self.name}')
+                raise ValueError(f'Type name {child.name} is duplicated in model {self.name}')
             type_names.add(child.name)
         return self
     
     def __repr_value__(self):
         return f"{','.join(child.name for child in self.children)}"
 
-class Definition(AST):
-    name: Union[TYPE, EDGE]
-
-class TypeDefinition(Definition):
-    name: TYPE
-
-class AliasDefinition(TypeDefinition):
-    typ: Expression
+class AliasDefinition(TypeDefinition, ExpressionDefinition):
 
     @model_validator(mode='after')
     def set_children(self):
-        self.children = [self.typ]
+        self.children = [self.type]
         return self
     
     def __repr_value__(self):
-        return f"{self.name}:{self.typ}"
+        return f"{self.name}:{self.type}"
 
-class ModelDefinition(TypeDefinition):
+class ModelDefinition(TypeDefinition, ContainedDefinitions):
     indexes: list[list[EDGE]]
     subtypes: list[TypeDefinition]
     edges: list[EdgeDefinition]
@@ -82,6 +92,14 @@ class ModelDefinition(TypeDefinition):
     @model_validator(mode='after')
     def validate_indexes(self):
         self.children = self.subtypes + self.edges
+
+        subtype_names = set()
+        for subtype in self.subtypes:
+            # raise error if subtype name is duplicated
+            if subtype.name in subtype_names:
+                raise ValueError(f'Subtype {subtype.name} is duplicated in model {self.name}')
+            subtype_names.add(subtype.name)
+
         edge_names = set()
         for edge in self.edges:
             # raise error if edge name is duplicated
@@ -108,20 +126,20 @@ class ModelDefinition(TypeDefinition):
             ''.join(format_index(idx) for idx in self.indexes) + \
             "{" + ','.join(edge.name for edge in self.children) + "}"
 
-class EdgeDefinition(Definition):
+class EdgeDefinition(ExpressionDefinition):
     name: EDGE
     cardinality: Optional[Literal['*','?','+','!']]
-    typ: Expression
 
     @model_validator(mode='after')
     def set_children(self):
-        self.children = [self.typ]
+        self.children = [self.type]
         return self
 
     def __repr_value__(self):
         return f"{self.name}{self.cardinality or ''}"
 
 class Expression(AST):
+    """ Abstract class for all AST nodes that are expressions """
     pass
 
 class Identifier(Expression):

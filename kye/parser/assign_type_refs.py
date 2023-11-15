@@ -14,7 +14,7 @@ def get_propagated_type_ref(node: AST):
 def assign_type_refs(node: AST, parent_type_ref=None):
     type_ref = get_defined_type_ref(node) or parent_type_ref
 
-    assert type_ref is not None or isinstance(node, Definitions), 'Type reference not found'
+    assert type_ref is not None or isinstance(node, ModuleDefinitions), 'Type reference not found'
     node.type_ref = type_ref
     
     for child in node.children:

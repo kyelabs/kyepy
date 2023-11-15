@@ -5,6 +5,9 @@ from kye.parser.kye_transformer import transform
 from kye.parser.assign_scopes import assign_scopes, Scope
 from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
+from kye.parser.type_evaluation import get_type_evaluation
+from kye.parser.types import Environment
+from kye.parser.kye_ast import *
 from kye.dataset import Models
 
 GRAMMAR_DIR = Path(__file__).parent / 'grammars'
@@ -49,7 +52,11 @@ def print_ast(ast):
 
 def kye_to_ast(text):
     ast = parse_definitions(text)
-    assign_scopes(ast, scope=GLOBAL_SCOPE)
+
+    GLOBAL_ENV = Environment(parent=None)
+    type_eval = get_type_evaluation(GLOBAL_ENV, ast)
+    type_eval.set_global_name()
+    # assign_scopes(ast, scope=GLOBAL_SCOPE)
     # assign_type_refs(ast)
     print_ast(ast)
     return ast

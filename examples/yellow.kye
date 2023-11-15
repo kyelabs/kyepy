@@ -3,6 +3,6 @@ model User(id) {
     type Name: String
     model Type(id) { id: Number }
     kind: Type
-    id: (3)[length > 2].name[hello].length
+    id: 4
     hi: 3
 }
