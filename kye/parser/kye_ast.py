@@ -29,8 +29,6 @@ class AST(BaseModel):
     
     def set_env(self, env: Environment):
         if isinstance(self, Definition):
-            env.define(self.name)
-        if isinstance(self, ModelDefinition):
             env = ChildEnvironment(self.name, parent=env)
         for child in self.children:
             child.set_env(env)

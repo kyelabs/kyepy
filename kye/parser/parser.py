@@ -2,7 +2,6 @@ from lark import Lark
 from lark.load_grammar import FromPackageLoader
 from pathlib import Path
 from kye.parser.kye_transformer import transform
-from kye.parser.assign_scopes import assign_scopes, Scope
 from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
 from kye.parser.types import Environment
@@ -10,10 +9,6 @@ from kye.parser.kye_ast import *
 from kye.dataset import Models
 
 GRAMMAR_DIR = Path(__file__).parent / 'grammars'
-
-GLOBAL_SCOPE = Scope(name=None, parent=None)
-for global_type in Models.globals.keys():
-    GLOBAL_SCOPE[global_type] = '<built-in type>'
 
 def get_parser(grammar_file, start_rule):
     def parse(text):
@@ -53,8 +48,8 @@ def kye_to_ast(text):
     ast = parse_definitions(text)
 
     GLOBAL_ENV = Environment()
-    GLOBAL_ENV.define_type('String')
-    GLOBAL_ENV.define_type('Number')
+    ChildEnvironment(name='String', parent=GLOBAL_ENV)
+    ChildEnvironment(name='Number', parent=GLOBAL_ENV)
     ast.set_env(GLOBAL_ENV)
     # assign_type_refs(ast)
     print_ast(ast)

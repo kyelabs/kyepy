@@ -2,11 +2,10 @@ from __future__ import annotations
 from typing import Optional
 
 class Environment:
-    local: dict[str, Optional[Type]]
+    local: dict[str, ChildEnvironment]
 
     def __init__(self):
         self.local = {}
-        self.frozen = False
     
     @property
     def path(self):
@@ -19,10 +18,6 @@ class Environment:
     def get_path(self, key):
         return (*self.resolve(key).path, key)
     
-    def freeze(self):
-        self.frozen = True
-        return self
-    
     def resolve(self, key):
         if key in self.local:
             return self
@@ -30,29 +25,6 @@ class Environment:
 
     def get(self, key, __default = None):
         return self.local.get(key, __default)
-    
-    def define(self, name, value: Optional[Type] = None):
-        if self.frozen:
-            raise RuntimeError('Cannot define new types in a frozen environment')
-        if name in self.local:
-            raise KeyError(f'Type {name} is already defined')
-        self.local[name] = value
-
-    def define_type(self,
-                    name: str = None,
-                    extends: str = None,
-                    indexes: list[list[str]] = [],
-                    edges: dict[str, Type] = {}) -> Type:
-        model = Type(
-            name=name,
-            extends=extends,
-            indexes=indexes,
-            edges=edges
-        )
-        self.define(name, model)
-        if name is not None:
-            model.ref = '.'.join(self.get_path(name))
-        return model
 
     def __getitem__(self, key):
         if key in self.local:
@@ -77,6 +49,8 @@ class ChildEnvironment(Environment):
         assert isinstance(parent, Environment)
         self.name = name
         self.parent = parent
+        assert self.name not in self.parent.local
+        self.parent.local[self.name] = self
     
     @property
     def path(self):
