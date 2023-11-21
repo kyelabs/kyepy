@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union, Any
-from kye.parser.types import Environment, ChildEnvironment
+from kye.parser.environment import Environment, ChildEnvironment
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')

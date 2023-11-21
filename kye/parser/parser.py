@@ -4,7 +4,7 @@ from pathlib import Path
 from kye.parser.kye_transformer import transform
 from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
-from kye.parser.types import Environment
+from kye.parser.environment import Environment, ChildEnvironment
 from kye.parser.kye_ast import *
 from kye.dataset import Models
 
