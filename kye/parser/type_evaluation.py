@@ -5,29 +5,28 @@ from kye.parser.types import *
 
 class TypeEvaluation:
     name: str
-    global_name: str
+    type: Type
     env: Environment
 
     def __init__(self, env: Environment, name: str):
         self.name = name
-        self.global_name = name
-        env[self.name] = self
-        self.env = Environment(parent=env)
-    
-    def set_global_name(self, path: Optional[str] = None):
-        if path is not None:
-            self.global_name = path + '.' + self.name
-        else:
-            self.global_name = self.name
+        self.env = Environment(name=name, parent=env)
 
-    def get_external_references(self):
-        return []
+    @property
+    def type(self):
+        return self.env.parent.local.get(self.name)
+    
+    def define_stub(self):
+        """ Add our name to our parent's environment namespace.
+        Setting the value to either a new Type or None """
+        raise NotImplementedError()
+
+    def evaluate(self):
+        """ Evaluate Type Expressions to generate a type """
+        raise NotImplementedError()
     
     def __repr__(self):
-        return f'{self.global_name}{repr(self.env)}'
-    
-    def __eq__(self, other: TypeEvaluation):
-        return self.global_name == other.global_name
+        return repr(self.env)
 
 class ContainerTypeEvaluation(TypeEvaluation):
     ast: ContainedDefinitions
@@ -38,16 +37,34 @@ class ContainerTypeEvaluation(TypeEvaluation):
         self.ast = ast
         self.children = [ get_type_evaluation(self.env, child) for child in ast.children ]
     
-    def set_global_name(self, path: Optional[str] = None):
-        super().set_global_name(path)
+    def define_stub(self):
         for child in self.children:
-            child.set_global_name(self.global_name)
+            child.define_stub()
+        self.env.parent.define_type(
+            name=self.name,
+            indexes=self.ast.indexes if isinstance(self.ast, ModelDefinition) else [],
+            edges={
+                child.name: self.env[child.name]
+                for child in self.children
+            }
+        )
+        self.env.freeze()
     
-    def get_external_references(self):
+    def evaluate(self):
         for child in self.children:
-            for ref in child.get_external_references():
-                if ref not in self.env.local:
-                    yield ref
+            child.evaluate()
+
+def evaluate_type(ast: Expression, env: Environment) -> Type:
+    if isinstance(ast, Identifier):
+        if ast.name not in env:
+            raise KeyError(f'Unknown reference to "{ast.name}" ({repr(ast.meta)})')
+        else:
+            typ = env[ast.name]
+            if typ is None:
+                return Type(extends='.'.join(env.get_path(ast.name)))
+            else:
+                return typ
+    
 
 class ExpressionTypeEvaluation(TypeEvaluation):
     ast: ExpressionDefinition
@@ -57,11 +74,12 @@ class ExpressionTypeEvaluation(TypeEvaluation):
         super().__init__(env, name=ast.name)
         self.ast = ast
         self.expr = ast.type
-
-    def get_external_references(self):
-        for _, child in self.ast.traverse():
-            if isinstance(child, Identifier):
-                yield child.name
+    
+    def define_stub(self):
+        self.env.parent.define(self.name)
+    
+    def evaluate(self):
+        evaluate_type(self.expr, self.env)
 
 def get_type_evaluation(
         env: Environment,
