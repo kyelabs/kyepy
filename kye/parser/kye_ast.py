@@ -2,6 +2,7 @@ from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union, Any
 from kye.parser.environment import Environment, ChildEnvironment
+from kye.parser.types import Type
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
@@ -150,11 +151,19 @@ class Expression(AST):
 class Identifier(Expression):
     name: str
 
+    def evaluate(self):
+        assert self.name in self.env
+        return Type(extends=self.env[self.name].global_name)
+
     def __repr_value__(self):
         return self.name
 
 class LiteralExpression(Expression):
     value: Union[str, float, bool]
+
+    def evaluate(self):
+        if type(self.value) is str:
+            return Type(extends='String', filters={'eq': self.value})
 
     def __repr_value__(self):
         return repr(self.value)

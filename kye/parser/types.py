@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Literal, Any
 
 class Type:
     ref: Optional[str] = None
@@ -7,18 +7,21 @@ class Type:
     extends: Optional[str] = None
     indexes: list[list[str]] = []
     edges: dict[str, Type] = {}
+    filters: dict[str, tuple[Any]] = {}
 
     def __init__(self,
                  ref: str = None,
                  name: str = None,
                  extends: str = None,
                  indexes: list[list[str]] = [],
-                 edges: dict[str, Type] = {}):
+                 edges: dict[str, Type] = {},
+                 filters: dict[str, tuple[Any]] = {}):
         self.ref = ref
         self.name = name
         self.extends = extends
         self.indexes = indexes
         self.edges = edges
+        self.filters = filters
 
     def __getitem__(self, name: str):
         return self.edges[name]
