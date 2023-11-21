@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, Any
+from kye.parser.types import Environment, ChildEnvironment
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
@@ -19,14 +20,21 @@ class TokenPosition(BaseModel):
         return f"{self.line}:{self.column}-{end_line}{self.end_column}"
 
 class AST(BaseModel):
-    name: Optional[str] = None
     children: list[AST] = []
     meta: TokenPosition
-    scope: Optional[dict] = None
-    type_ref: Optional[str] = None
+    env: Optional[Any] = None
 
     def __str__(self):
         return self.name or super().__str__()
+    
+    def set_env(self, env: Environment):
+        if isinstance(self, Definition):
+            env.define(self.name)
+        if isinstance(self, ModelDefinition):
+            env = ChildEnvironment(self.name, parent=env)
+        for child in self.children:
+            child.set_env(env)
+        setattr(self, 'env', env)
 
     def traverse(self, path=tuple()):
         path = path + (self,)
@@ -53,12 +61,11 @@ class ExpressionDefinition(Definition):
     """ Abstract class for all AST nodes who's type is an expression """
     type: Expression
 
-class ContainedDefinitions(Definition):
+class ContainedDefinitions(AST):
     """ Abstract class for all AST nodes that have child definitions """
     children: list[Definition]
 
 class ModuleDefinitions(ContainedDefinitions):
-    name: Literal['main']
     children: list[TypeDefinition]
 
     @model_validator(mode='after')

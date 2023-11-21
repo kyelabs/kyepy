@@ -5,7 +5,6 @@ from kye.parser.kye_transformer import transform
 from kye.parser.assign_scopes import assign_scopes, Scope
 from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
-from kye.parser.type_evaluation import get_type_evaluation
 from kye.parser.types import Environment
 from kye.parser.kye_ast import *
 from kye.dataset import Models
@@ -45,8 +44,8 @@ def print_ast(ast):
     print('-'*80)
     for path, node in ast.traverse():
         print(FORMAT.format(
-            getattr(node.scope, 'path', '') or '',
-            node.type_ref or '',
+            getattr(node.env, 'global_name', '') or '',
+            '', # node.type_ref or '',
             '    '*(len(path)-1) + repr(node))
         )
 
@@ -56,9 +55,7 @@ def kye_to_ast(text):
     GLOBAL_ENV = Environment()
     GLOBAL_ENV.define_type('String')
     GLOBAL_ENV.define_type('Number')
-    type_eval = get_type_evaluation(GLOBAL_ENV, ast)
-    type_eval.evaluate()
-    # assign_scopes(ast, scope=GLOBAL_SCOPE)
+    ast.set_env(GLOBAL_ENV)
     # assign_type_refs(ast)
     print_ast(ast)
     return ast

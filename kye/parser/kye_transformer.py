@@ -96,7 +96,7 @@ def transform(token: Union[Tree, Token], script=str):
         )
 
     if kind == 'definitions':
-        return ModuleDefinitions(children=children, name='main', meta=meta)
+        return ModuleDefinitions(children=children, meta=meta)
 
     if isinstance(token, Token):
         return value
