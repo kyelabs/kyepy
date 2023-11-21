@@ -15,11 +15,6 @@ class TypeEvaluation:
     @property
     def type(self):
         return self.env.parent.local.get(self.name)
-    
-    def define_stub(self):
-        """ Add our name to our parent's environment namespace.
-        Setting the value to either a new Type or None """
-        raise NotImplementedError()
 
     def evaluate(self):
         """ Evaluate Type Expressions to generate a type """
@@ -36,10 +31,6 @@ class ContainerTypeEvaluation(TypeEvaluation):
         super().__init__(env, name=ast.name)
         self.ast = ast
         self.children = [ get_type_evaluation(self.env, child) for child in ast.children ]
-    
-    def define_stub(self):
-        for child in self.children:
-            child.define_stub()
         self.env.parent.define_type(
             name=self.name,
             indexes=self.ast.indexes if isinstance(self.ast, ModelDefinition) else [],
@@ -74,9 +65,7 @@ class ExpressionTypeEvaluation(TypeEvaluation):
         super().__init__(env, name=ast.name)
         self.ast = ast
         self.expr = ast.type
-    
-    def define_stub(self):
-        self.env.parent.define(self.name)
+        self.env.parent.define(self.name)        
     
     def evaluate(self):
         evaluate_type(self.expr, self.env)

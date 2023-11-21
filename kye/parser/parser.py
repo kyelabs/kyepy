@@ -57,7 +57,6 @@ def kye_to_ast(text):
     GLOBAL_ENV.define_type('String')
     GLOBAL_ENV.define_type('Number')
     type_eval = get_type_evaluation(GLOBAL_ENV, ast)
-    type_eval.define_stub()
     type_eval.evaluate()
     # assign_scopes(ast, scope=GLOBAL_SCOPE)
     # assign_type_refs(ast)
