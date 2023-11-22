@@ -151,6 +151,12 @@ class Expression(AST):
 class Identifier(Expression):
     name: str
 
+    @property
+    def kind(self):
+        assert len(self.name) > 0
+        assert self.name[0].isalpha()
+        return 'TYPE' if self.name[0].isupper() else 'EDGE'
+
     def evaluate(self):
         assert self.name in self._env
         return Type(extends=self._env[self.name].global_name)
