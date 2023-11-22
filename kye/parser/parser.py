@@ -39,7 +39,7 @@ def print_ast(ast):
     print('-'*80)
     for path, node in ast.traverse():
         print(FORMAT.format(
-            getattr(node.env, 'global_name', '') or '',
+            getattr(node._env, 'global_name', '') or '',
             '', # node.type_ref or '',
             '    '*(len(path)-1) + repr(node))
         )

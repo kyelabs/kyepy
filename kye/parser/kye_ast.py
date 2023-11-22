@@ -23,7 +23,7 @@ class TokenPosition(BaseModel):
 class AST(BaseModel):
     children: list[AST] = []
     meta: TokenPosition
-    env: Optional[Any] = None
+    _env: Optional[Environment] = None
 
     def __str__(self):
         return self.name or super().__str__()
@@ -33,7 +33,7 @@ class AST(BaseModel):
             env = ChildEnvironment(self.name, parent=env)
         for child in self.children:
             child.set_env(env)
-        setattr(self, 'env', env)
+        setattr(self, '_env', env)
 
     def traverse(self, path=tuple()):
         path = path + (self,)
@@ -152,8 +152,8 @@ class Identifier(Expression):
     name: str
 
     def evaluate(self):
-        assert self.name in self.env
-        return Type(extends=self.env[self.name].global_name)
+        assert self.name in self._env
+        return Type(extends=self._env[self.name].global_name)
 
     def __repr_value__(self):
         return self.name
