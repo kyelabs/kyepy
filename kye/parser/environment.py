@@ -1,90 +1,121 @@
 from __future__ import annotations
-from typing import Optional
+import kye.parser.kye_ast as AST
+from kye.parser.types import Type
+from typing import Literal, Optional
 
-# TODO: All of this fancy path parsing could probably lead to security vulnerabilities
-# if edge names are not properly sanitized. Should probably remove it from the released
-# version, and just keep it for debugging for now.
-def normalize_path(key: str) -> tuple[str]:
-    assert key != '', f'Environment path shouldn\'t be empty'
-    assert '..' not in key, f'Environment path shouldn\'t have a double period "{key}"'
-    return key.split('.')
+def evaluate(ast: AST.AST, env: Environment) -> Type:
+    pass
 
 class Environment:
+    """ Abstract class for Type Environments """
     local: dict[str, ChildEnvironment]
-
+    
     def __init__(self):
         self.local = {}
-    
+
     @property
     def path(self) -> tuple[str]:
-        return tuple()
-
+        raise NotImplementedError('Abstract Environment does not define `.path`')
+    
     @property
     def global_name(self) -> str:
         return '.'.join(self.path)
 
-    def _resolve(self, key: str) -> Optional[Environment]:
-        """ Travel up the Environment hierarchy,
-        returning the environment that contains this key """
-        assert '.' not in key
-        if key in self.local or key == '':
-            return self
-        return None
+    def define(self, key: str, eval: type(evaluate), ast: Optional[AST.AST] = None):
+        self.local[key] = ChildEnvironment(
+            name=key,
+            parent=self,
+            evaluator=TypeEvaluator(
+                eval=eval,
+                env=self,
+                ast=ast,
+            )
+        )
     
-    def _descend(self, path: tuple[str]) -> Optional[Environment]:
-        """ Travel down the Environment hierarchy,
-        returning the environment at the end of this path """
-        if len(path) == 0:
-            return self
-        if path[0] == '':
-            return self._descend(path[1:])
-        if path[0] in self.local:
-            return self.local[path[0]]._descend(path[1:])
-        return None
+    def lookup(self, key: str) -> Optional[ChildEnvironment]:
+        raise NotImplementedError('Abstract Environment does not define `lookup()`')
 
-    def _resolve_path(self, path: tuple[str]) -> Optional[Environment]:
-        """ Search up the Environment hierarchy for the first key in the path,
-        then travel down the path from there """
-        return self._descend(path)
-
-    def __getitem__(self, key: str) -> ChildEnvironment:
-        env = self._resolve_path(normalize_path(key))
-        if env is None:
-            raise KeyError(f'"{key}" not defined')
-        return env
+    def get_child(self, key) -> Optional[ChildEnvironment]:
+        return self.local.get(key)
     
-    def __contains__(self, key) -> bool:
-        return self._resolve_path(normalize_path(key)) is not None
-
+    def apply_ast(self, ast: AST.AST):
+        env = self
+        if isinstance(ast, AST.Definition):
+            self.define(ast.name, eval=evaluate, ast=ast)
+            env = env.get_child(ast.name)
+        for child in ast.children:
+            env.apply_ast(child)
+        
     def __repr__(self):
         return self.global_name + '{' + ','.join(self.local.keys()) + '}'
 
+class RootEnvironment(Environment):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def path(self) -> tuple[str]:
+        return tuple()
+    
+    def lookup(self, key: str) -> Optional[ChildEnvironment]:
+        return self.get_child(key)
 
 class ChildEnvironment(Environment):
     name: str
     parent: Environment
+    evaluator: TypeEvaluator
 
-    def __init__(self, name: str, parent: Environment):
+    def __init__(self, name: str, parent: Environment, evaluator: TypeEvaluator):
         super().__init__()
-        assert type(name) is str
-        assert '.' not in name
-        assert isinstance(parent, Environment)
         self.name = name
         self.parent = parent
-        assert self.name not in self.parent.local
-        self.parent.local[self.name] = self
+        self.evaluator = evaluator
     
     @property
     def path(self) -> tuple[str]:
         return (*self.parent.path, self.name)
     
-    def _resolve(self, key: str):
-        """ Travel up the Environment hierarchy,
-        returning the environment that contains this key """
-        return super()._resolve(key) or self.parent._resolve(key)
+    @property
+    def type(self) -> Type:
+        return self.evaluator.get_type()
+    
+    def lookup(self, key: str) -> Optional[ChildEnvironment]:
+        if key == self.name:
+            return self
+        return self.get_child(key) or self.parent.lookup(key)
 
-    def _resolve_path(self, path: tuple[str]) -> ChildEnvironment:
-        """ Search up the Environment hierarchy for the first key in the path,
-        then travel down the path from there """
-        env = self._resolve(path[0]) if len(path) > 0 else self
-        return env._descend(path)
+class TypeEvaluator:
+    """
+    Type Evaluator houses the evaluation function
+    caching the resulting type and also making sure
+    that it is not circularly referenced
+    """
+    eval: type(evaluate)
+    env: Environment
+    ast: Optional[AST.AST]
+    status: Literal['new','processing','done']
+    cached_type: Optional[Type]
+
+    def __init__(self, eval: type(evaluate), env: Environment, ast: Optional[AST.AST]):
+        self.eval = eval
+        self.env = env
+        self.ast = ast
+        self.status = 'new'
+        self.cached_type = None
+    
+    def get_type(self):
+        if self.status == 'done':
+            assert self.cached_type is not None
+            return self.cached_type
+        
+        if self.status == 'processing':
+            raise Exception('Already has been called, possible circular reference')
+        
+        if self.status == 'new':
+            self.status = 'processing'
+            self.cached_type = self.eval(self.ast, self.env)
+            assert isinstance(self.cached_type, Type)
+            self.status = 'done'
+            return self.cached_type
+
+        raise Exception(f'Unknown status "{self.status}"')

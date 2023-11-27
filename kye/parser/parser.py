@@ -2,11 +2,9 @@ from lark import Lark
 from lark.load_grammar import FromPackageLoader
 from pathlib import Path
 from kye.parser.kye_transformer import transform
-from kye.parser.assign_type_refs import assign_type_refs
 from kye.parser.flatten_ast import flatten_ast
-from kye.parser.environment import Environment, ChildEnvironment
-from kye.parser.kye_ast import *
-from kye.dataset import Models
+from kye.parser.environment import RootEnvironment
+from kye.parser.types import Type
 
 GRAMMAR_DIR = Path(__file__).parent / 'grammars'
 
@@ -39,7 +37,7 @@ def print_ast(ast):
     print('-'*80)
     for path, node in ast.traverse():
         print(FORMAT.format(
-            getattr(node._env, 'global_name', '') or '',
+            '', # getattr(node._env, 'global_name', '') or '',
             '', # node.type_ref or '',
             '    '*(len(path)-1) + repr(node))
         )
@@ -47,12 +45,14 @@ def print_ast(ast):
 def kye_to_ast(text):
     ast = parse_definitions(text)
 
-    GLOBAL_ENV = Environment()
-    ChildEnvironment(name='String', parent=GLOBAL_ENV)
-    ChildEnvironment(name='Number', parent=GLOBAL_ENV)
-    ast.set_env(GLOBAL_ENV)
-    # assign_type_refs(ast)
+    GLOBAL_ENV = RootEnvironment()
+    GLOBAL_ENV.define('String', lambda ast,env: Type('String'))
+    GLOBAL_ENV.lookup('String').define('length', lambda ast, env: env.lookup('Number').type)
+    GLOBAL_ENV.define('Number', lambda ast,env: Type('Number'))
+    GLOBAL_ENV.apply_ast(ast)
+
     print_ast(ast)
+    print(GLOBAL_ENV.get_child('String').lookup('length').type)
     return ast
 
 def compile(text):

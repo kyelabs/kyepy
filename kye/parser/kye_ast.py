@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union, Any
-from kye.parser.environment import ChildEnvironment
 from kye.parser.types import Type
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
@@ -23,37 +22,9 @@ class TokenPosition(BaseModel):
 class AST(BaseModel):
     children: list[AST] = []
     meta: TokenPosition
-    _env: Optional[ChildEnvironment] = None
 
     def __str__(self):
         return self.name or super().__str__()
-    
-    def set_env(self, env: ChildEnvironment):
-        if isinstance(self, Definition):
-            env = ChildEnvironment(self.name, parent=env)
-        for child in self.children:
-            child.set_env(env)
-        setattr(self, '_env', env)
-    
-    def type_check(self):
-        if isinstance(self, Identifier):
-            assert self.name in self._env
-            return self._env[self.name]
-        if isinstance(self, LiteralExpression):
-            if type(self.value) is str:
-                return self._env['String']
-            elif isinstance(self.value, (int, float)):
-                return self._env['Number']
-            elif type(self.value) is bool:
-                return self._env['Boolean']
-            else:
-                raise Exception(f'Unexpected literal of type "{self.value.__class__.__name__}" "{self.value}"')
-        if isinstance(self, Operation):
-            # TODO: Get better sleep, so that I stop banging my head against a wall.
-            pass
-
-        for child in self.children:
-            child.type_check()
 
     def traverse(self, path=tuple()):
         path = path + (self,)
