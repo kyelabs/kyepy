@@ -1,59 +1,7 @@
 from __future__ import annotations
 import kye.parser.kye_ast as AST
-from kye.parser.types import Type, Edge
-from typing import Literal, Optional
-
-def evaluate_type_expression(ast: AST.Expression, env: Environment) -> Type:
-    if isinstance(ast, AST.Identifier):
-        typ = env.lookup(ast.name)
-        if typ is None:
-            raise Exception(f'Undefined Type: {repr(ast)}')
-        return typ.type
-    
-    if isinstance(ast, AST.LiteralExpression):
-        base_type = None
-        if type(ast.value) is str:
-            base_type = 'String'
-        if isinstance(ast.value, (float, int)):
-            base_type = 'Number'
-        assert base_type is not None
-        return Type(
-            extends=env.root.get_child(base_type).type,
-            filters={'eq': ast.value},
-        )
-    
-    raise NotImplementedError(f'Not Implemented {ast.__class__.__name__}')
-
-def evaluate_edge(ast: AST.EdgeDefinition, env: Environment) -> Edge:
-    return Edge(
-        name=ast.name,
-        returns=evaluate_type_expression(ast.type, env),
-        nullable=ast.cardinality in ('?','*'),
-        multiple=ast.cardinality in ('+','*'),
-    )
-
-def evaluate(ast: AST.AST, env: Environment) -> Type:
-    if isinstance(ast, AST.Expression):
-        return evaluate_type_expression(ast, env)
-    
-    if isinstance(ast, AST.AliasDefinition):
-        return Type(
-            name=ast.name,
-            extends=evaluate_type_expression(ast.type, env),
-        )
-
-    if isinstance(ast, AST.EdgeDefinition):
-        return evaluate_type_expression(ast.type, env)
-    
-    if isinstance(ast, AST.ModelDefinition):
-        return Type(
-            name=ast.name,
-            indexes=ast.indexes,
-            edges={
-                edge.name: evaluate_edge(edge, env)
-                for edge in ast.edges
-            }
-        )
+from kye.parser.types import Type
+from typing import Literal, Optional, Callable
 
 
 class Environment:
@@ -75,7 +23,7 @@ class Environment:
     def global_name(self) -> str:
         return '.'.join(self.path)
 
-    def define(self, key: str, eval: type(evaluate), ast: Optional[AST.AST] = None):
+    def define(self, key: str, eval: Callable[[AST.AST, Environment], Type], ast: Optional[AST.AST] = None):
         self.local[key] = ChildEnvironment(
             name=key,
             parent=self,
@@ -89,14 +37,14 @@ class Environment:
     def get_child(self, key) -> Optional[ChildEnvironment]:
         return self.local.get(key)
     
-    def apply_ast(self, ast: AST.AST):
+    def apply_ast(self, ast: AST.AST, eval: Callable[[AST.AST, Environment], Type]):
         env = self
         if isinstance(ast, AST.Definition):
-            self.define(ast.name, eval=evaluate, ast=ast)
+            self.define(ast.name, eval=eval, ast=ast)
             env = env.get_child(ast.name)
         if isinstance(ast, AST.ContainedDefinitions):
             for child in ast.children:
-                env.apply_ast(child)
+                env.apply_ast(child, eval)
         
     def __repr__(self):
         return self.global_name + '{' + ','.join(self.local.keys()) + '}'
@@ -121,7 +69,7 @@ class ChildEnvironment(Environment):
     parent: Environment
     evaluator: TypeEvaluator
 
-    def __init__(self, name: str, parent: Environment, eval: type(evaluate), ast=Optional[AST.AST]):
+    def __init__(self, name: str, parent: Environment, eval: Callable[[AST.AST, Environment], Type], ast=Optional[AST.AST]):
         super().__init__()
         self.name = name
         self.parent = parent
@@ -154,13 +102,13 @@ class TypeEvaluator:
     caching the resulting type and also making sure
     that it is not circularly referenced
     """
-    eval: type(evaluate)
+    eval: Callable[[AST.AST, Environment], Type]
     env: Environment
     ast: Optional[AST.AST]
     status: Literal['new','processing','done']
     cached_type: Optional[Type]
 
-    def __init__(self, eval: type(evaluate), env: Environment, ast: Optional[AST.AST]):
+    def __init__(self, eval: Callable[[AST.AST, Environment], Type], env: Environment, ast: Optional[AST.AST]):
         self.eval = eval
         self.env = env
         self.ast = ast
