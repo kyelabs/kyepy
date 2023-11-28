@@ -3,58 +3,36 @@ from typing import Optional, Literal, Any
 import kye.parser.kye_ast as AST
 
 class Type:
-    name: Optional[str] = None
-    extends: Optional[Type] = None
-    indexes: list[list[str]] = []
-    filters: dict[str, tuple[Any]] = {}
-    edges: dict[str, Edge] = {}
+    name: str
+    edges: dict[str, Edge]
 
-    def __init__(self,
-                 name: Optional[str] = None,
-                 extends: Type = None,
-                 indexes: list[list[str]] = [],
-                 filters: dict[str, tuple[Any]] = {},
-                 edges: dict[str, Edge] = {},
-                ):
+    def __init__(self, name: str, edges: dict[str, Edge]):
         self.name = name
-        self.extends = extends
-        self.indexes = indexes
-        self.filters = filters
         self.edges = edges
-        for name, edge in self.edges.items():
-            edge.model = self
 
-    @property
-    def has_edges(self) -> bool:
-        return len(self.edges) > 0
-    
-    @property
-    def has_index(self) -> bool:
-        return len(self.indexes) > 0
+class FilteredType(Type):
+    extends: Type
+    filter: Edge
 
-    @property
-    def base(self) -> Type:
-        return self.extends if self.extends else self
-    
-    @property
-    def index(self) -> list[str]:
-        """ Flatten the 2d list of indexes """
-        return list({idx for idxs in self.indexes for idx in idxs})
+    def __init__(self, extends: Type, filter: Edge):
+        super().__init__(name=extends.name, edges=extends.edges)
+        self.extends = extends
+        self.filter = filter
 
-    def __repr__(self):
-        non_index_edges = [
-            repr(edge) for edge in self.edges.values()
-            if edge.name not in self.index
-        ]
-        return "Type<{}{}{}>".format(
-            self.name or '',
-            ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
-            "{" + ','.join(non_index_edges) + "}" if len(non_index_edges) > 0 else '',
-        )
+class PrimitiveType(Type):
+    name: Literal['String', 'Number', 'Boolean']
+
+class FilteredPrimitiveType(PrimitiveType, FilteredType):
+    extends: PrimitiveType
+
+class ComposedType(Type):
+    indexes: list[list[str]]
+
+class FilteredComposedType(ComposedType, FilteredType):
+    extends: ComposedType
 
 class Edge:
     name: str
-    model: Optional[Type]
     returns: Type
     parameters: list[Type]
     nullable: bool
