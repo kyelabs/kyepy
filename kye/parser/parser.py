@@ -31,16 +31,22 @@ def get_parser(grammar_file, start_rule):
 parse_definitions = get_parser('definitions', 'definitions')
 parse_expression = get_parser('expressions', 'exp')
 
-def print_ast(ast):
-    FORMAT = '{:<20} {:<20} {}'
-    print(FORMAT.format('Scope', 'Type', 'Node'))
-    print('-'*80)
-    for path, node in ast.traverse():
+def display(env: RootEnvironment):
+    FORMAT = '{:<15} {:<40} {}'
+    print(FORMAT.format('Name', 'Type', 'AST'))
+    print('-'*100)
+
+    def display_child(env, depth=0):
         print(FORMAT.format(
-            '', # getattr(node._env, 'global_name', '') or '',
-            '', # node.type_ref or '',
-            '    '*(len(path)-1) + repr(node))
-        )
+            '  ' * depth + env.name,
+            repr(env.type),
+            repr(env.evaluator.ast),
+        ))
+        for child in env.local.values():
+            display_child(child, depth + 1)
+    
+    for child in env.local.values():
+        display_child(child)
 
 def kye_to_ast(text):
     ast = parse_definitions(text)
@@ -51,8 +57,7 @@ def kye_to_ast(text):
     GLOBAL_ENV.define('Number', lambda ast,env: Type('Number'))
     GLOBAL_ENV.apply_ast(ast)
 
-    print_ast(ast)
-    print(GLOBAL_ENV.get_child('String').lookup('length').type)
+    display(GLOBAL_ENV)
     return ast
 
 def compile(text):

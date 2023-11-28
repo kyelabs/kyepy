@@ -2,7 +2,7 @@ type Hello: String
 model User(id) {
     type Name: String
     model Type(id) { id: Number }
-    kind: Type
+    kind+: Type
     name: Name
     id: 4
     hi: 3

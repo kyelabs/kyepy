@@ -22,22 +22,13 @@ class TokenPosition(BaseModel):
 class AST(BaseModel):
     children: list[AST] = []
     meta: TokenPosition
-
-    def __str__(self):
-        return self.name or super().__str__()
-
-    def traverse(self, path=tuple()):
-        path = path + (self,)
-        for child in self.children:
-            yield path, child
-            yield from child.traverse(path=path)
     
     def __repr__(self):
         end_line = f"-{self.meta.end_line}" if self.meta.end_line != self.meta.line else ''
         return f"{self.__class__.__name__}<{self.__repr_value__()}>:{self.meta.line}{end_line}"
     
     def __repr_value__(self):
-        return ''
+        raise Exception('Not implemented __repr_value__')
 
 class Definition(AST):
     """ Abstract class for all AST nodes that define a name """
@@ -79,7 +70,7 @@ class AliasDefinition(TypeDefinition, ExpressionDefinition):
         return self
     
     def __repr_value__(self):
-        return f"{self.name}:{self.type}"
+        return f"{self.name}"
 
 class ModelDefinition(TypeDefinition, ContainedDefinitions):
     indexes: list[list[EDGE]]
@@ -142,25 +133,11 @@ class Expression(AST):
 class Identifier(Expression):
     name: str
 
-    @property
-    def kind(self):
-        assert len(self.name) > 0
-        assert self.name[0].isalpha()
-        return 'TYPE' if self.name[0].isupper() else 'EDGE'
-
-    def evaluate(self):
-        assert self.name in self._env
-        return Type(extends=self._env[self.name].global_name)
-
     def __repr_value__(self):
         return self.name
 
 class LiteralExpression(Expression):
     value: Union[str, float, bool]
-
-    def evaluate(self):
-        if type(self.value) is str:
-            return Type(extends='String', filters={'eq': self.value})
 
     def __repr_value__(self):
         return repr(self.value)
