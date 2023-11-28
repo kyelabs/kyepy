@@ -1,0 +1,41 @@
+type NumberFormat {
+    from String
+    length: Number
+    decimals: Number
+    leading_zeros: Boolean
+    trailing_zeros: Boolean
+    sign?: '+' | '-'
+    decimal_separator?: Char
+    thousands_separator?: Char
+}
+
+type Number {
+    to from String
+    format: NumberFormat
+    operation > - + ~ * / Number
+}
+
+type Integer {
+    to from String
+    format: NumberFormat[!decimals]
+    operation > - + ~ * Integer
+}
+
+type UInteger {
+    to from String
+    format: NumberFormat[!decimals & sign != '-']
+    operation > + * - UInteger
+    operation + - Integer: Integer
+}
+
+type Count: UInteger {
+    from Null: 0
+}
+
+type String {
+    length: UInteger
+    operation > String: Boolean
+    operation + String: String
+}
+
+type Char: String[length == 1]
