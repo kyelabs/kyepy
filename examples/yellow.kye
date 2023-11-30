@@ -1,9 +1,9 @@
 type Hello: String
 model User(id) {
-    type Name: String
+    type Name: String[length > 4]
     model Type(id) { id: Number }
     kind+: Type
-    name: Name
+    name: String
     id: 4
     hi: 3
 }

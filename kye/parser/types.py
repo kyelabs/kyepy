@@ -26,6 +26,7 @@ class Value(Expression):
         super().__init__()
         self.name = None
         self.type = type
+        self.value = value
     
     def extends(self, other: Expression) -> bool:
         if not self.type.extends(other):
@@ -39,6 +40,12 @@ class Value(Expression):
     
     def __contains__(self, key: str) -> bool:
         return key in self.type
+    
+    def __repr__(self):
+        return "{}({})".format(
+            self.type.name,
+            repr(self.value),
+        )
 
 
 class Type(Expression):

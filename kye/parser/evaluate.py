@@ -19,13 +19,19 @@ def evaluate_expression(ast: AST.Expression, env: Environment) -> Expression:
         return env.root.get_child(base_type).type.select(ast.value)
     
     if isinstance(ast, AST.Operation):
+        # TODO: There must be a way to have the type define it's own
+        # filter operation right?
+        # Would that require re-assigning environments to the ast or something?
         if ast.name == 'filter':
             typ = evaluate(ast.children[0], env)
             if len(ast.children) == 0:
                 return typ
             return typ.extend(
-                filter=evaluate_expression(ast.children[0], typ.env)
+                filter=evaluate_expression(ast.children[1], typ.env)
             )
+        if ast.name == 'dot':
+            typ = evaluate(ast.children[0])
+            
     
     raise NotImplementedError(f'Not Implemented {ast.__class__.__name__}')
 
