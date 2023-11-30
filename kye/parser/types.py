@@ -1,7 +1,43 @@
 from __future__ import annotations
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, Any
 
-class Type:
+class Expression:
+    """ Abstract interface for Types, Edges & Values """
+    name: Optional[str]
+
+    def extends(self, other: Expression) -> bool:
+        raise NotImplementedError()
+
+    def __getitem__(self, key: str) -> Edge:
+        raise NotImplementedError()
+    
+    def __contains__(self, key: str) -> bool:
+        raise NotImplementedError()
+
+class Value(Expression):
+    value: str | int | float | bool
+    type: Type
+
+    def __init__(self, type: Type, value: str | int | float | bool):
+        super().__init__()
+        self.name = None
+        self.type = type
+    
+    def extends(self, other: Expression) -> bool:
+        if not self.type.extends(other):
+            return False
+        if isinstance(other, Value):
+            return self.value == other.value
+        return True
+    
+    def __getitem__(self, key: str) -> Edge:
+        return self.type[key].bind(self)
+    
+    def __contains__(self, key: str) -> bool:
+        return key in self.type
+
+
+class Type(Expression):
     name: str
     edges: dict[str, Edge]
     filter: Optional[Edge]
@@ -17,13 +53,21 @@ class Type:
     
     def _extend_filter(self, filter: Optional[Edge]):
         if self.filter:
-            filter = self.filter.extend_with(filter)
+            if filter is not None:
+                filter = filter['__and__'].apply(self.filter)
+            else:
+                filter = self.filter
         return filter
 
     def _extend_edges(self, edges: dict[str, Edge]):
         edges = {**edges}
         for key, edge in self.edges.items():
-            edges[key] = edge.extend_with(edges.get(key))
+            # If over writing the edge, ensure
+            # that it can extend the parent's edge
+            if key in edges:
+                assert edges[key].extends(edge)
+            else:
+                edges[key] = edge
         return edges
     
     def extend(self,
@@ -36,13 +80,25 @@ class Type:
             filter=self._extend_filter(filter),
         )
     
-    def extend_with(self, other: Optional[Type]):
-        return self.extend(other.name, other.edges, other.filter)
+    def extends(self, other: Expression) -> bool:
+        if isinstance(other, Edge):
+            return self.extends(other.returns)
+        if isinstance(other, Value):
+            return self.extends(other.type)
+        if isinstance(other, Type):
+            for other_key, other_edge in other.edges.items():
+                if other_key not in self:
+                    return False
+                if not self[other_key].extends(other_edge):
+                    return False
+            # TODO: Also check if our filter is a subset of the other's filter?
+            return True
+        raise Exception('How did you get here?')
 
     def select(self, value: str | float | int | bool):
         return Value(type=self, value=value)
     
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> Edge:
         return self.edges[key]
 
     def __contains__(self, key: str):
@@ -80,9 +136,15 @@ class Model(Type):
             filter=self._extend_filter(filter),
         )
 
-    def extend_with(self, other: Optional[Model]):
-        assert isinstance(other, Model)
-        return self.extend(other.name, other.indexes, other.edges, other.filter)
+    def extends(self, other: Expression) -> bool:
+        if not super().extends(other):
+            return False
+        if isinstance(other, Model):
+            indexes = {tuple(idx) for idx in self.indexes}
+            for other_idx in other.indexes:
+                if tuple(other_idx) not in indexes:
+                    return False
+        return True
 
     @property
     def index(self) -> set[str]:
@@ -101,50 +163,69 @@ class Model(Type):
             '{' + ','.join(non_index_edges) + '}' if len(self.edges) else '',
         )
 
-class Edge:
+class Edge(Expression):
+    owner: Type
     name: Optional[str]
     returns: Type
-    parameters: list[tuple[Type, Optional[Edge]]]
+    parameters: list[Type]
+    bound: Optional[Expression]
+    values: list[Optional[Edge]]
     nullable: bool
     multiple: bool
 
     def __init__(self,
+                 owner: Type,
                  name: Optional[str],
                  returns: Type,
-                 parameters: list[tuple[Type, Optional[Edge]]] = [],
+                 parameters: list[Type] = [],
+                 values: list[Optional[Edge]] = [],
+                 bound: Optional[Expression] = None,
                  nullable: bool = False,
                  multiple: bool = False,
                  ):
+        self.owner = owner
         self.name = name
         self.returns = returns
         self.parameters = parameters
+        assert bound is None or bound.extends(self.owner)
+        self.bound = bound
+        self.values = self._normalize_values(values)
         self.nullable = nullable
         self.multiple = multiple
     
-    def extend_with(self, other: Optional[Edge]):
-        if other is None:
-            return self
-        assert isinstance(other, Edge)
-        assert self.name == other.name or (self.name or other.name) is None
-        return Edge(
-            name=self.name or other.name,
-            # TODO: Assert that return types are compatible
-            returns=self.returns.extend_with(other.returns),
-            # TODO: Assert that the other edge's parameters are compatible
-            parameters=self.parameters, 
-            nullable=self.nullable or other.nullable,
-            multiple=self.multiple or other.multiple,
-        )
+    def _copy(self, **kwargs):
+        return Edge(**{**self.__dict__, **kwargs})
+
+    def _normalize_values(self, values: list[Edge]):
+        assert len(values) <= len(self.parameters)
+        for i, val in enumerate(values):
+            assert val is None or val.extends(self.parameters[i])
+        # fill the undefined values with null
+        values = values + [None] * (len(self.parameters) - len(values))
+        return values
+
+    def bind(self, exp: Optional[Expression]) -> Edge:
+        return self._copy(bound=exp)
     
     def apply(self, values: list[Optional[Edge]]):
-        assert len(self.parameters) == len(values)
-        return Edge(
-            name=self.name,
-            returns=self.returns,
-            parameters=[(self.parameters[i][0], val) for i, val in enumerate(values)],
-            nullable=self.nullable,
-            multiple=self.multiple,
-        )
+        return self._copy(values=values)
+    
+    def extends(self, other: Expression) -> bool:
+        if not self.returns.extends(other):
+            return False
+        if isinstance(other, Edge):
+            if not self.nullable and other.nullable:
+                return False
+            if not self.multiple and other.multiple:
+                return False
+            # TODO: Might also want to check parameters and values?
+        return True
+    
+    def __getitem__(self, key: str) -> Edge:
+        return self.returns[key].bind(self)
+    
+    def __contains__(self, key: str) -> bool:
+        return key in self.returns
 
     def __repr__(self):
         return "{}{}".format(
@@ -153,18 +234,13 @@ class Edge:
               ['?','*']])[int(self.nullable)][int(self.multiple)]
         )
 
-class Value(Edge):
-    def __init__(self, type: Type, value: str | int | float | bool):
-        super().__init__(name=None, returns=type, parameters=[(type, value)], nullable=False, multiple=False)
-
-
 if __name__ == '__main__':
     boolean = Type('Boolean')
     number = Type('Number')
-    number.edges['__gt__'] = Edge(name='__gt__', parameters=[(number, None), (number, None)], returns=boolean)
-    number.edges['__lt__'] = Edge(name='__lt__', parameters=[(number, None), (number, None)], returns=boolean)
+    number.edges['__gt__'] = Edge(owner=number, name='__gt__', parameters=[number], returns=boolean)
+    number.edges['__lt__'] = Edge(owner=number, name='__lt__', parameters=[number], returns=boolean)
     string = Type('String')
-    string.edges['length'] = Edge(name='length', parameters=[(string, None)], returns=number)
+    string.edges['length'] = Edge(owner=string, name='length', returns=number)
     big_string = string.extend(name='BigString')
-    big_string.filter = number.edges['__gt__'].apply(values=[big_string['length'], number.select(5)])
+    big_string.filter = big_string['length']['__gt__'].apply([number.select(5)])
     print('hi')

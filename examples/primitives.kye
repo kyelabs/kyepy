@@ -1,41 +1,40 @@
-type NumberFormat {
-    from String
-    length: Number
-    decimals: Number
-    leading_zeros: Boolean
-    trailing_zeros: Boolean
-    sign?: '+' | '-'
-    decimal_separator?: Char
-    thousands_separator?: Char
-}
-
 type Number {
+    type Format {
+        enum Sign { POSITIVE, NEGATIVE }
+        from String
+        length: Number
+        decimals: Number
+        leading_zeros: Boolean
+        trailing_zeros: Boolean
+        sign?: '+' | '-'
+        decimal_separator?: Char
+        thousands_separator?: Char
+    }
+
     to from String
-    format: NumberFormat
+    format: Format
     operation > - + ~ * / Number
 }
 
-type Integer {
-    to from String
-    format: NumberFormat[!decimals]
+type Integer: Number {
+    format: Number.Format[!decimals]
     operation > - + ~ * Integer
 }
 
-type UInteger {
-    to from String
-    format: NumberFormat[!decimals & sign != '-']
+type UInteger: Integer {
+    format: Number.Format[!decimals & sign != '-']
     operation > + * - UInteger
-    operation + - Integer: Integer
 }
 
 type Count: UInteger {
-    from Null: 0
+    null 0
 }
 
 type String {
+    null ''
     length: UInteger
-    operation > String: Boolean
-    operation + String: String
+    operation > String
+    operation + String
 }
 
 type Char: String[length == 1]
