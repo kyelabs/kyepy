@@ -1,6 +1,6 @@
 from __future__ import annotations
 import kye.parser.kye_ast as AST
-from kye.parser.types import Type
+from kye.parser.types import Expression
 from typing import Literal, Optional, Callable
 
 
@@ -23,7 +23,7 @@ class Environment:
     def global_name(self) -> str:
         return '.'.join(self.path)
 
-    def define(self, key: str, eval: Callable[[AST.AST, Environment], Type], ast: Optional[AST.AST] = None):
+    def define(self, key: str, eval: Callable[[AST.AST, Environment], Expression], ast: Optional[AST.AST] = None):
         self.local[key] = ChildEnvironment(
             name=key,
             parent=self,
@@ -37,7 +37,7 @@ class Environment:
     def get_child(self, key) -> Optional[ChildEnvironment]:
         return self.local.get(key)
     
-    def apply_ast(self, ast: AST.AST, eval: Callable[[AST.AST, Environment], Type]):
+    def apply_ast(self, ast: AST.AST, eval: Callable[[AST.AST, Environment], Expression]):
         env = self
         if isinstance(ast, AST.Definition):
             self.define(ast.name, eval=eval, ast=ast)
@@ -69,7 +69,7 @@ class ChildEnvironment(Environment):
     parent: Environment
     evaluator: TypeEvaluator
 
-    def __init__(self, name: str, parent: Environment, eval: Callable[[AST.AST, Environment], Type], ast=Optional[AST.AST]):
+    def __init__(self, name: str, parent: Environment, eval: Callable[[AST.AST, Environment], Expression], ast=Optional[AST.AST]):
         super().__init__()
         self.name = name
         self.parent = parent
@@ -88,7 +88,7 @@ class ChildEnvironment(Environment):
         return self.parent.root
     
     @property
-    def type(self) -> Type:
+    def type(self) -> Expression:
         return self.evaluator.get_type()
     
     def lookup(self, key: str) -> Optional[ChildEnvironment]:
@@ -102,13 +102,13 @@ class TypeEvaluator:
     caching the resulting type and also making sure
     that it is not circularly referenced
     """
-    eval: Callable[[AST.AST, Environment], Type]
+    eval: Callable[[AST.AST, Environment], Expression]
     env: Environment
     ast: Optional[AST.AST]
     status: Literal['new','processing','done']
-    cached_type: Optional[Type]
+    cached_type: Optional[Expression]
 
-    def __init__(self, eval: Callable[[AST.AST, Environment], Type], env: Environment, ast: Optional[AST.AST]):
+    def __init__(self, eval: Callable[[AST.AST, Environment], Expression], env: Environment, ast: Optional[AST.AST]):
         self.eval = eval
         self.env = env
         self.ast = ast
@@ -126,7 +126,9 @@ class TypeEvaluator:
         if self.status == 'new':
             self.status = 'processing'
             self.cached_type = self.eval(self.ast, self.env)
-            assert isinstance(self.cached_type, Type)
+            assert isinstance(self.cached_type, Expression)
+            setattr(self.cached_type, 'env', self.env)
+            setattr(self.cached_type, 'ast', self.ast)
             self.status = 'done'
             return self.cached_type
 

@@ -163,5 +163,9 @@ class Operation(Expression):
     ]
     children: list[Expression]
 
-    def __repr_value__(self):
+    @property
+    def name(self):
         return self._OP_NAMES[self.op]
+
+    def __repr_value__(self):
+        return self.name

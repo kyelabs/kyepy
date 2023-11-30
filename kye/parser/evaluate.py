@@ -1,8 +1,8 @@
-from kye.parser.environment import Environment
+from kye.parser.environment import Environment, ChildEnvironment
 import kye.parser.kye_ast as AST
-from kye.parser.types import Type, Edge
+from kye.parser.types import Model, Type, Edge, Expression
 
-def evaluate_type_expression(ast: AST.Expression, env: Environment) -> Type:
+def evaluate_expression(ast: AST.Expression, env: Environment) -> Expression:
     if isinstance(ast, AST.Identifier):
         typ = env.lookup(ast.name)
         if typ is None:
@@ -16,40 +16,40 @@ def evaluate_type_expression(ast: AST.Expression, env: Environment) -> Type:
         if isinstance(ast.value, (float, int)):
             base_type = 'Number'
         assert base_type is not None
-        return Type(
-            extends=env.root.get_child(base_type).type,
-            filters={'eq': ast.value},
-        )
+        return env.root.get_child(base_type).type.select(ast.value)
+    
+    if isinstance(ast, AST.Operation):
+        if ast.name == 'filter':
+            typ = evaluate(ast.children[0], env)
+            if len(ast.children) == 0:
+                return typ
+            return typ.extend(
+                filter=evaluate_expression(ast.children[0], typ.env)
+            )
     
     raise NotImplementedError(f'Not Implemented {ast.__class__.__name__}')
 
-def evaluate_edge(ast: AST.EdgeDefinition, env: Environment) -> Edge:
-    return Edge(
-        name=ast.name,
-        returns=evaluate_type_expression(ast.type, env),
-        nullable=ast.cardinality in ('?','*'),
-        multiple=ast.cardinality in ('+','*'),
-    )
-
 def evaluate(ast: AST.AST, env: Environment) -> Type:
     if isinstance(ast, AST.Expression):
-        return evaluate_type_expression(ast, env)
+        return evaluate_expression(ast, env)
     
     if isinstance(ast, AST.AliasDefinition):
-        return Type(
-            name=ast.name,
-            extends=evaluate_type_expression(ast.type, env),
-        )
+        return evaluate_expression(ast.type, env)
 
     if isinstance(ast, AST.EdgeDefinition):
-        return evaluate_type_expression(ast.type, env)
+        return evaluate_expression(ast.type, env)
     
     if isinstance(ast, AST.ModelDefinition):
-        return Type(
+        typ = Model(
             name=ast.name,
             indexes=ast.indexes,
-            edges={
-                edge.name: evaluate_edge(edge, env)
-                for edge in ast.edges
-            }
         )
+        for edge in ast.edges:
+            typ.edges[edge.name] = Edge(
+                owner=typ,
+                name=edge.name,
+                returns=evaluate_expression(edge.type, env),
+                nullable=edge.cardinality in ('?','*'),
+                multiple=edge.cardinality in ('+','*'),
+            )
+        return typ

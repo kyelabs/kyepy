@@ -1,9 +1,13 @@
 from __future__ import annotations
-from typing import Optional, Literal, Union, Any
+from typing import Optional, Literal, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kye.parser.environment import Environment
 
 class Expression:
     """ Abstract interface for Types, Edges & Values """
     name: Optional[str]
+    env: Environment
 
     def extends(self, other: Expression) -> bool:
         raise NotImplementedError()
@@ -116,7 +120,7 @@ class Model(Type):
     def __init__(self,
                  name: str,
                  indexes: list[list[str]],
-                 edges: dict[str, Edge],
+                 edges: dict[str, Edge] = {},
                  filter: Optional[Edge] = None,
                  ):
         super().__init__(name, edges, filter)
@@ -160,7 +164,7 @@ class Model(Type):
         return '{}{}{}'.format(
             self.name,
             ''.join('(' + ','.join(repr(self.edges[edge]) for edge in idx) + ')' for idx in self.indexes),
-            '{' + ','.join(non_index_edges) + '}' if len(self.edges) else '',
+            '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
 class Edge(Expression):
