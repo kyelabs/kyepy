@@ -56,11 +56,14 @@ class Type(Expression):
     def __init__(self,
                  name: str,
                  edges: Optional[dict[str, Edge]] = None,
-                 filter: Optional[Edge] = None
+                 filter: Optional[Edge] = None,
+                 env: Optional[Environment] = None,
                  ):
         self.name = name
         self.edges = edges or {}
         self.filter = filter
+        self.env = env
+        assert self.env is None or self.env.name == name
     
     def _extend_filter(self, filter: Optional[Edge]):
         if self.filter:
@@ -84,11 +87,14 @@ class Type(Expression):
     def extend(self,
                name: Optional[str] = None,
                edges: dict[str, Edge] = {},
-               filter: Optional[Edge] = None):
+               filter: Optional[Edge] = None,
+               env: Optional[Environment] = None,
+               ):
         return Type(
             name=name or self.name,
             edges=self._extend_edges(edges),
             filter=self._extend_filter(filter),
+            env=env or self.env,
         )
     
     def extends(self, other: Expression) -> bool:
@@ -129,8 +135,9 @@ class Model(Type):
                  indexes: list[list[str]],
                  edges: dict[str, Edge] = {},
                  filter: Optional[Edge] = None,
+                 env: Optional[Environment] = None,
                  ):
-        super().__init__(name, edges, filter)
+        super().__init__(name, edges, filter, env)
         assert len(indexes) > 0
         self.indexes = indexes
     
@@ -139,12 +146,14 @@ class Model(Type):
                indexes: Optional[list[list[str]]] = None,
                edges: dict[str, Edge] = {},
                filter: Optional[Edge] = None,
+               env: Optional[Environment] = None,
                ):
         return Model(
             name=name or self.name,
             indexes=indexes or self.indexes,
             edges=self._extend_edges(edges),
             filter=self._extend_filter(filter),
+            env=env or self.env,
         )
 
     def extends(self, other: Expression) -> bool:

@@ -127,8 +127,6 @@ class TypeEvaluator:
             self.status = 'processing'
             self.cached_type = self.eval(self.ast, self.env)
             assert isinstance(self.cached_type, Expression)
-            setattr(self.cached_type, 'env', self.env)
-            setattr(self.cached_type, 'ast', self.ast)
             self.status = 'done'
             return self.cached_type
 

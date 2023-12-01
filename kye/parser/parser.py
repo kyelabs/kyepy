@@ -53,9 +53,9 @@ def kye_to_ast(text):
     ast = parse_definitions(text)
 
     GLOBAL_ENV = RootEnvironment()
-    GLOBAL_ENV.define('String', lambda ast,env: Type('String'))
+    GLOBAL_ENV.define('String', lambda ast,env: Type('String', env=env.lookup('String')))
     GLOBAL_ENV.lookup('String').define('length', lambda ast, env: env.lookup('Number').type)
-    GLOBAL_ENV.define('Number', lambda ast,env: Type('Number'))
+    GLOBAL_ENV.define('Number', lambda ast,env: Type('Number', env=env.lookup('Number')))
     GLOBAL_ENV.apply_ast(ast, evaluate)
 
     display(GLOBAL_ENV)
