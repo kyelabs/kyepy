@@ -2,10 +2,12 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any
 import kye.parser.parser as parser
+from kye.parser.compile import compile_ast
 from kye.compiled import CompiledDataset
 from kye.dataset import Models
 from kye.loader.loader import Loader
 from kye.validate import Validate
+import yaml
 
 class ModelApi:
     def __init__(self, api: Api, model_name: str):
@@ -18,7 +20,9 @@ class ModelApi:
 
 class Api:
     def __init__(self, text):
-        self.compiled = parser.compile(text)
+        self.ast = parser.parse_definitions(text)
+        self.compiled = compile_ast(self.ast)
+        print(yaml.dump(self.compiled))
         self.models = Models(CompiledDataset(models=self.compiled))
         self.loader = Loader(self.models)
         self.done_loading = False

@@ -1,0 +1,38 @@
+type Number {
+    to from String
+    format: {
+        enum Sign { POSITIVE, NEGATIVE }
+        from String
+        length: Number
+        decimals: Number
+        leading_zeros: Boolean
+        trailing_zeros: Boolean
+        sign?: '+' | '-'
+        decimal_separator?: Char
+        thousands_separator?: Char
+    }
+    operation > - + ~ * / Number
+}
+
+type Integer: Number {
+    format: Number.format[!decimals]
+    operation > - + ~ * Integer
+}
+
+type UInteger: Integer {
+    format: Integer.format[sign != '-']
+    operation > + * - UInteger
+}
+
+type Count: UInteger {
+    null 0
+}
+
+type String {
+    null ''
+    length: UInteger
+    operation > String
+    operation + String
+}
+
+type Char: String[length == 1]

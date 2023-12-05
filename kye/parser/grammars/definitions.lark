@@ -1,0 +1,24 @@
+_line_delimited{item}: [ item (","? item)* ","? ]
+
+definitions: _line_delimited{ _script_definition }
+_script_definition: model_def | alias_def
+
+alias_def: "type" TYPE ":" exp
+
+model_def: "model" TYPE index+ "{" _line_delimited{ _model_definition } "}"
+
+_model_definition: model_def | alias_def | edge_def
+
+index: "(" _comma_delimited{ EDGE } ")"
+
+edge_def: EDGE CARDINALITY? ":" type_exp
+
+CARDINALITY: "*" | "?" | "+" | "!"
+
+?type_exp: exp
+         | model_def
+
+%import expressions (exp, _comma_delimited)
+%import tokens (WS, COMMENT, TYPE, EDGE)
+%ignore WS
+%ignore COMMENT

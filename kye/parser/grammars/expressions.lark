@@ -1,0 +1,42 @@
+_binary_exp{child,op}: child | child op child
+_delimited_exp{child,op}: child | child (op child)+
+_comma_delimited{item}: [ item ("," item)* ","? ]
+
+?exp: or_exp
+
+?or_exp: _delimited_exp{xor_exp, "|"}
+?xor_exp: _delimited_exp{and_exp, "^"}
+?and_exp: _delimited_exp{comp_exp, "&"}
+
+?comp_exp: _binary_exp{mult_exp, COMPARISON_OP}
+COMPARISON_OP: "!=" | "==" | ">=" | "<=" | ">" | "<"
+
+?mult_exp: _binary_exp{add_exp, MULTIPLICATION_OP}
+MULTIPLICATION_OP: "*" | "/" | "%"
+
+?add_exp: _binary_exp{unary_exp, ADDITION_OP}
+ADDITION_OP: "+" | "-"
+
+?unary_exp: value_exp
+          | UNARY_OP value_exp
+UNARY_OP: "!" | "~"
+
+?value_exp: dot_exp
+          | literal
+
+?dot_exp: _delimited_exp{filter_exp, "."}
+
+?filter_exp: atom_exp
+           | atom_exp "[" [ exp ] "]"
+
+?atom_exp: identifier
+         | "(" exp ")"
+
+identifier: TYPE | EDGE
+
+literal: SIGNED_NUMBER
+       | STRING
+
+%import tokens (WS, COMMENT, TYPE, EDGE, SIGNED_NUMBER, STRING)
+%ignore WS
+%ignore COMMENT

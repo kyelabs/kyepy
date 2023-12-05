@@ -1,19 +1,9 @@
-type Size: Number
-
-model User(id)(name) {
-    id: Number,
-    name: String,
-    admin: Boolean?,
-    friends: User*,
-}
-
-model Yellow(id) {
-    id: Number,
-    size: Size?,
-    meep: model Meep(id) {
-        id: Number,
-    }+,
-    mother: User,
-    father: User,
-    tags: String*,
+type Hello: String
+type Name: String[length > 4]
+model Type(id) { id: Number }
+model User(id) {
+    kind+: Type
+    name: String
+    id: 4
+    hi: 3
 }
