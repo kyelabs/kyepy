@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
 from typing import Optional, Literal, Union, Any
-from kye.parser.types import Type
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
@@ -132,6 +131,15 @@ class Expression(AST):
 
 class Identifier(Expression):
     name: str
+
+    @property
+    def kind(self):
+        if self.name[0].isupper():
+            if any(letter.islower() for letter in self.name):
+                return 'type'
+            return 'const'
+        if self.name[0].islower():
+            return 'edge'
 
     def __repr_value__(self):
         return self.name
