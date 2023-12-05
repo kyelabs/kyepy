@@ -1,5 +1,6 @@
 type Number {
-    type Format {
+    to from String
+    format: {
         enum Sign { POSITIVE, NEGATIVE }
         from String
         length: Number
@@ -10,19 +11,16 @@ type Number {
         decimal_separator?: Char
         thousands_separator?: Char
     }
-
-    to from String
-    format: Format
     operation > - + ~ * / Number
 }
 
 type Integer: Number {
-    format: Number.Format[!decimals]
+    format: Number.format[!decimals]
     operation > - + ~ * Integer
 }
 
 type UInteger: Integer {
-    format: Number.Format[!decimals & sign != '-']
+    format: Integer.format[sign != '-']
     operation > + * - UInteger
 }
 

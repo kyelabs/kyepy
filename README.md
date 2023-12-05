@@ -19,3 +19,4 @@
 - [ ] Allow null definition
 - [ ] Allow type edge definitions
 - [ ] Allow lambda type definitions
+- [ ] Pre-process flattening type definitions and renaming local identifiers
