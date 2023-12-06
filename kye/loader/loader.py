@@ -1,8 +1,8 @@
 import duckdb
 from duckdb import DuckDBPyRelation, DuckDBPyConnection
-from kye.dataset import Models
+from kye.compile import Models
 from kye.loader.json_lines import from_json
-from kye.dataset import Type, DefinedType, Edge, TYPE_REF
+from kye.types import Type, Edge, TYPE_REF
 
 
 def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
@@ -83,14 +83,14 @@ class Loader:
             append_table(self.db, self.tables[model_name], r)
         self.tables[model_name] = self.db.table(table_name)
 
-    def _load(self, typ: DefinedType, r: duckdb.DuckDBPyRelation):
-        chunk_id = typ.name + '_' + str(len(self.chunks) + 1)
+    def _load(self, typ: Type, r: duckdb.DuckDBPyRelation):
+        chunk_id = typ.ref + '_' + str(len(self.chunks) + 1)
         chunk = r.select(f'''list_value('{chunk_id}', ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val''').set_alias(chunk_id)
         self.chunks[chunk_id] = chunk
         self._get_value(typ, chunk)
 
     def _get_value(self, typ: Type, r: DuckDBPyRelation):
-        if typ.has_edges:
+        if typ.has_index:
             edges = r.select('_')
             for edge_name, edge in typ.edges.items():
                 if edge_name in get_struct_keys(r):
@@ -98,12 +98,9 @@ class Loader:
                     edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
                     edges = edges.join(edge_rel, '_', how='left')
             
-            if typ.has_index:
-                edges = get_index(typ, edges)
-                self._insert(typ.ref, edges)
-                return edges.select(f'''_, _index as val''')
-            else:
-                return edges.select(f'''_, {struct_pack(typ.edges.keys(), edges)} as val''')
+            edges = get_index(typ, edges)
+            self._insert(typ.ref, edges)
+            return edges.select(f'''_, _index as val''')
         
         elif r.dtypes[1].id != 'varchar':
             dtype = r.dtypes[1].id
@@ -118,7 +115,7 @@ class Loader:
         if edge.multiple:
             r = r.select('''_, unnest(val) as val''').select('list_append(_, ROW_NUMBER() OVER (PARTITION BY _) - 1) as _, val')
 
-        r = self._get_value(edge.type, r)
+        r = self._get_value(edge.returns, r)
 
         if edge.multiple:
             r = r.aggregate('array_pop_back(_) as _, list(val) as val','array_pop_back(_)')
@@ -126,8 +123,8 @@ class Loader:
         return r
     
     def from_json(self, model_name: TYPE_REF, data: list[dict]):
-        r = from_json(self.models[model_name], data, self.db)
-        self._load(self.models[model_name], r)
+        r = from_json(self.models.get_type(model_name), data, self.db)
+        self._load(self.models.get_type(model_name), r)
 
     def __getitem__(self, model_name: str):
         return self.tables[model_name]

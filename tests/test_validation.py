@@ -2,7 +2,7 @@ from context import kye
 
 def get_errors(text, data):
     api = kye.compile(text)
-    model_name = list(api.compiled.keys())[0]
+    model_name = [model.ref for model in api.models.definitions.values() if '.' not in model.ref][-1]
     api.from_records(model_name, data)
     return api.errors
 
@@ -45,9 +45,9 @@ def test_undefined_columns():
     USER = '''
     model User(id) {
         id: Number,
-        name: String+,
-        age: Number?,
-        tags: String*,
+        name+: String,
+        age?: Number,
+        tags*: String,
     }
     '''
 
@@ -60,9 +60,9 @@ def test_validate_cardinality():
     USER = '''
     model User(id) {
         id: Number,
-        name: String+,
-        age: Number?,
-        tags: String*,
+        name+: String,
+        age?: Number,
+        tags*: String,
     }
     '''
 
@@ -89,7 +89,7 @@ def test_validate_recursive():
     USER = '''
     model User(id) {
         id: Number,
-        friends: User*,
+        friends*: User,
     }
     '''
 

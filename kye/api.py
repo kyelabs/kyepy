@@ -3,10 +3,9 @@ from functools import cached_property
 from typing import Any
 import kye.parser.parser as parser
 from kye.compile import compile_definitions
-# from kye.compiled import Dataset
-# from kye.dataset import Models
-# from kye.loader.loader import Loader
-# from kye.validate import Validate
+from kye.compile import Models
+from kye.loader.loader import Loader
+from kye.validate import Validate
 import yaml
 
 class ModelApi:
@@ -21,33 +20,30 @@ class ModelApi:
 class Api:
     def __init__(self, text):
         self.ast = parser.parse_definitions(text)
-        self.compiled = compile_definitions(self.ast)
-        print(yaml.dump(self.compiled))
-        # models = Dataset(models=self.compiled)
-        # self.models = Models(Dataset(models=self.compiled))
-        # self.loader = Loader(self.models)
-        # self.done_loading = False
+        self.models = compile_definitions(self.ast)
+        self.loader = Loader(self.models)
+        self.done_loading = False
 
-        # for model_name in self.compiled.keys():
-        #     if '.' not in model_name:
-        #         setattr(self, model_name, ModelApi(self, model_name))
+        for model_name in self.models.definitions.keys():
+            if '.' not in model_name:
+                setattr(self, model_name, ModelApi(self, model_name))
     
-    # @cached_property
-    # def validate(self):
-    #     self.done_loading = True
-    #     return Validate(self.loader)
+    @cached_property
+    def validate(self):
+        self.done_loading = True
+        return Validate(self.loader)
     
-    # @property
-    # def errors(self):
-    #     return set(self.validate.errors.aggregate(f"rule_ref, error_type").fetchall())
+    @property
+    def errors(self):
+        return set(self.validate.errors.aggregate(f"rule_ref, error_type").fetchall())
 
-    # @property
-    # def tables(self):
-    #     return self.validate.tables
+    @property
+    def tables(self):
+        return self.validate.tables
     
-    # def from_records(self, model_name: str, json: Any):
-    #     getattr(self, model_name).from_records(json)
-    #     return self
+    def from_records(self, model_name: str, json: Any):
+        getattr(self, model_name).from_records(json)
+        return self
 
 def compile(text) -> Api:
     return Api(text)

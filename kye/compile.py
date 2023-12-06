@@ -3,7 +3,7 @@ from typing import Optional, Literal, Union
 import kye.parser.kye_ast as AST
 import kye.types as Types
 
-def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: SymbolsTable) -> Types.Expression:
+def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: Models) -> Types.Expression:
     assert isinstance(ast, AST.Expression)
     if isinstance(ast, AST.Identifier):
         # TODO: Maybe somehow push this location onto a call stack?
@@ -65,7 +65,7 @@ def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: 
     else:
         raise Exception('Unknown Expression')
 
-def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type, symbols: SymbolsTable) -> tuple[Types.Edge, Types.Expression]:
+def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type, symbols: Models) -> tuple[Types.Edge, Types.Expression]:
     assert isinstance(ast, AST.EdgeDefinition)
     return symbols.define_edge(
         name=ast.name,
@@ -77,12 +77,17 @@ def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type, symbols:
     )
 
 
-def compile_type_definition(ast: AST.TypeDefinition, symbols: SymbolsTable) -> tuple[Types.Type, Types.Expression]:
+def compile_type_definition(ast: AST.TypeDefinition, symbols: Models) -> tuple[Types.Type, Types.Expression]:
     assert isinstance(ast, AST.TypeDefinition)
     if isinstance(ast, AST.AliasDefinition):
         return symbols.define_type(ref=ast.name, loc=ast.meta, expr=ast.type)
     elif isinstance(ast, AST.ModelDefinition):
-        return symbols.define_type(ref=ast.name, indexes=ast.indexes, loc=ast.meta)
+        return symbols.define_type(
+            ref=ast.name,
+            indexes=ast.indexes,
+            loc=ast.meta,
+            extends=symbols.get_type('Object')
+        )
     else:
         raise Exception('Unknown TypeDefinition')
 
@@ -90,7 +95,7 @@ def compile_type_definition(ast: AST.TypeDefinition, symbols: SymbolsTable) -> t
 def compile_definitions(ast: AST.ModuleDefinitions):
     assert isinstance(ast, AST.ModuleDefinitions)
 
-    symbols = SymbolsTable()
+    symbols = Models()
     Object = symbols.define_type(ref='Object')
     String = symbols.define_type(ref='String', extends=Object)
     Number = symbols.define_type(ref='Number', extends=Object)
@@ -112,7 +117,7 @@ def compile_definitions(ast: AST.ModuleDefinitions):
     return symbols
 
 
-class SymbolsTable:
+class Models:
     definitions: dict[str, Types.Definition]
     expressions: dict[str, AST.Expression]
 
@@ -138,6 +143,9 @@ class SymbolsTable:
     def define_edge(self, expr: Optional[AST.Expression] = None, **kwargs) -> Types.Edge:
         edge = Types.Edge(**kwargs)
         self._define(edge, expr)
+        if edge.name not in edge.model.edges:
+            edge.model.edges[edge.name] = edge
+        assert edge.model.edges[edge.name] == edge
         return edge
     
     def get_type(self, ref: Types.TYPE_REF):

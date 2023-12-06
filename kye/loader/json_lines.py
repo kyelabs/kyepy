@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from kye.dataset import Type, Edge, Models, TYPE_REF
+from kye.types import Type, Edge
 from typing import Any
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 import re
@@ -16,13 +16,13 @@ def normalize_value(typ: Type, data: Any):
     # TODO: reshape id maps { [id]: { ... } } to [ { id, ... } ]
     # not sure if we want to do that auto-magically or have it explicitly
     # defined as part of the schema
-    if typ.has_edges:
+    if typ.has_index:
         # TODO: better error handling, i.e trace location in data
         # so that we can report the location of the error
         assert type(data) is dict
 
         edges = {}
-        for edge in typ:
+        for edge in typ.edges.values():
             if edge.name not in data:
                 continue
 
@@ -30,9 +30,8 @@ def normalize_value(typ: Type, data: Any):
             if val is not None:
                 edges[edge.name] = val
         
-        if typ.has_index:
-            missing_indexes = [key for key in typ.index if key not in edges]
-            assert len(missing_indexes) == 0, f'Missing indexes for {repr(typ)}: {",".join(missing_indexes)}'
+        missing_indexes = [key for key in typ.index if key not in edges]
+        assert len(missing_indexes) == 0, f'Missing indexes for {repr(typ)}: {",".join(missing_indexes)}'
         
         if len(edges) == 0:
             return None
@@ -69,10 +68,10 @@ def normalize_edge(edge: Edge, data: Any):
         return None
 
     if edge.multiple:
-        return normalize_values(edge.type, data)
+        return normalize_values(edge.returns, data)
     
     assert type(data) is not list
-    return normalize_value(edge.type, data)
+    return normalize_value(edge.returns, data)
 
 def from_json(typ: Type, data: list[dict], con: DuckDBPyConnection) -> DuckDBPyRelation:
     file_path = DIR / f'{typ.ref}.jsonl'

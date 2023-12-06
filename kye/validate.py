@@ -1,4 +1,5 @@
-from kye.dataset import Models, Type, Edge, TYPE_REF, EDGE
+from kye.compile import Models
+from kye.types import Type, Edge, TYPE_REF, EDGE
 from kye.loader.loader import Loader, struct_pack
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
@@ -14,7 +15,7 @@ class Validate:
         self.errors = self.db.table('errors')
 
         for model_name, table in self.loader.tables.items():
-            table = self._validate_model(self.models[model_name], table)
+            table = self._validate_model(self.models.get_type(model_name), table)
             table_name = f'"{model_name}.validated"'
             table.create(table_name)
             self.tables[model_name] = self.db.table(table_name)
@@ -77,7 +78,7 @@ class Validate:
             r = r.select(f'''_index, unnest(val) as val''')
         
         r = r.filter('val IS NOT NULL')
-        r = self._validate_value(edge.type, r)
+        r = self._validate_value(edge.returns, r)
 
         if edge.multiple:
             r = r.aggregate('_index, list(val) as val')
@@ -87,11 +88,9 @@ class Validate:
     def _validate_value(self, typ: Type, r: DuckDBPyRelation):
         # TODO: Look up object references and see if they exist
 
-        base_type = typ.base.name
-
-        if base_type == 'Boolean':
+        if typ.kind == 'Boolean':
             r = self._add_errors_where(r, 'TRY_CAST(val as BOOLEAN) IS NULL', typ.ref, 'INVALID_VALUE')
-        elif base_type == 'Number':
+        elif typ.kind == 'Number':
             r = self._add_errors_where(r, 'TRY_CAST(val AS DOUBLE) IS NULL', typ.ref, 'INVALID_VALUE')
 
         return r

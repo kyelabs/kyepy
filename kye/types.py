@@ -15,32 +15,38 @@ class Definition:
 
 class Type(Definition):
     ref: TYPE_REF
-    # kind: Literal['String', 'Number', 'Boolean', 'Object']
     indexes: list[list[EDGE]]
     edges: dict[EDGE, Edge]
     extends: Optional[Type]
 
     def __init__(self,
                  ref: TYPE_REF,
-                #  kind: Literal['String', 'Number', 'Boolean', 'Object'],
                  indexes: list[list[EDGE]] = [],
-                #  edges: dict[EDGE, Edge] = {},
                  loc: Optional[TokenPosition] = None,
                  returns: Type = None,
                  extends: Type = None,
                  ):
         self.ref = ref
-        self.kind = None
         self.indexes = indexes
         self.edges = {}
         self.loc = loc
         self.expr = None
         self.returns = returns
         self.extends = extends
-    
+
+    def _inheritance_chain(self):
+        base = self.returns
+        yield base
+        while base.extends is not None:
+            base = base.extends
+            yield base
+
     @property
-    def has_edges(self) -> bool:
-        return len(self.edges) > 0
+    def kind(self) -> Literal['String','Number','Boolean','Object']:
+        for typ in self._inheritance_chain():
+            if typ.ref in ('String','Number','Boolean','Object'):
+                return typ.ref
+        raise Exception('Everything is supposed to at least inherit from `Object`')
     
     @property
     def has_index(self) -> bool:
@@ -56,9 +62,6 @@ class Type(Definition):
 
     def __contains__(self, name: EDGE) -> bool:
         return name in self.edges
-    
-    def __iter__(self) -> iter[Edge]:
-        return iter(self.edges.values())
     
     def __repr__(self):
         return "Type<{}>".format(self.ref)
