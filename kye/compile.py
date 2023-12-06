@@ -3,27 +3,37 @@ from typing import Optional, Literal, Union
 import kye.parser.kye_ast as AST
 import kye.types as Types
 
-def compile_expression(ast: AST.Expression, typ: Types.Type, env: ExpressionsTable) -> Types.Expression:
+def compile_expression(ast: AST.Expression, typ: Types.Type, env: SymbolsTable) -> Types.Expression:
     assert isinstance(ast, AST.Expression)
     if isinstance(ast, AST.Identifier):
         # TODO: Maybe somehow push this location onto a call stack?
         if ast.kind == 'type':
-            return env[ast.name] # Maybe this could also be a call where the type is `Object` and it is bound to the type
+            # Maybe this could also be a call where the type is `Object` and it is bound to the type
+            return Types.Expression(
+                returns=env[ast.name].returns,
+                loc=ast.meta,
+            )
         if ast.kind == 'edge':
             assert typ is not None
             key = typ.ref + '.' + ast.name
             assert key in env
-            return env[key] # Should accessing an edge should return a `Function` type?
+            return Types.CallExpression(
+                bound=None,
+                args=[],
+                returns=env[key].returns,
+                edge=env.get_edge(key),
+                loc=ast.meta,
+            )
     elif isinstance(ast, AST.LiteralExpression):
         if type(ast.value) is str:
-            typ = env['String']
+            typ = env.get_type('String')
         elif type(ast.value) is bool:
-            typ = env['Boolean']
+            typ = env.get_type('Boolean')
         elif isinstance(ast.value, (int, float)):
-            typ = env['Number']
+            typ = env.get_type('Number')
         else:
             raise Exception()
-        return Types.LiteralExpression(returns=typ.returns, value=ast.value, loc=ast.meta)
+        return Types.LiteralExpression(returns=typ, value=ast.value, loc=ast.meta)
     elif isinstance(ast, AST.Operation):
         assert len(ast.children) >= 1
         expr = compile_expression(ast.children[0], typ, env)
@@ -35,7 +45,7 @@ def compile_expression(ast: AST.Expression, typ: Types.Type, env: ExpressionsTab
                     bound=expr,
                     args=[filter],
                     returns=expr.returns,
-                    edge_ref='Object.filter',
+                    edge=env.get_edge('Object.filter'),
                     loc=ast.meta,
                 )
         elif ast.name == 'dot':
@@ -50,16 +60,16 @@ def compile_expression(ast: AST.Expression, typ: Types.Type, env: ExpressionsTab
                         compile_expression(child, typ, env)
                     ],
                     returns=expr.returns,
-                    edge_ref=f'{expr.returns.ref}.${ast.name}',
+                    edge=env.get_edge(f'{expr.returns.ref}.${ast.name}'),
                     loc=ast.meta,
                 )
         return expr
     else:
         raise Exception('Unknown Expression')
 
-def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type) -> tuple[Types.Edge, Types.Expression]:
+def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type, symbols: SymbolsTable) -> tuple[Types.Edge, Types.Expression]:
     assert isinstance(ast, AST.EdgeDefinition)
-    return Types.Edge(
+    return symbols.define_edge(
         name=ast.name,
         model=model,
         nullable=ast.cardinality in ('?','*'),
@@ -67,13 +77,14 @@ def compile_edge_definition(ast: AST.EdgeDefinition, model: Types.Type) -> tuple
         loc=ast.meta,
     ), (ast.type, model)
 
-def compile_type_definition(ast: AST.TypeDefinition) -> tuple[Types.Type, Types.Expression]:
+
+def compile_type_definition(ast: AST.TypeDefinition, symbols: SymbolsTable) -> tuple[Types.Type, Types.Expression]:
     assert isinstance(ast, AST.TypeDefinition)
     if isinstance(ast, AST.AliasDefinition):
-        model = Types.Type(ref=ast.name, loc=ast.meta)
+        model = symbols.define_type(ref=ast.name, loc=ast.meta)
         return model, (ast.type, model)
     elif isinstance(ast, AST.ModelDefinition):
-        model = Types.Type(ref=ast.name, indexes=ast.indexes, loc=ast.meta)
+        model = symbols.define_type(ref=ast.name, indexes=ast.indexes, loc=ast.meta)
         return model, Types.Expression(returns=model, loc=ast.meta)
     else:
         raise Exception('Unknown TypeDefinition')
@@ -81,48 +92,72 @@ def compile_type_definition(ast: AST.TypeDefinition) -> tuple[Types.Type, Types.
 
 def compile_definitions(ast: AST.ModuleDefinitions):
     assert isinstance(ast, AST.ModuleDefinitions)
-    definitions = {}
-    expressions = ExpressionsTable()
 
-    expressions['Object'] = Types.Expression(returns=Types.Type('Object'))
-    expressions['Object.filter'] = Types.Expression(returns=expressions['Object'].returns) # I feel like these returns should return an edge?
-    expressions['Number'] = Types.Expression(returns=Types.Type('Number'))
-    expressions['String'] = Types.Expression(returns=Types.Type('String'))
-    expressions['String.length'] = Types.Expression(returns=expressions['Number'].returns)
-    expressions['Boolean'] = Types.Expression(returns=Types.Type('Boolean'))
+    symbols = SymbolsTable()
+    Object = symbols.define_type(ref='Object')
+    String = symbols.define_type(ref='String')
+    Number = symbols.define_type(ref='Number')
+    Boolean = symbols.define_type(ref='Boolean')
+    symbols.define_edge(model=Object, name='filter', args=[Boolean])
+    symbols.define_edge(model=String, name='length') # returns=Number
+    symbols.define_edge(model=Number, name='$gt') # returns=Boolean
+
+    symbols['Object'] = Types.Expression(returns=Object)
+    symbols['String'] = Types.Expression(returns=String)
+    symbols['Number'] = Types.Expression(returns=Number)
+    symbols['Boolean'] = Types.Expression(returns=Boolean)
+    symbols['Object.filter'] = Types.Expression(returns=Object)
+    symbols['Number.$gt'] = Types.Expression(returns=Boolean)
+    symbols['String.length'] = Types.Expression(returns=Number)
 
     for type_def in ast.children:
-        typ, exp = compile_type_definition(type_def)
-        definitions[typ.ref] = typ
-        expressions[typ.ref] = exp
+        typ, exp = compile_type_definition(type_def, symbols)
+        symbols[typ.ref] = exp
 
         if isinstance(type_def, AST.ModelDefinition):
             for edge_def in type_def.edges:
-                edge, exp = compile_edge_definition(edge_def, typ)
-                definitions[edge.ref] = edge
-                expressions[edge.ref] = exp
+                edge, exp = compile_edge_definition(edge_def, typ, symbols)
+                symbols[edge.ref] = exp
     
-    for exp in expressions:
-        print(exp, expressions[exp])
+    for exp in symbols:
+        print(exp, symbols[exp])
 
-    return expressions
+    return symbols
 
 
-class ExpressionsTable:
+class SymbolsTable:
     symbols: dict[str, Union[tuple, Types.Expression, None]]
+    types: dict[Types.TYPE_REF, Types.Type]
+    edges: dict[Types.EDGE_REF, Types.Edge]
 
     def __init__(self):
         self.symbols = {}
+        self.types = {}
+        self.edges = {}
     
-    # TODO: have a define_type & define_edge functions that create an expression that returns a `Object`
-    # def define_type(self, type: Types.Type):
-    #     self.symbols[type.ref] = Types.Expression(bound=type, returns='Type')
+    def define_type(self, **kwargs) -> Types.Type:
+        typ = Types.Type(**kwargs)
+        self.types[typ.ref] = typ
+        return typ
+    
+    def define_edge(self, **kwargs) -> Types.Edge:
+        edge = Types.Edge(**kwargs)
+        self.edges[edge.ref] = edge
+        return edge
+    
+    def get_type(self, ref: Types.TYPE_REF):
+        return self.types[ref]
+    
+    def get_edge(self, ref: Types.EDGE_REF):
+        return self.edges[ref]
 
     def __setitem__(self, ref: str, val: Union[tuple, Types.Expression]):
         assert ref not in self.symbols
         assert type(val) is tuple or isinstance(val, Types.Expression)
         self.symbols[ref] = val
     
+    # TODO: rename to get_return_type or something and define/access 
+    # the return type through the type/edge definitions
     def __getitem__(self, ref: str):
         if ref not in self.symbols:
             raise KeyError(f'Unknown symbol `{ref}`')

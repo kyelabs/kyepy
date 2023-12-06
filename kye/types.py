@@ -58,6 +58,7 @@ class Type(Definition):
 class Edge(Definition):
     name: EDGE
     model: Type
+    args: list[Type]
     nullable: bool = False
     multiple: bool = False
     loc: Optional[TokenPosition]
@@ -67,12 +68,14 @@ class Edge(Definition):
                  model: Type,
                  nullable: bool = False,
                  multiple: bool = False,
+                 args: list[Type] = [],
                  loc: Optional[TokenPosition] = None,
                 ):
         self.name = name
         self.model = model
         self.nullable = nullable
         self.multiple = multiple
+        self.args = args
         self.loc = loc
     
     @property
@@ -121,17 +124,17 @@ class LiteralExpression(Expression):
 
 class CallExpression(Expression):
     bound: Expression
-    edge_ref: str
+    edge: Edge
     args: list[Expression]
 
     def __init__(self,
                  bound: Expression,
                  args: list[Expression],
                  returns: Type,
-                 edge_ref: Edge,
+                 edge: Edge,
                  loc: Optional[TokenPosition] = None
                  ):
         super().__init__(returns=returns, loc=loc)
         self.bound = bound
         self.args = args
-        self.edge_ref = edge_ref
+        self.edge = edge
