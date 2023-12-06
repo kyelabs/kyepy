@@ -15,9 +15,10 @@ class Definition:
 
 class Type(Definition):
     ref: TYPE_REF
-    kind: Literal['String', 'Number', 'Boolean', 'Object']
+    # kind: Literal['String', 'Number', 'Boolean', 'Object']
     indexes: list[list[EDGE]]
     edges: dict[EDGE, Edge]
+    extends: Optional[Type]
 
     def __init__(self,
                  ref: TYPE_REF,
@@ -26,6 +27,7 @@ class Type(Definition):
                 #  edges: dict[EDGE, Edge] = {},
                  loc: Optional[TokenPosition] = None,
                  returns: Type = None,
+                 extends: Type = None,
                  ):
         self.ref = ref
         self.kind = None
@@ -34,6 +36,7 @@ class Type(Definition):
         self.loc = loc
         self.expr = None
         self.returns = returns
+        self.extends = extends
     
     @property
     def has_edges(self) -> bool:
