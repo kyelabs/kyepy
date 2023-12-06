@@ -14,13 +14,12 @@ def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: 
                 loc=ast.meta,
             )
         if ast.kind == 'edge':
-            assert typ is not None
-            key = typ.ref + '.' + ast.name
+            edge = symbols.get_edge(typ.ref, ast.name)
             return Types.CallExpression(
                 bound=None,
                 args=[],
-                returns=symbols.get_return_type(key),
-                edge=symbols.get_edge(key),
+                returns=symbols.get_return_type(edge.ref),
+                edge=edge,
                 loc=ast.meta,
             )
     elif isinstance(ast, AST.LiteralExpression):
@@ -44,7 +43,7 @@ def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: 
                     bound=expr,
                     args=[filter],
                     returns=expr.returns,
-                    edge=symbols.get_edge('Object.filter'),
+                    edge=symbols.get_edge(expr.returns.ref, '$filter'),
                     loc=ast.meta,
                 )
         elif ast.name == 'dot':
@@ -59,7 +58,7 @@ def compile_expression(ast: AST.Expression, typ: Optional[Types.Type], symbols: 
                         compile_expression(child, typ, symbols)
                     ],
                     returns=expr.returns,
-                    edge=symbols.get_edge(f'{expr.returns.ref}.${ast.name}'),
+                    edge=symbols.get_edge(expr.returns.ref, '$' + ast.name),
                     loc=ast.meta,
                 )
         return expr
@@ -92,13 +91,12 @@ def compile_definitions(ast: AST.ModuleDefinitions):
     assert isinstance(ast, AST.ModuleDefinitions)
 
     symbols = SymbolsTable()
-    Object = symbols.define_type(ref='Object')
     String = symbols.define_type(ref='String')
     Number = symbols.define_type(ref='Number')
     Boolean = symbols.define_type(ref='Boolean')
-    symbols.define_edge(model=Object, name='filter', args=[Boolean], returns=Object)
     symbols.define_edge(model=String, name='length', returns=Number)
-    symbols.define_edge(model=Number, name='$gt', returns=Number)
+    symbols.define_edge(model=String, name='$filter', args=[Boolean], returns=String)
+    symbols.define_edge(model=Number, name='$gt', args=[Number], returns=Boolean)
 
     for type_def in ast.children:
         typ = compile_type_definition(type_def, symbols)
@@ -146,8 +144,8 @@ class SymbolsTable:
         assert isinstance(typ, Types.Type)
         return typ
     
-    def get_edge(self, ref: Types.EDGE_REF):
-        edge = self.definitions[ref]
+    def get_edge(self, type_ref: Types.TYPE_REF, edge_ref: Types.EDGE_REF):
+        edge = self.definitions[type_ref + '.' + edge_ref]
         assert isinstance(edge, Types.Edge)
         return edge
     
