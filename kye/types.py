@@ -9,13 +9,15 @@ EDGE = str
 class Definition:
     """ Abstract Class for Type and Edge Definitions """
     ref: str
+    expr: Optional[Expression]
+    returns: Type
+    loc: Optional[TokenPosition]
 
 class Type(Definition):
     ref: TYPE_REF
     kind: Literal['String', 'Number', 'Boolean', 'Object']
     indexes: list[list[EDGE]]
     edges: dict[EDGE, Edge]
-    loc: Optional[TokenPosition]
 
     def __init__(self,
                  ref: TYPE_REF,
@@ -23,12 +25,15 @@ class Type(Definition):
                  indexes: list[list[EDGE]] = [],
                 #  edges: dict[EDGE, Edge] = {},
                  loc: Optional[TokenPosition] = None,
+                 returns: Type = None,
                  ):
         self.ref = ref
         self.kind = None
         self.indexes = indexes
         self.edges = {}
         self.loc = loc
+        self.expr = None
+        self.returns = returns
     
     @property
     def has_edges(self) -> bool:
@@ -61,7 +66,6 @@ class Edge(Definition):
     args: list[Type]
     nullable: bool = False
     multiple: bool = False
-    loc: Optional[TokenPosition]
     
     def __init__(self,
                  name: EDGE,
@@ -70,6 +74,7 @@ class Edge(Definition):
                  multiple: bool = False,
                  args: list[Type] = [],
                  loc: Optional[TokenPosition] = None,
+                 returns: Type = None
                 ):
         self.name = name
         self.model = model
@@ -77,6 +82,8 @@ class Edge(Definition):
         self.multiple = multiple
         self.args = args
         self.loc = loc
+        self.expr = None
+        self.returns = returns
     
     @property
     def ref(self) -> EDGE_REF:
