@@ -2,7 +2,7 @@ from context import kye
 
 def get_errors(text, data):
     api = kye.compile(text)
-    model_name = [model.ref for model in api.models.definitions.values() if '.' not in model.ref][-1]
+    model_name = [model.ref for model in api.models.values()][-1]
     api.from_records(model_name, data)
     return api.errors
 
@@ -37,7 +37,7 @@ def test_value_is_coercible():
         'name': 'bill',
         'is_admin': 'sure',
     }]) == {
-        ('Number', 'INVALID_VALUE'),
+        ('UserId', 'INVALID_VALUE'),
         ('Boolean', 'INVALID_VALUE'),
     }
 

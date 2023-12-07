@@ -2,8 +2,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any
 import kye.parser.parser as parser
-from kye.compile import compile_definitions
-from kye.compile import Models
+from kye.compiler import Compiler
 from kye.loader.loader import Loader
 from kye.validate import Validate
 import yaml
@@ -20,11 +19,11 @@ class ModelApi:
 class Api:
     def __init__(self, text):
         self.ast = parser.parse_definitions(text)
-        self.models = compile_definitions(self.ast)
+        self.models = Compiler().read_definitions(self.ast).get_models()
         self.loader = Loader(self.models)
         self.done_loading = False
 
-        for model_name in self.models.definitions.keys():
+        for model_name in self.models.keys():
             if '.' not in model_name:
                 setattr(self, model_name, ModelApi(self, model_name))
     

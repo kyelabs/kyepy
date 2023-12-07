@@ -1,8 +1,7 @@
 import duckdb
 from duckdb import DuckDBPyRelation, DuckDBPyConnection
-from kye.compile import Models
 from kye.loader.json_lines import from_json
-from kye.types import Type, Edge, TYPE_REF
+from kye.types import Type, Edge, TYPE_REF, Models
 
 
 def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
@@ -123,8 +122,8 @@ class Loader:
         return r
     
     def from_json(self, model_name: TYPE_REF, data: list[dict]):
-        r = from_json(self.models.get_type(model_name), data, self.db)
-        self._load(self.models.get_type(model_name), r)
+        r = from_json(self.models[model_name], data, self.db)
+        self._load(self.models[model_name], r)
 
     def __getitem__(self, model_name: str):
         return self.tables[model_name]

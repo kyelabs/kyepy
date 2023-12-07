@@ -1,5 +1,4 @@
-from kye.compile import Models
-from kye.types import Type, Edge, TYPE_REF, EDGE
+from kye.types import Type, Edge, TYPE_REF, EDGE, Models
 from kye.loader.loader import Loader, struct_pack
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
@@ -15,7 +14,7 @@ class Validate:
         self.errors = self.db.table('errors')
 
         for model_name, table in self.loader.tables.items():
-            table = self._validate_model(self.models.get_type(model_name), table)
+            table = self._validate_model(self.models[model_name], table)
             table_name = f'"{model_name}.validated"'
             table.create(table_name)
             self.tables[model_name] = self.db.table(table_name)

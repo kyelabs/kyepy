@@ -23,7 +23,6 @@ class Type(Definition):
                  ref: TYPE_REF,
                  indexes: list[list[EDGE]] = [],
                  loc: Optional[TokenPosition] = None,
-                 returns: Type = None,
                  extends: Type = None,
                  ):
         self.ref = ref
@@ -31,11 +30,11 @@ class Type(Definition):
         self.edges = {}
         self.loc = loc
         self.expr = None
-        self.returns = returns
         self.extends = extends
+        assert isinstance(extends, Type) or extends is None
 
     def _inheritance_chain(self):
-        base = self.returns
+        base = self
         yield base
         while base.extends is not None:
             base = base.extends
@@ -80,6 +79,7 @@ class Edge(Definition):
                  multiple: bool = False,
                  args: list[Type] = [],
                  loc: Optional[TokenPosition] = None,
+                 expr: Optional[Expression] = None,
                  returns: Type = None
                 ):
         self.name = name
@@ -88,8 +88,12 @@ class Edge(Definition):
         self.multiple = multiple
         self.args = args
         self.loc = loc
-        self.expr = None
+        self.expr = expr
         self.returns = returns
+        if self.returns is None:
+            assert self.expr is not None
+            self.returns = self.expr.returns
+        assert isinstance(self.returns, Type)
     
     @property
     def ref(self) -> EDGE_REF:
@@ -151,3 +155,5 @@ class CallExpression(Expression):
         self.bound = bound
         self.args = args
         self.edge = edge
+
+Models = dict[str, Type]
