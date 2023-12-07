@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import cached_property
 from typing import Optional, Literal, Union
 from kye.parser.kye_ast import TokenPosition
 
@@ -23,15 +24,20 @@ class Type(Definition):
                  ref: TYPE_REF,
                  indexes: list[list[EDGE]] = [],
                  loc: Optional[TokenPosition] = None,
-                 extends: Type = None,
+                 expr: Optional[Expression] = None,
+                 extends: Optional[Type] = None,
                  ):
         self.ref = ref
         self.indexes = indexes
         self.edges = {}
         self.loc = loc
-        self.expr = None
+        self.expr = expr
         self.extends = extends
-        assert isinstance(extends, Type) or extends is None
+        if expr is not None:
+            assert isinstance(expr, Expression)
+            assert extends is None
+            self.extends = expr.returns
+        assert isinstance(self.extends, Type) or ref == 'Object', 'Everything is supposed to at least inherit from `Object`'
 
     def _inheritance_chain(self):
         base = self
@@ -40,21 +46,21 @@ class Type(Definition):
             base = base.extends
             yield base
 
-    @property
+    @cached_property
     def kind(self) -> Literal['String','Number','Boolean','Object']:
         for typ in self._inheritance_chain():
             if typ.ref in ('String','Number','Boolean','Object'):
                 return typ.ref
         raise Exception('Everything is supposed to at least inherit from `Object`')
     
-    @property
+    @cached_property
     def has_index(self) -> bool:
         return len(self.indexes) > 0
 
-    @property
-    def index(self) -> list[EDGE]:
+    @cached_property
+    def index(self) -> set[EDGE]:
         """ Flatten the 2d list of indexes """
-        return [idx for idxs in self.indexes for idx in idxs]
+        return {idx for idxs in self.indexes for idx in idxs}
     
     def __getitem__(self, name: EDGE) -> Edge:
         return self.edges[name]
@@ -63,7 +69,13 @@ class Type(Definition):
         return name in self.edges
     
     def __repr__(self):
-        return "Type<{}>".format(self.ref)
+        non_index_edges = [edge for edge in self.edges.keys() if edge not in self.index]
+        return "Type<{}{}{}{}>".format(
+            self.ref or '',
+            ':' + self.extends.ref if self.extends is not None and self.extends.ref is not 'Object' else '',
+            ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
+            '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
+        )
 
 class Edge(Definition):
     name: EDGE
@@ -124,8 +136,9 @@ class Expression:
     
     def __repr__(self):
         import re
-        return 'Expr<{}>'.format(
-            re.sub(r'\s+', ' ', self.loc.text) if self.loc else ''
+        return '{}<{}>'.format(
+            self.__class__.__name__,
+            re.sub(r'\s+', ' ', self.loc.text) if self.loc else '',
         )
 
 class LiteralExpression(Expression):
@@ -140,17 +153,24 @@ class LiteralExpression(Expression):
         self.value = value
 
 class CallExpression(Expression):
-    bound: Expression
+    bound: Optional[Expression]
     edge: Edge
     args: list[Expression]
 
     def __init__(self,
-                 bound: Expression,
-                 args: list[Expression],
-                 returns: Type,
                  edge: Edge,
+                 bound: Optional[Expression] = None,
+                 args: list[Expression] = [],
                  loc: Optional[TokenPosition] = None
                  ):
+        returns = edge.returns
+
+        # Have not figured out template functions yet,
+        # so here is my hack for $filter
+        if edge.name == '$filter':
+            assert bound is not None
+            returns = bound.returns
+
         super().__init__(returns=returns, loc=loc)
         self.bound = bound
         self.args = args

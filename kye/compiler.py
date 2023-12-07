@@ -26,9 +26,24 @@ class Compiler:
         String = self.define_native_type('String', extends=Object)
         Number = self.define_native_type('Number', extends=Object)
         Boolean = self.define_native_type('Boolean', extends=Object)
+        self.define_native_edge(model=Object, name='$eq', args=[Object], returns=Boolean)
+        self.define_native_edge(model=Object, name='$ne', args=[Object], returns=Boolean)
         self.define_native_edge(model=Object, name='$filter', args=[Boolean], returns=Object)
+        self.define_native_edge(model=Number, name='$gt', args=[Number], returns=Boolean)
+        self.define_native_edge(model=Number, name='$lt', args=[Number], returns=Boolean)
+        self.define_native_edge(model=Number, name='$gte', args=[Number], returns=Boolean)
+        self.define_native_edge(model=Number, name='$lte', args=[Number], returns=Boolean)
+        self.define_native_edge(model=Number, name='$add', args=[Number], returns=Number)
+        self.define_native_edge(model=Number, name='$sub', args=[Number], returns=Number)
+        self.define_native_edge(model=Number, name='$mul', args=[Number], returns=Number)
+        self.define_native_edge(model=Number, name='$div', args=[Number], returns=Number)
+        self.define_native_edge(model=Number, name='$mod', args=[Number], returns=Number)
         self.define_native_edge(model=String, name='length', returns=Number)
-        self.define_native_edge(model=Number, name='$gt', returns=Boolean)
+        self.define_native_edge(model=String, name='$gt', args=[String], returns=Boolean)
+        self.define_native_edge(model=String, name='$lt', args=[String], returns=Boolean)
+        self.define_native_edge(model=String, name='$gte', args=[String], returns=Boolean)
+        self.define_native_edge(model=String, name='$lte', args=[String], returns=Boolean)
+        self.define_native_edge(model=String, name='$add', args=[String], returns=String)
 
     @property
     def edges(self) -> list[Types.Edge]:
@@ -138,6 +153,9 @@ class Compiler:
             extended_type = extended_type.extends
             ref = extended_type.ref + '.' + name
         
+        if ref not in self.meta:
+            raise KeyError(f"Unknown edge `{typ.ref}.{name}`")
+        
         edge = self._get(ref)
         assert isinstance(edge, Types.Edge)
         return edge
@@ -159,7 +177,7 @@ class Compiler:
             return Types.Type(
                 ref=ast.name,
                 loc=ast.meta,
-                extends=self.compile_expression(ast.type, None).returns,
+                expr=self.compile_expression(ast.type, None),
             )
         if isinstance(ast, AST.ModelDefinition):
             return Types.Type(
@@ -170,7 +188,7 @@ class Compiler:
             )
         raise Exception('Unknown TypeDefinition')
     
-    def compile_expression(self, ast: AST.Expression, typ: Optional[Types.Type]):
+    def compile_expression(self, ast: AST.Expression, typ: Optional[Types.Type]) -> Types.Expression:
         assert isinstance(ast, AST.Expression)
         if isinstance(ast, AST.Identifier):
             if ast.kind == 'type':
@@ -182,9 +200,6 @@ class Compiler:
             if ast.kind == 'edge':
                 edge = self.get_edge(typ, ast.name)
                 return Types.CallExpression(
-                    bound=None,
-                    args=[],
-                    returns=edge.returns,
                     edge=edge,
                     loc=ast.meta,
                 )
@@ -208,7 +223,6 @@ class Compiler:
                     expr = Types.CallExpression(
                         bound=expr,
                         args=[filter],
-                        returns=expr.returns,
                         edge=self.get_edge(expr.returns, '$filter'),
                         loc=ast.meta,
                     )
@@ -223,7 +237,6 @@ class Compiler:
                         args=[
                             self.compile_expression(child, typ)
                         ],
-                        returns=expr.returns,
                         edge=self.get_edge(expr.returns, '$' + ast.name),
                         loc=ast.meta,
                     )

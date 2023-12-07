@@ -4,5 +4,6 @@ model User(id) {
     kind+: UserType
     name: String
     id: 4
+    num: id == 4
     hi: 3
 }

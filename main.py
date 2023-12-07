@@ -13,17 +13,18 @@ if __name__ == '__main__':
         'id': 4,
         'hi': 2
     }])
+    err = api.errors
 
-    print(kye.compile('''
-    type UserId: Number
+    # print(kye.compile('''
+    # type UserId: Number
 
-    model User(id) {
-        id: UserId,
-        name: String,
-        is_admin: Boolean,
-    }
-    ''').from_records('User', [{
-        'id': 1,
-        'name': 'Joe',
-        'is_admin': True,
-    }]).errors)
+    # model User(id) {
+    #     id: UserId,
+    #     name: String,
+    #     is_admin: Boolean,
+    # }
+    # ''').from_records('User', [{
+    #     'id': 1,
+    #     'name': 'Joe',
+    #     'is_admin': True,
+    # }]).errors)
