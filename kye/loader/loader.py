@@ -66,7 +66,14 @@ class Loader:
 
     Any value normalization needs to be done here so that the index hash is consistent.
     """
+    # If I store types and edges in separate relations, then that will allow me
+    # to have a more standard storage format and not have to append columns to tables
+    # right? Because every edge table would look like (index:int64, value:str, args:list[str])
+    # It would also allow me to do my quad store if I really wanted to.
     tables: dict[TYPE_REF, duckdb.DuckDBPyRelation]
+    models: Models
+    db: duckdb.DuckDBPyConnection
+    chunks: dict[str, duckdb.DuckDBPyRelation]
 
     def __init__(self, models: Models):
         self.tables = {}
@@ -101,6 +108,11 @@ class Loader:
             self._insert(typ.ref, edges)
             return edges.select(f'''_, _index as val''')
         
+        # Eventually this will be replaced with a custom function for normalizing
+        # values right? Like a DateTime type needs to be converted into a standard
+        # format for index and equivalency checks right?
+        # The standard format that it is converted into might also depend on the
+        # storage system
         elif r.dtypes[1].id != 'varchar':
             dtype = r.dtypes[1].id
             r = r.select(f'''_, CAST(val AS VARCHAR) as val''')

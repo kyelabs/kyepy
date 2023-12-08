@@ -45,6 +45,12 @@ class Type(Definition):
         while base.extends is not None:
             base = base.extends
             yield base
+    
+    def get_edge(self, name: str):
+        for typ in self._inheritance_chain():
+            if name in typ.edges:
+                return typ.edges[name]
+        raise Exception(f'Unknown edge `{self.ref}.{name}`')
 
     @cached_property
     def kind(self) -> Literal['String','Number','Boolean','Object']:
@@ -141,6 +147,21 @@ class Expression:
             re.sub(r'\s+', ' ', self.loc.text) if self.loc else '',
         )
 
+class TypeRefExpression(Expression):
+    def __init__(self,
+                 type: Type,
+                 loc: Optional[TokenPosition] = None):
+        super().__init__(returns=type, loc=loc)
+
+class EdgeRefExpression(Expression):
+    edge: Edge
+
+    def __init__(self,
+                 edge: Edge,
+                 loc: Optional[TokenPosition] = None):
+        super().__init__(returns=edge.returns, loc=loc)
+        self.edge = edge
+
 class LiteralExpression(Expression):
     value: Union[str, int, float, bool]
 
@@ -153,13 +174,13 @@ class LiteralExpression(Expression):
         self.value = value
 
 class CallExpression(Expression):
-    bound: Optional[Expression]
+    bound: Expression
     edge: Edge
     args: list[Expression]
 
     def __init__(self,
+                 bound: Expression,
                  edge: Edge,
-                 bound: Optional[Expression] = None,
                  args: list[Expression] = [],
                  loc: Optional[TokenPosition] = None
                  ):
@@ -168,7 +189,6 @@ class CallExpression(Expression):
         # Have not figured out template functions yet,
         # so here is my hack for $filter
         if edge.name == '$filter':
-            assert bound is not None
             returns = bound.returns
 
         super().__init__(returns=returns, loc=loc)

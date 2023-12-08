@@ -48,7 +48,7 @@ class Compiler:
     @property
     def edges(self) -> list[Types.Edge]:
         return [
-            self._get(ref)
+            self.get_edge(ref)
             for ref, meta in self.meta.items()
             if meta.kind == 'edge' and meta.user_defined
         ]
@@ -71,7 +71,7 @@ class Compiler:
     def get_edges(self, type_ref: str) -> list[Types.Edge]:
         assert self.meta[type_ref].kind == 'type' 
         return [
-            self._get(edge_ref)
+            self.get_edge(edge_ref)
             for edge_ref, meta in self.meta.items()
             if meta.kind == 'edge' and meta.type_ref == type_ref
         ]
@@ -145,8 +145,13 @@ class Compiler:
                 else:
                     assert typ.edges[edge.name] == edge
         return typ
+
+    def get_edge(self, edge_ref: str) -> Types.Edge:
+        edge = self._get(edge_ref)
+        assert isinstance(edge, Types.Edge)
+        return edge
     
-    def get_edge(self, typ: Types.Type, name: str) -> Types.Edge:
+    def lookup_edge(self, typ: Types.Type, name: str) -> Types.Edge:
         extended_type = typ
         ref = extended_type.ref + '.' + name
         while ref not in self.meta and extended_type.extends is not None:
@@ -156,9 +161,7 @@ class Compiler:
         if ref not in self.meta:
             raise KeyError(f"Unknown edge `{typ.ref}.{name}`")
         
-        edge = self._get(ref)
-        assert isinstance(edge, Types.Edge)
-        return edge
+        return self.get_edge(ref)
 
     def compile_edge(self, ast: AST.EdgeDefinition, model: Types.Type):
         assert isinstance(ast, AST.EdgeDefinition)
@@ -193,13 +196,13 @@ class Compiler:
         if isinstance(ast, AST.Identifier):
             if ast.kind == 'type':
                 # Maybe this could also be a call where the type is `Object` and it is bound to the type
-                return Types.Expression(
-                    returns=self.get_type(ast.name),
+                return Types.TypeRefExpression(
+                    type=self.get_type(ast.name),
                     loc=ast.meta,
                 )
             if ast.kind == 'edge':
-                edge = self.get_edge(typ, ast.name)
-                return Types.CallExpression(
+                edge = self.lookup_edge(typ, ast.name)
+                return Types.EdgeRefExpression(
                     edge=edge,
                     loc=ast.meta,
                 )
@@ -223,7 +226,7 @@ class Compiler:
                     expr = Types.CallExpression(
                         bound=expr,
                         args=[filter],
-                        edge=self.get_edge(expr.returns, '$filter'),
+                        edge=self.lookup_edge(expr.returns, '$filter'),
                         loc=ast.meta,
                     )
             elif ast.name == 'dot':
@@ -237,7 +240,7 @@ class Compiler:
                         args=[
                             self.compile_expression(child, typ)
                         ],
-                        edge=self.get_edge(expr.returns, '$' + ast.name),
+                        edge=self.lookup_edge(expr.returns, '$' + ast.name),
                         loc=ast.meta,
                     )
             return expr

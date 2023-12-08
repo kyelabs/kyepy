@@ -19,7 +19,8 @@ class ModelApi:
 class Api:
     def __init__(self, text):
         self.ast = parser.parse_definitions(text)
-        self.models = Compiler().read_definitions(self.ast).get_models()
+        self.compiler = Compiler().read_definitions(self.ast)
+        self.models = self.compiler.get_models()
         self.loader = Loader(self.models)
         self.done_loading = False
 
