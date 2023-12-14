@@ -116,6 +116,7 @@ class ModelDefinition(TypeDefinition, ContainedDefinitions):
 class EdgeDefinition(ExpressionDefinition):
     name: EDGE
     cardinality: Optional[Literal['*','?','+','!']]
+    _ref: Optional[str]
 
     @model_validator(mode='after')
     def set_children(self):

@@ -1,7 +1,7 @@
-type Name: String[length > 4]
-model UserType(id) { id: Number }
 model User(id) {
-    kind+: UserType
+    type Name: String[length > 4]
+    model Type(id) { id: Number }
+    kind+: Type
     name: String
     id: 4
     hi: id + 5

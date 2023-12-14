@@ -10,7 +10,7 @@ OPERATORS_MAP = {
     'filter_exp': '[]',
 }
 
-def transform(token: Union[Tree, Token], script=str):
+def tokens_to_ast(token: Union[Tree, Token], script: str):
 
     if isinstance(token, Token):
         kind = token.type
@@ -20,7 +20,7 @@ def transform(token: Union[Tree, Token], script=str):
     elif isinstance(token, Tree):
         kind = token.data
         meta = token.meta
-        children = [transform(child, script) for child in token.children]
+        children = [tokens_to_ast(child, script) for child in token.children]
     
     meta = TokenPosition(
         line=meta.line,
@@ -102,3 +102,50 @@ def transform(token: Union[Tree, Token], script=str):
         return value
     else:
         raise Exception(f'Unknown rule: {kind}')
+
+
+def globalize_names(ast: AST, path = tuple(), type_name_map = dict()):
+
+    def rename_identifiers(ast: Expression, type_name_map: dict[str, str]):
+        if isinstance(ast, Operation) and ast.name == 'dot':
+            # Only rename the first child for the dot operator,
+            # because the following children have a different context
+            rename_identifiers(ast.children[0], type_name_map)
+            return
+        if isinstance(ast, Identifier) and ast.name in type_name_map:
+            ast.name = type_name_map[ast.name]
+
+        for child in ast.children:
+            rename_identifiers(child, type_name_map)
+
+    if isinstance(ast, Definition):
+        path += (ast.name,)
+        if isinstance(ast, TypeDefinition):
+            ast.name = '.'.join(path)
+        elif isinstance(ast, EdgeDefinition):
+            ast._ref = '.'.join(path)
+            rename_identifiers(ast, type_name_map)
+    if isinstance(ast, ContainedDefinitions):
+        local = {**type_name_map}
+        for child in ast.children:
+            if isinstance(child, TypeDefinition):
+                local[child.name] = '.'.join(path + (child.name,))
+        for child in ast.children:
+            globalize_names(child, path, local)
+
+def unnest_subtypes(ast: AST):
+    def collect_types(ast: AST):
+        if isinstance(ast, TypeDefinition):
+            yield ast
+        if isinstance(ast, ContainedDefinitions):
+            for child in ast.children:
+                yield from collect_types(child)
+    
+    if isinstance(ast, ModuleDefinitions):
+        ast.children = list(collect_types(ast))
+
+def transform(token: Union[Tree, Token], script: str):
+    ast = tokens_to_ast(token, script)
+    globalize_names(ast)
+    unnest_subtypes(ast)
+    return ast
