@@ -4,5 +4,5 @@ model User(id) {
     kind+: UserType
     name: String
     id: 4
-    hi: 3
+    hi: id + 5
 }
