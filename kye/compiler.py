@@ -22,13 +22,26 @@ class Compiler:
         self.definitions = {}
         self.ast = {}
         self.meta = {}
+        Type = self.define_native_type('Type')
         Object = self.define_native_type('Object')
         String = self.define_native_type('String', extends=Object)
         Number = self.define_native_type('Number', extends=Object)
         Boolean = self.define_native_type('Boolean', extends=Object)
+        self.define_native_edge(model=Type, name='$and', args=[Type], returns=Type)
+        self.define_native_edge(model=Type, name='$or', args=[Type], returns=Type)
+        self.define_native_edge(model=Type, name='$xor', args=[Type], returns=Type)
+        self.define_native_edge(model=Type, name='$eq', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$ne', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$gt', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$lt', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$gte', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$lte', args=[Object], returns=Type)
+        self.define_native_edge(model=Type, name='$filter', args=[Boolean], returns=Type)
         self.define_native_edge(model=Object, name='$eq', args=[Object], returns=Boolean)
         self.define_native_edge(model=Object, name='$ne', args=[Object], returns=Boolean)
-        self.define_native_edge(model=Object, name='$filter', args=[Boolean], returns=Object)
+        self.define_native_edge(model=Boolean, name='$and', args=[Boolean], returns=Boolean)
+        self.define_native_edge(model=Boolean, name='$or', args=[Boolean], returns=Boolean)
+        self.define_native_edge(model=Boolean, name='$xor', args=[Boolean], returns=Boolean)
         self.define_native_edge(model=Number, name='$gt', args=[Number], returns=Boolean)
         self.define_native_edge(model=Number, name='$lt', args=[Number], returns=Boolean)
         self.define_native_edge(model=Number, name='$gte', args=[Number], returns=Boolean)
@@ -125,7 +138,8 @@ class Compiler:
                 raise Exception(f'Possible circular reference for `{ref}`')
             return existing
     
-        # Clear the table first, so that if the function calls itself
+        # Clear the ref from the table first, 
+        # so that if the function calls itself
         # it will get a circular reference error
         self.definitions[ref] = None
         if self.meta[ref].kind == 'edge':
@@ -195,10 +209,10 @@ class Compiler:
         assert isinstance(ast, AST.Expression)
         if isinstance(ast, AST.Identifier):
             if ast.kind == 'type':
-                # Maybe this could also be a call where the type is `Object` and it is bound to the type
                 return Types.TypeRefExpression(
                     type=self.get_type(ast.name),
                     loc=ast.meta,
+                    returns=self.get_type('Type'),
                 )
             if ast.kind == 'edge':
                 edge = self.lookup_edge(typ, ast.name)
@@ -222,17 +236,21 @@ class Compiler:
             if ast.name == 'filter':
                 assert len(ast.children) <= 2
                 if len(ast.children) == 2:
-                    filter = self.compile_expression(ast.children[1], expr.returns)
+                    assert isinstance(expr, Types.TypeRefExpression)
+                    filter = self.compile_expression(ast.children[1], expr.type)
                     expr = Types.CallExpression(
                         bound=expr,
                         args=[filter],
-                        edge=self.lookup_edge(expr.returns, '$filter'),
+                        edge=self.get_edge('Type.$filter'),
                         loc=ast.meta,
                     )
             elif ast.name == 'dot':
                 assert len(ast.children) >= 2
                 for child in ast.children[1:]:
-                    expr = self.compile_expression(child, expr.returns)
+                    new_context = expr.returns
+                    if isinstance(expr, Types.TypeRefExpression):
+                        new_context = expr.type
+                    expr = self.compile_expression(child, new_context)
             else:
                 for child in ast.children[1:]:
                     expr = Types.CallExpression(

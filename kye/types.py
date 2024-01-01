@@ -36,8 +36,11 @@ class Type(Definition):
         if expr is not None:
             assert isinstance(expr, Expression)
             assert extends is None
-            self.extends = expr.returns
-        assert isinstance(self.extends, Type) or ref == 'Object', 'Everything is supposed to at least inherit from `Object`'
+            if isinstance(expr, TypeRefExpression):
+                self.extends = expr.type
+            else:
+                self.extends = expr.returns
+        assert isinstance(self.extends, Type) or ref in ('Object','Type'), 'Everything is supposed to at least inherit from `Object`'
 
     def _inheritance_chain(self):
         base = self
@@ -110,7 +113,10 @@ class Edge(Definition):
         self.returns = returns
         if self.returns is None:
             assert self.expr is not None
-            self.returns = self.expr.returns
+            if isinstance(self.expr, TypeRefExpression):
+                self.returns = self.expr.type
+            else:
+                self.returns = self.expr.returns
         assert isinstance(self.returns, Type)
     
     @property
@@ -129,6 +135,7 @@ class Edge(Definition):
         )
 
 class Expression:
+    """ Abstract Class for all Expression Types """
     returns: Type
     loc: Optional[TokenPosition]
 
@@ -148,10 +155,16 @@ class Expression:
         )
 
 class TypeRefExpression(Expression):
+    type: Type
+
     def __init__(self,
                  type: Type,
-                 loc: Optional[TokenPosition] = None):
-        super().__init__(returns=type, loc=loc)
+                 returns: Type,
+                 loc: Optional[TokenPosition] = None,
+                ):
+        assert returns.ref == 'Type'
+        super().__init__(returns=returns, loc=loc)
+        self.type = type
 
 class EdgeRefExpression(Expression):
     edge: Edge
@@ -185,11 +198,6 @@ class CallExpression(Expression):
                  loc: Optional[TokenPosition] = None
                  ):
         returns = edge.returns
-
-        # Have not figured out template functions yet,
-        # so here is my hack for $filter
-        if edge.name == '$filter':
-            returns = bound.returns
 
         super().__init__(returns=returns, loc=loc)
         self.bound = bound

@@ -1,8 +1,9 @@
 model User(id) {
     type Name: String[length > 4]
-    model Type(id) { id: Number }
-    kind+: Type
+    model Kind(id) { id: Number }
+    kind+: Kind
     name: String
     id: 4
     hi: id + 5
+    hii: User.id + 5
 }
