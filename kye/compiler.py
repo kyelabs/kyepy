@@ -229,15 +229,15 @@ class Compiler:
                 typ = self.get_type('Number')
             else:
                 raise Exception()
-            return Types.LiteralExpression(returns=typ, value=ast.value, loc=ast.meta)
+            return Types.LiteralExpression(type=typ, value=ast.value, loc=ast.meta)
         elif isinstance(ast, AST.Operation):
             assert len(ast.children) >= 1
             expr = self.compile_expression(ast.children[0], typ)
             if ast.name == 'filter':
                 assert len(ast.children) <= 2
                 if len(ast.children) == 2:
-                    assert isinstance(expr, Types.TypeRefExpression)
-                    filter = self.compile_expression(ast.children[1], expr.type)
+                    assert expr.is_type()
+                    filter = self.compile_expression(ast.children[1], expr.get_context())
                     expr = Types.CallExpression(
                         bound=expr,
                         args=[filter],
@@ -247,10 +247,7 @@ class Compiler:
             elif ast.name == 'dot':
                 assert len(ast.children) >= 2
                 for child in ast.children[1:]:
-                    new_context = expr.returns
-                    if isinstance(expr, Types.TypeRefExpression):
-                        new_context = expr.type
-                    expr = self.compile_expression(child, new_context)
+                    expr = self.compile_expression(child, expr.get_context())
             else:
                 for child in ast.children[1:]:
                     expr = Types.CallExpression(

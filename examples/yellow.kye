@@ -1,5 +1,5 @@
 model User(id) {
-    type Name: String[length > 4]
+    type Name: String[length > 4][length < 10]
     model Kind(id) { id: Number }
     kind+: Kind
     name: String

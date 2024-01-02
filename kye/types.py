@@ -11,7 +11,6 @@ class Definition:
     """ Abstract Class for Type and Edge Definitions """
     ref: str
     expr: Optional[Expression]
-    returns: Type
     loc: Optional[TokenPosition]
 
 class Type(Definition):
@@ -36,10 +35,7 @@ class Type(Definition):
         if expr is not None:
             assert isinstance(expr, Expression)
             assert extends is None
-            if isinstance(expr, TypeRefExpression):
-                self.extends = expr.type
-            else:
-                self.extends = expr.returns
+            self.extends = expr.get_context()
         assert isinstance(self.extends, Type) or ref in ('Object','Type'), 'Everything is supposed to at least inherit from `Object`'
 
     def _inheritance_chain(self):
@@ -81,7 +77,7 @@ class Type(Definition):
         non_index_edges = [edge for edge in self.edges.keys() if edge not in self.index]
         return "Type<{}{}{}{}>".format(
             self.ref or '',
-            ':' + self.extends.ref if self.extends is not None and self.extends.ref is not 'Object' else '',
+            ':' + self.extends.ref if self.extends is not None and self.extends.ref != 'Object' else '',
             ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
@@ -92,6 +88,7 @@ class Edge(Definition):
     args: list[Type]
     nullable: bool = False
     multiple: bool = False
+    returns: Type
     
     def __init__(self,
                  name: EDGE,
@@ -113,10 +110,7 @@ class Edge(Definition):
         self.returns = returns
         if self.returns is None:
             assert self.expr is not None
-            if isinstance(self.expr, TypeRefExpression):
-                self.returns = self.expr.type
-            else:
-                self.returns = self.expr.returns
+            self.returns = self.expr.get_context()
         assert isinstance(self.returns, Type)
     
     @property
@@ -137,15 +131,24 @@ class Edge(Definition):
 class Expression:
     """ Abstract Class for all Expression Types """
     returns: Type
+    type: Optional[Type]
     loc: Optional[TokenPosition]
 
     def __init__(self,
                  returns: Type,
+                 type: Optional[Type] = None,
                  loc: Optional[TokenPosition] = None
                  ):
         assert isinstance(returns, Type)
         self.returns = returns
+        self.type = type
         self.loc = loc
+    
+    def is_type(self):
+        return self.returns.ref == 'Type'
+    
+    def get_context(self):
+        return self.type if self.type is not None else self.returns
     
     def __repr__(self):
         import re
@@ -162,9 +165,8 @@ class TypeRefExpression(Expression):
                  returns: Type,
                  loc: Optional[TokenPosition] = None,
                 ):
-        assert returns.ref == 'Type'
-        super().__init__(returns=returns, loc=loc)
-        self.type = type
+        super().__init__(returns=returns, type=type, loc=loc)
+        assert self.is_type()
 
 class EdgeRefExpression(Expression):
     edge: Edge
@@ -179,11 +181,11 @@ class LiteralExpression(Expression):
     value: Union[str, int, float, bool]
 
     def __init__(self,
-                 returns: Type,
+                 type: Type,
                  value: Union[str, int, float, bool],
                  loc: Optional[TokenPosition] = None
                  ):
-        super().__init__(returns=returns, loc=loc)
+        super().__init__(returns=type, loc=loc, type=type)
         self.value = value
 
 class CallExpression(Expression):
@@ -198,8 +200,15 @@ class CallExpression(Expression):
                  loc: Optional[TokenPosition] = None
                  ):
         returns = edge.returns
+        type = None
 
-        super().__init__(returns=returns, loc=loc)
+        # Have not figured out template functions yet,
+        # so here is my hack for $filter
+        if edge.name == '$filter':
+            returns = bound.returns
+            type = bound.type
+
+        super().__init__(returns=returns, type=type, loc=loc)
         self.bound = bound
         self.args = args
         self.edge = edge

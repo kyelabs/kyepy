@@ -16,7 +16,7 @@ def get_parser(grammar_file, start_rule):
             """,
             start=start_rule,
             parser='lalr',
-            strict=True,
+            # strict=True,
             propagate_positions=True,
             import_paths=[FromPackageLoader(__name__, ('grammars',))],
         )
