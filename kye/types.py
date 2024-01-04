@@ -1,216 +1,195 @@
 from __future__ import annotations
-from functools import cached_property
-from typing import Optional, Literal, Union
-from kye.parser.kye_ast import TokenPosition
+import re
 
 TYPE_REF = str
-EDGE_REF = str
 EDGE = str
 
-class Definition:
-    """ Abstract Class for Type and Edge Definitions """
-    ref: str
-    expr: Optional[Expression]
-    loc: Optional[TokenPosition]
-
-class Type(Definition):
+class Type:
+    """ Base Class for Types """
     ref: TYPE_REF
-    indexes: list[list[EDGE]]
-    edges: dict[EDGE, Edge]
-    extends: Optional[Type]
+    indexes: tuple[tuple[EDGE]]
+    assertions: list[str]
+    _edges: dict[EDGE, Type]
+    _multiple: dict[EDGE, bool]
+    _nullable: dict[EDGE, bool]
 
-    def __init__(self,
-                 ref: TYPE_REF,
-                 indexes: list[list[EDGE]] = [],
-                 loc: Optional[TokenPosition] = None,
-                 expr: Optional[Expression] = None,
-                 extends: Optional[Type] = None,
-                 ):
-        self.ref = ref
-        self.indexes = indexes
-        self.edges = {}
-        self.loc = loc
-        self.expr = expr
-        self.extends = extends
-        if expr is not None:
-            assert isinstance(expr, Expression)
-            assert extends is None
-            self.extends = expr.get_context()
-        assert isinstance(self.extends, Type) or ref in ('Object','Type'), 'Everything is supposed to at least inherit from `Object`'
+    def __init__(self, name: TYPE_REF):
+        assert re.match(r'\b[A-Z]+[a-z]\w+\b', name)
+        self.ref = name
+        self.indexes = tuple()
+        self.assertions = []
+        self._edges = {}
+        self._multiple = {}
+        self._nullable = {}
 
-    def _inheritance_chain(self):
-        base = self
-        yield base
-        while base.extends is not None:
-            base = base.extends
-            yield base
+    def define_edge(self,
+                    name: EDGE,
+                    type: Type,
+                    nullable=False,
+                    multiple=False
+                    ):
+        assert re.fullmatch(r'[a-z_][a-z0-9_]+', name)
+        assert isinstance(type, Type)
+        self._edges[name] = type
+        self._nullable[name] = nullable
+        self._multiple[name] = multiple
     
-    def get_edge(self, name: str):
-        for typ in self._inheritance_chain():
-            if name in typ.edges:
-                return typ.edges[name]
-        raise Exception(f'Unknown edge `{self.ref}.{name}`')
+    def define_index(self, index: tuple[EDGE]):
+        # Convert to tuple if passed in a single string
+        if type(index) is str:
+            index = (index,)
+        else:
+            index = tuple(index)
 
-    @cached_property
-    def kind(self) -> Literal['String','Number','Boolean','Object']:
-        for typ in self._inheritance_chain():
-            if typ.ref in ('String','Number','Boolean','Object'):
-                return typ.ref
-        raise Exception('Everything is supposed to at least inherit from `Object`')
+        # Skip if it is already part of our indexes
+        if index in self.indexes:
+            return
+
+        # Validate edges within index
+        for edge in index:
+            assert self.has_edge(edge), f'Cannot use undefined edge in index: "{edge}"'
+            assert not self.allows_null(edge), f'Cannot use a nullable edge in index: "{edge}"'
+
+        # Remove any existing indexes that are a superset of the new index
+        self.indexes = tuple(
+            existing_idx for existing_idx in self.indexes
+            if not set(index).issubset(set(existing_idx))
+        ) + (index,)
     
-    @cached_property
-    def has_index(self) -> bool:
-        return len(self.indexes) > 0
+    def define_parent(self, parent: Type):
+        assert isinstance(parent, Type)
+        for edge in parent._edges:
+            if not self.has_edge(edge):
+                self.define_edge(
+                    name=edge,
+                    type=parent._edges[edge],
+                    multiple=parent.allows_multiple(edge),
+                    nullable=parent.allows_null(edge),
+                )
+        self.assertions += parent.assertions
+    
+    def define_assertion(self, assertion):
+        self.assertions.append(assertion)
 
-    @cached_property
+    @property
     def index(self) -> set[EDGE]:
         """ Flatten the 2d list of indexes """
         return {idx for idxs in self.indexes for idx in idxs}
-    
-    def __getitem__(self, name: EDGE) -> Edge:
-        return self.edges[name]
 
-    def __contains__(self, name: EDGE) -> bool:
-        return name in self.edges
+    @property
+    def has_index(self) -> bool:
+        return len(self.indexes) > 0
+
+    @property
+    def edges(self) -> set[EDGE]:
+        return set(self._edges)
     
+    def has_edge(self, edge: EDGE) -> bool:
+        return edge in self._edges
+
+    def get_edge(self, edge: EDGE) -> Type:
+        assert self.has_edge(edge)
+        return self._edges[edge]
+
+    def allows_multiple(self, edge: EDGE) -> bool:
+        assert self.has_edge(edge)
+        return self._multiple[edge]
+
+    def allows_null(self, edge: EDGE) -> bool:
+        assert self.has_edge(edge)
+        return self._nullable[edge]
+
     def __repr__(self):
-        non_index_edges = [edge for edge in self.edges.keys() if edge not in self.index]
-        return "Type<{}{}{}{}>".format(
+        def get_cardinality_symbol(edge):
+            nullable = int(self.allows_null(edge))
+            multiple = int(self.allows_multiple(edge))
+            return ([['' ,'+'],
+                     ['?','*']])[nullable][multiple]
+
+        non_index_edges = [
+            edge + get_cardinality_symbol(edge)            
+            for edge in self._edges
+            if edge not in self.index
+        ]
+
+        return "{}{}{}".format(
             self.ref or '',
-            ':' + self.extends.ref if self.extends is not None and self.extends.ref != 'Object' else '',
             ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
-class Edge(Definition):
-    name: EDGE
-    model: Type
-    args: list[Type]
-    nullable: bool = False
-    multiple: bool = False
-    returns: Type
+class ComputedType(Type):
+    pass
+
+class ModeledType(Type):
+    pass
+
+def from_compiled(source, types={}):
+    # 1. Do first iteration creating a stub type for each name
+    for ref in source.get('types',{}):
+        types[ref] = ComputedType(ref)
+    for ref in source.get('models',{}):
+        types[ref] = ModeledType(ref)
     
-    def __init__(self,
-                 name: EDGE,
-                 model: Type,
-                 nullable: bool = False,
-                 multiple: bool = False,
-                 args: list[Type] = [],
-                 loc: Optional[TokenPosition] = None,
-                 expr: Optional[Expression] = None,
-                 returns: Type = None
-                ):
-        self.name = name
-        self.model = model
-        self.nullable = nullable
-        self.multiple = multiple
-        self.args = args
-        self.loc = loc
-        self.expr = expr
-        self.returns = returns
-        if self.returns is None:
-            assert self.expr is not None
-            self.returns = self.expr.get_context()
-        assert isinstance(self.returns, Type)
+    def get_type(type_ref):
+        assert type_ref in types, f'Undefined type: "{type_ref}"'
+        return types[type_ref]
     
-    @property
-    def ref(self) -> EDGE_REF:
-        return self.model.ref + '.' + self.name
+    zipped_source_and_stub: list[tuple[dict, Type]] = [
+        (src, types[ref])
+        for ref, src in ({
+            **source.get('types',{}), 
+            **source.get('models',{})
+        }).items()
+    ]
+
+    # 2. During second iteration define the edges, indexes & assertions
+    for src, typ in zipped_source_and_stub:
+
+        for edge_name, edge_type_ref in src.get('edges', {}).items():
+            nullable = edge_name.endswith('?') or edge_name.endswith('*')
+            multiple = edge_name.endswith('+') or edge_name.endswith('*')
+            edge_name = edge_name.rstrip('?+*')
+            typ.define_edge(
+                name=edge_name,
+                type=get_type(edge_type_ref),
+                nullable=nullable,
+                multiple=multiple,
+            )
+
+        if 'index' in src:
+            typ.define_index(src['index'])
+        if 'indexes' in src:
+            for idx in src['indexes']:
+                typ.define_index(idx)
+
+        for assertion in src.get('assertions', []):
+            typ.define_assertion(assertion)
+
+    # 3. Wait till the third iteration to define the extends
+    # so that parent edges & assertions will be known
+    for src, typ in zipped_source_and_stub:
+        if 'extends' in src:
+            typ.define_parent(get_type(src['extends']))
     
-    @property
-    def is_in_index(self) -> bool:
-        return self.name in self.model.index
+
+    # # 4. Now that all edges have been defined, parse the expressions
+    # for src, typ in zipped_source_and_stub:
+    #     for assertion in src.get('assertions', []):
+    #         # TODO: parse the assertion and add type information
+    #         typ.define_assertion(assertion)
+
+    return types
+
+
+if __name__ == '__main__':
+    import yaml
+    from pathlib import Path
+    DIR = Path(__file__).parent
+    FILE = DIR / '../examples/compiled.yaml'
+    with FILE.open('r') as f:
+        source = yaml.safe_load(f)
     
-    def __repr__(self):
-        return 'Edge<{}{}>'.format(
-            self.ref,
-            ([['' ,'+'],
-              ['?','*']])[int(self.nullable)][int(self.multiple)]
-        )
+    types = from_compiled(source)
 
-class Expression:
-    """ Abstract Class for all Expression Types """
-    returns: Type
-    type: Optional[Type]
-    loc: Optional[TokenPosition]
-
-    def __init__(self,
-                 returns: Type,
-                 type: Optional[Type] = None,
-                 loc: Optional[TokenPosition] = None
-                 ):
-        assert isinstance(returns, Type)
-        self.returns = returns
-        self.type = type
-        self.loc = loc
-    
-    def is_type(self):
-        return self.returns.ref == 'Type'
-    
-    def get_context(self):
-        return self.type if self.type is not None else self.returns
-    
-    def __repr__(self):
-        import re
-        return '{}<{}>'.format(
-            self.__class__.__name__,
-            re.sub(r'\s+', ' ', self.loc.text) if self.loc else '',
-        )
-
-class TypeRefExpression(Expression):
-    type: Type
-
-    def __init__(self,
-                 type: Type,
-                 returns: Type,
-                 loc: Optional[TokenPosition] = None,
-                ):
-        super().__init__(returns=returns, type=type, loc=loc)
-        assert self.is_type()
-
-class EdgeRefExpression(Expression):
-    edge: Edge
-
-    def __init__(self,
-                 edge: Edge,
-                 loc: Optional[TokenPosition] = None):
-        super().__init__(returns=edge.returns, loc=loc)
-        self.edge = edge
-
-class LiteralExpression(Expression):
-    value: Union[str, int, float, bool]
-
-    def __init__(self,
-                 type: Type,
-                 value: Union[str, int, float, bool],
-                 loc: Optional[TokenPosition] = None
-                 ):
-        super().__init__(returns=type, loc=loc, type=type)
-        self.value = value
-
-class CallExpression(Expression):
-    bound: Expression
-    edge: Edge
-    args: list[Expression]
-
-    def __init__(self,
-                 bound: Expression,
-                 edge: Edge,
-                 args: list[Expression] = [],
-                 loc: Optional[TokenPosition] = None
-                 ):
-        returns = edge.returns
-        type = None
-
-        # Have not figured out template functions yet,
-        # so here is my hack for $filter
-        if edge.name == '$filter':
-            returns = bound.returns
-            type = bound.type
-
-        super().__init__(returns=returns, type=type, loc=loc)
-        self.bound = bound
-        self.args = args
-        self.edge = edge
-
-Models = dict[str, Type]
+    print('hi')
