@@ -1,0 +1,21 @@
+types:
+  Name:
+    extends: String
+    assertions:
+      - 'this is String'
+      - 'length > 4'
+      - 'length < 10'
+models:
+  User.Kind:
+    index: id
+    edges:
+      id: Number
+  User:
+    index: id
+    edges:
+      kind+: User.Kind
+      name: Name
+      id: Number
+      hi: Number
+    assertions:
+      - 'hi == id + 5'

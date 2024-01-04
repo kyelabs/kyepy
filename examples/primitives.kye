@@ -1,3 +1,13 @@
+model User(id) {
+    type Name: String[length > 4][length < 10]
+    model Kind(id) { id: Number }
+    kind+: Kind
+    name: String
+    id: 4
+    hi: id + 5
+    hii: User.id + 5
+}
+
 type Number {
     to from String
     format: {
@@ -26,6 +36,7 @@ type UInteger: Integer {
 
 type Count: UInteger {
     null 0
+    assert this >= 0
 }
 
 type String {
@@ -36,3 +47,17 @@ type String {
 }
 
 type Char: String[length == 1]
+
+type Date<ISODateFormat>(year, month, day) {
+    year: Number
+    month: Number
+    day: Number
+    assert year >= 1600
+    assert year < 3000
+    assert month >= 0
+    assert month < 12
+    assert day >= 0
+    assert day <= 31
+    if (month is (4 | 6 | 9 | 11))
+        assert day < 31
+}

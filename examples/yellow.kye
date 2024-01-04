@@ -3,7 +3,7 @@ model User(id) {
     model Kind(id) { id: Number }
     kind+: Kind
     name: String
-    id: 4
+    id: Number
+    published: Date<YYYY-MM-DD>
     hi: id + 5
-    hii: User.id + 5
 }
