@@ -1,7 +1,7 @@
 import duckdb
 from duckdb import DuckDBPyRelation, DuckDBPyConnection
 from kye.loader.json_lines import from_json
-from kye.types import Type, Edge, TYPE_REF, Models
+from kye.types import Type, EDGE, TYPE_REF
 
 
 def append_table(con: DuckDBPyConnection, orig: DuckDBPyRelation, new: DuckDBPyRelation):
@@ -71,11 +71,11 @@ class Loader:
     # right? Because every edge table would look like (index:int64, value:str, args:list[str])
     # It would also allow me to do my quad store if I really wanted to.
     tables: dict[TYPE_REF, duckdb.DuckDBPyRelation]
-    models: Models
+    models: dict[TYPE_REF, Type]
     db: duckdb.DuckDBPyConnection
     chunks: dict[str, duckdb.DuckDBPyRelation]
 
-    def __init__(self, models: Models):
+    def __init__(self, models: dict[TYPE_REF, Type]):
         self.tables = {}
         self.models = models
         self.db = duckdb.connect(':memory:')
@@ -91,17 +91,17 @@ class Loader:
 
     def _load(self, typ: Type, r: duckdb.DuckDBPyRelation):
         chunk_id = typ.ref + '_' + str(len(self.chunks) + 1)
-        chunk = r.select(f'''list_value('{chunk_id}', ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges.keys(), r)} as val''').set_alias(chunk_id)
+        chunk = r.select(f'''list_value('{chunk_id}', ROW_NUMBER() OVER () - 1) as _, {struct_pack(typ.edges, r)} as val''').set_alias(chunk_id)
         self.chunks[chunk_id] = chunk
         self._get_value(typ, chunk)
 
     def _get_value(self, typ: Type, r: DuckDBPyRelation):
         if typ.has_index:
             edges = r.select('_')
-            for edge_name, edge in typ.edges.items():
-                if edge_name in get_struct_keys(r):
-                    edge_rel = self._get_edge(edge, r.select(f'''list_append(_, '{edge_name}') as _, val.{edge_name} as val''')).set_alias(edge.ref)
-                    edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge_name}''')
+            for edge in typ.edges:
+                if edge in get_struct_keys(r):
+                    edge_rel = self._get_edge(typ, edge, r.select(f'''list_append(_, '{edge}') as _, val.{edge} as val''')).set_alias(typ.ref + '.' + edge)
+                    edge_rel = edge_rel.select(f'''array_pop_back(_) as _, val as {edge}''')
                     edges = edges.join(edge_rel, '_', how='left')
             
             edges = get_index(typ, edges)
@@ -122,13 +122,13 @@ class Loader:
                 r = r.select(f'''_, REGEXP_REPLACE(val, '\\.0$', '') as val''')
         return r
     
-    def _get_edge(self, edge: Edge, r: DuckDBPyRelation):
-        if edge.multiple:
+    def _get_edge(self, typ: Type, edge: EDGE, r: DuckDBPyRelation):
+        if typ.allows_multiple(edge):
             r = r.select('''_, unnest(val) as val''').select('list_append(_, ROW_NUMBER() OVER (PARTITION BY _) - 1) as _, val')
 
-        r = self._get_value(edge.returns, r)
+        r = self._get_value(typ.get_edge(edge), r)
 
-        if edge.multiple:
+        if typ.allows_multiple(edge):
             r = r.aggregate('array_pop_back(_) as _, list(val) as val','array_pop_back(_)')
 
         return r

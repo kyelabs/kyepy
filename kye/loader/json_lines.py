@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from kye.types import Type, Edge
+from kye.types import Type, EDGE
 from typing import Any
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 import re
@@ -22,13 +22,13 @@ def normalize_value(typ: Type, data: Any):
         assert type(data) is dict
 
         edges = {}
-        for edge in typ.edges.values():
-            if edge.name not in data:
+        for edge in typ.edges:
+            if edge not in data:
                 continue
 
-            val = normalize_edge(edge, data.get(edge.name))
+            val = normalize_edge(typ, edge, data.get(edge))
             if val is not None:
-                edges[edge.name] = val
+                edges[edge] = val
         
         missing_indexes = [key for key in typ.index if key not in edges]
         assert len(missing_indexes) == 0, f'Missing indexes for {repr(typ)}: {",".join(missing_indexes)}'
@@ -63,15 +63,15 @@ def normalize_values(typ: Type, data: Any):
     
     return values
 
-def normalize_edge(edge: Edge, data: Any):
+def normalize_edge(typ: Type, edge: EDGE, data: Any):
     if data is None:
         return None
 
-    if edge.multiple:
-        return normalize_values(edge.returns, data)
+    if typ.allows_multiple(edge):
+        return normalize_values(typ.get_edge(edge), data)
     
     assert type(data) is not list
-    return normalize_value(edge.returns, data)
+    return normalize_value(typ.get_edge(edge), data)
 
 def from_json(typ: Type, data: list[dict], con: DuckDBPyConnection) -> DuckDBPyRelation:
     file_path = DIR / f'{typ.ref}.jsonl'

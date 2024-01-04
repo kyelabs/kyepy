@@ -1,30 +1,33 @@
 from pathlib import Path
 import kye
+from kye.loader.loader import Loader
+from kye.validate import Validate
+from kye.types import from_compiled
+import yaml
 DIR = Path(__file__).parent
 
 if __name__ == '__main__':
-    with open(DIR / 'examples/yellow.kye') as f:
-        text = f.read()
+    with open(DIR / 'examples/compiled.yaml') as f:
+        src = yaml.safe_load(f)
     
-    api = kye.compile(text)
-    api.from_records('User',[{
-        'kind': { 'id': 1 },
-        'name': 'ben',
-        'id': 4,
-        'hi': 2
+    models = from_compiled(src)
+    loader = Loader(models)
+    loader.from_json('User', [{
+        'id': 1,
+        'name': 'Joe',
+    }, {
+        'id': 2,
+        'name': 'Bill',
     }])
-    err = api.errors
-
-    # print(kye.compile('''
-    # type UserId: Number
-
-    # model User(id) {
-    #     id: UserId,
-    #     name: String,
-    #     is_admin: Boolean,
-    # }
-    # ''').from_records('User', [{
-    #     'id': 1,
-    #     'name': 'Joe',
-    #     'is_admin': True,
-    # }]).errors)
+    loader.from_json('User', [{
+        'id': 1,
+        'name': 'Joey', # conflicting name
+    }])
+    validate = Validate(loader)
+    errors = validate.errors.aggregate(f"rule_ref, error_type").df()
+    if not errors.empty:
+        print('\nThe following validation errors were found:')
+        print(errors)
+    else:
+        print('\n\tNo validation errors found.\n')
+    print('hi')

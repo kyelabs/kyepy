@@ -1,4 +1,4 @@
-from kye.types import Type, Edge, TYPE_REF, EDGE, Models
+from kye.types import Type, TYPE_REF, EDGE
 from kye.loader.loader import Loader, struct_pack
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
@@ -24,7 +24,7 @@ class Validate:
         return self.loader.db
     
     @property
-    def models(self) -> Models:
+    def models(self) -> dict[TYPE_REF, Type]:
         return self.loader.models
 
     def _add_errors_where(self, r: DuckDBPyRelation, condition: str, rule_ref: str, error_type: str):
@@ -56,30 +56,30 @@ class Validate:
         if len(typ.indexes) > 1:
             edges = self.check_for_index_collision(typ, r)
 
-        for edge_name, edge in typ.edges.items():
-            edge_rel = r.select(f'''_index, {edge_name if edge_name in r.columns else 'CAST(NULL as VARCHAR)'} as val''')
-            edge_rel = self._validate_edge(edge, edge_rel).set_alias(edge.ref)
-            edge_rel = edge_rel.select(f'''_index, val as {edge_name}''')
+        for edge in typ.edges:
+            edge_rel = r.select(f'''_index, {edge if edge in r.columns else 'CAST(NULL as VARCHAR)'} as val''')
+            edge_rel = self._validate_edge(typ, edge, edge_rel).set_alias(typ.ref + '.' + edge)
+            edge_rel = edge_rel.select(f'''_index, val as {edge}''')
             edges = edges.join(edge_rel, '_index', how='left')
         return edges
 
-    def _validate_edge(self, edge: Edge, r: DuckDBPyRelation):
+    def _validate_edge(self, typ: Type, edge: EDGE, r: DuckDBPyRelation):
         agg_fun = 'list_distinct(flatten(list(val)))' if r.val.dtypes[0].id == 'list' else 'list_distinct(list(val))'
         r = r.aggregate(f'''_index, {agg_fun} as val''')
 
-        if not edge.nullable:
-            r = self._add_errors_where(r, 'len(val) == 0', edge.ref, 'NOT_NULLABLE')
+        if not typ.allows_null(edge):
+            r = self._add_errors_where(r, 'len(val) == 0', typ.ref + '.' + edge, 'NOT_NULLABLE')
         
-        if not edge.multiple:
-            r = self._add_errors_where(r, 'len(val) > 1', edge.ref, 'NOT_MULTIPLE')
+        if not typ.allows_multiple(edge):
+            r = self._add_errors_where(r, 'len(val) > 1', typ.ref + '.' + edge, 'NOT_MULTIPLE')
             r = r.select(f'''_index, val[1] as val''')
         else:
             r = r.select(f'''_index, unnest(val) as val''')
         
         r = r.filter('val IS NOT NULL')
-        r = self._validate_value(edge.returns, r)
+        r = self._validate_value(typ.get_edge(edge), r)
 
-        if edge.multiple:
+        if typ.allows_multiple(edge):
             r = r.aggregate('_index, list(val) as val')
         
         return r
@@ -87,9 +87,9 @@ class Validate:
     def _validate_value(self, typ: Type, r: DuckDBPyRelation):
         # TODO: Look up object references and see if they exist
 
-        if typ.kind == 'Boolean':
+        if 'this is Boolean' in typ.assertions:
             r = self._add_errors_where(r, 'TRY_CAST(val as BOOLEAN) IS NULL', typ.ref, 'INVALID_VALUE')
-        elif typ.kind == 'Number':
+        if 'this is Number' in typ.assertions:
             r = self._add_errors_where(r, 'TRY_CAST(val AS DOUBLE) IS NULL', typ.ref, 'INVALID_VALUE')
 
         return r
