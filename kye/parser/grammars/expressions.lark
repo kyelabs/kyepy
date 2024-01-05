@@ -1,7 +1,9 @@
 _binary_exp{self,child,op}: child | self op child
 _comma_delimited{item}: [ item ("," item)* ","? ] // Used in definitions.lark
 
-?exp: or_exp
+?exp: is_exp
+
+?is_exp: _binary_exp{is_exp, or_exp, "is"}
 
 ?or_exp: _binary_exp{or_exp, xor_exp, "|"}
 ?xor_exp: _binary_exp{xor_exp, and_exp, "^"}
