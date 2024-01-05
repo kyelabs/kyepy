@@ -8,6 +8,7 @@ OPERATORS_MAP = {
     'and_exp': '&',
     'dot_exp': '.',
     'filter_exp': '[]',
+    'is_exp': 'is',
 }
 
 def tokens_to_ast(token: Union[Tree, Token], script: str):

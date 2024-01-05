@@ -160,7 +160,7 @@ class Operation(Expression):
         '+': 'add', '-': 'sub',
         '*': 'mul', '/': 'div', '%': 'mod',
         '|': 'or', '&': 'and', '^': 'xor',
-        '[]': 'filter', '.': 'dot',
+        '[]': 'filter', '.': 'dot', 'is': 'is',
     }
 
     op: Literal[
@@ -168,7 +168,7 @@ class Operation(Expression):
         '!=','==','>=','<=','>','<',
         '+','-','*','/','%',
         '|','&','^',
-        '[]','.'
+        '[]','.','is',
     ]
     children: list[Expression]
 

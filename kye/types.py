@@ -1,4 +1,7 @@
 from __future__ import annotations
+from typing import Optional
+from kye.parser.parser import parse_expression
+import kye.parser.kye_ast as AST
 import re
 
 TYPE_REF = str
@@ -7,8 +10,9 @@ EDGE = str
 class Type:
     """ Base Class for Types """
     ref: TYPE_REF
+    extends: Optional[Type]
     indexes: tuple[tuple[EDGE]]
-    assertions: list[str]
+    assertions: list[AST.Expression]
     _edges: dict[EDGE, Type]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
@@ -18,6 +22,7 @@ class Type:
         self.ref = name
         self.indexes = tuple()
         self.assertions = []
+        self.extends = None
         self._edges = {}
         self._multiple = {}
         self._nullable = {}
@@ -58,6 +63,10 @@ class Type:
     
     def define_parent(self, parent: Type):
         assert isinstance(parent, Type)
+        if self.extends is not None:
+            assert self.extends == parent, 'Already assigned a parent'
+            return
+        self.extends = parent
         for edge in parent._edges:
             if not self.has_edge(edge):
                 self.define_edge(
@@ -66,10 +75,12 @@ class Type:
                     multiple=parent.allows_multiple(edge),
                     nullable=parent.allows_null(edge),
                 )
-        self.assertions += parent.assertions
+        self.assertions = parent.assertions + self.assertions
     
-    def define_assertion(self, assertion):
-        self.assertions.append(assertion)
+    def define_assertion(self, assertion: str):
+        assert type(assertion) is str
+        ast = parse_expression(assertion)
+        self.assertions.append(ast)
 
     @property
     def index(self) -> set[EDGE]:
@@ -124,7 +135,7 @@ class ComputedType(Type):
 class ModeledType(Type):
     pass
 
-def from_compiled(source, types={}):
+def from_compiled(source, types: dict[TYPE_REF, Type]={}):
     # 1. Do first iteration creating a stub type for each name
     for ref in source.get('types',{}):
         types[ref] = ComputedType(ref)
@@ -135,16 +146,16 @@ def from_compiled(source, types={}):
         assert type_ref in types, f'Undefined type: "{type_ref}"'
         return types[type_ref]
     
-    zipped_source_and_stub: list[tuple[dict, Type]] = [
-        (src, types[ref])
+    zipped_source_and_stub: dict[TYPE_REF, tuple[dict, Type]] = {
+        ref: (src, types[ref])
         for ref, src in ({
             **source.get('types',{}), 
             **source.get('models',{})
         }).items()
-    ]
+    }
 
     # 2. During second iteration define the edges, indexes & assertions
-    for src, typ in zipped_source_and_stub:
+    for src, typ in zipped_source_and_stub.values():
 
         for edge_name, edge_type_ref in src.get('edges', {}).items():
             nullable = edge_name.endswith('?') or edge_name.endswith('*')
@@ -168,9 +179,15 @@ def from_compiled(source, types={}):
 
     # 3. Wait till the third iteration to define the extends
     # so that parent edges & assertions will be known
-    for src, typ in zipped_source_and_stub:
+    def recursively_define_parent(type_ref):
+        src, typ = zipped_source_and_stub[type_ref]
         if 'extends' in src:
-            typ.define_parent(get_type(src['extends']))
+            parent = get_type(src['extends'])
+            recursively_define_parent(parent.ref)
+            typ.define_parent(parent)
+
+    for type_ref in zipped_source_and_stub.keys():
+        recursively_define_parent(type_ref)
     
 
     # # 4. Now that all edges have been defined, parse the expressions
@@ -180,16 +197,3 @@ def from_compiled(source, types={}):
     #         typ.define_assertion(assertion)
 
     return types
-
-
-if __name__ == '__main__':
-    import yaml
-    from pathlib import Path
-    DIR = Path(__file__).parent
-    FILE = DIR / '../examples/compiled.yaml'
-    with FILE.open('r') as f:
-        source = yaml.safe_load(f)
-    
-    types = from_compiled(source)
-
-    print('hi')

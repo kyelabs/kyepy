@@ -10,6 +10,10 @@ types:
   Boolean:
     assertions:
       - 'this is Boolean'
+  User.name:
+    extends: String
+    assertions:
+      - 'length < 60'
 models:
   User:
     index:
@@ -17,4 +21,4 @@ models:
       - name
     edges:
       id: Number
-      name: String
+      name: User.name
