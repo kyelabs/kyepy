@@ -16,9 +16,10 @@ types:
       - 'length < 60'
 models:
   User:
-    index:
+    indexes:
       - id
       - name
     edges:
       id: Number
       name: User.name
+      age?: Number

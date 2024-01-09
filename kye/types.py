@@ -101,6 +101,12 @@ class Type:
     def get_edge(self, edge: EDGE) -> Type:
         assert self.has_edge(edge)
         return self._edges[edge]
+    
+    def edge_origin(self, edge: EDGE) -> Optional[Type]:
+        assert self.has_edge(edge)
+        if self.extends and self.extends.has_edge(edge):
+            return self.extends.edge_origin(edge)
+        return self
 
     def allows_multiple(self, edge: EDGE) -> bool:
         assert self.has_edge(edge)
