@@ -1,1 +1,1 @@
-from kye.api import compile
+from kye.api import validate
