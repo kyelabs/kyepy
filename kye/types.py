@@ -3,6 +3,7 @@ from typing import Optional
 from kye.parser.parser import parse_expression
 import kye.parser.kye_ast as AST
 import re
+from collections import OrderedDict
 
 TYPE_REF = str
 EDGE = str
@@ -13,7 +14,7 @@ class Type:
     extends: Optional[Type]
     indexes: tuple[tuple[EDGE]]
     assertions: list[AST.Expression]
-    _edges: dict[EDGE, Type]
+    _edges: OrderedDict[EDGE, Type]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
 
@@ -23,7 +24,7 @@ class Type:
         self.indexes = tuple()
         self.assertions = []
         self.extends = None
-        self._edges = {}
+        self._edges = OrderedDict()
         self._multiple = {}
         self._nullable = {}
 
@@ -92,8 +93,8 @@ class Type:
         return len(self.indexes) > 0
 
     @property
-    def edges(self) -> set[EDGE]:
-        return set(self._edges)
+    def edges(self) -> list[EDGE]:
+        return list(self._edges.keys())
     
     def has_edge(self, edge: EDGE) -> bool:
         return edge in self._edges
@@ -135,18 +136,17 @@ class Type:
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
-class ComputedType(Type):
-    pass
-
-class ModeledType(Type):
-    pass
+GLOBALS = {
+    'Number': {},
+    'String': {'edges':{'length':'Number'}},
+    'Boolean': {},
+}
 
 def from_compiled(source, types: dict[TYPE_REF, Type]={}):
+    source['models'] = {**GLOBALS, **source.get('models',{})}
     # 1. Do first iteration creating a stub type for each name
-    for ref in source.get('types',{}):
-        types[ref] = ComputedType(ref)
     for ref in source.get('models',{}):
-        types[ref] = ModeledType(ref)
+        types[ref] = Type(ref)
     
     def get_type(type_ref):
         assert type_ref in types, f'Undefined type: "{type_ref}"'
@@ -154,10 +154,7 @@ def from_compiled(source, types: dict[TYPE_REF, Type]={}):
     
     zipped_source_and_stub: dict[TYPE_REF, tuple[dict, Type]] = {
         ref: (src, types[ref])
-        for ref, src in ({
-            **source.get('types',{}), 
-            **source.get('models',{})
-        }).items()
+        for ref, src in source.get('models',{}).items()
     }
 
     # 2. During second iteration define the edges, indexes & assertions

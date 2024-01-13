@@ -23,3 +23,10 @@ models:
       id: Number
       name: User.name
       age?: Number
+  Post:
+    index: id
+    edges:
+      id: Number
+      authors+: User.name
+      tags*: String
+      published_date?: String

@@ -1,0 +1,13 @@
+models:
+  User:
+    indexes:
+      - id
+      - name
+    edges:
+      id: Number
+      name: String
+  Post:
+    index: id
+    edges:
+      id: Number
+      author: User
