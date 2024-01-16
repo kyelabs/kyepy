@@ -58,7 +58,7 @@ def row_indexes(edges: DuckDBPyRelation, typ: Type):
 
 def compute_index(typ: Type, table: DuckDBPyRelation):
     edges = table.filter(f'''col in ({string_list(typ.index)})''')
-    edges = flag('MULTIPLE_INDEX_VALUES', 'cnt > 1',
+    edges = flag('CONFLICTING_INDEX', 'cnt > 1',
         edges.aggregate('''row, col, first(val) as val, count(distinct(val)) as cnt'''), tbl=typ.ref, val=None)
     edges = collect('row', {
         col: edges.filter(f"col = '{col}'").select('row, val')
@@ -67,7 +67,7 @@ def compute_index(typ: Type, table: DuckDBPyRelation):
     indexes = row_indexes(edges, typ)
     r = table.aggregate('row').join(indexes, 'row', how='left')
     r = flag('MISSING_INDEX', 'partial IS NULL', r, tbl=typ.ref)
-    r = flag('MISSING_INDEX_COMPLETION', 'idx IS NULL', r, tbl=typ.ref)
+    r = flag('INCOMPLETE_INDEX', 'idx IS NULL', r, tbl=typ.ref)
     r = flag('CONFLICTING_INDEX', 'cnt > 1',
         r.aggregate('row, first(idx) as idx, count(distinct(idx)) as cnt'), tbl=typ.ref, idx=None)
     r = r.select('row, idx')
@@ -77,7 +77,7 @@ def compute_index(typ: Type, table: DuckDBPyRelation):
 def check_edge(typ: Type, edge: EDGE, table: DuckDBPyRelation):
     column = table.filter(f"col = '{edge}'")
     if not typ.allows_multiple(edge):
-        column = flag('NOT_MULTIPLE', 'cnt > 1',
+        column = flag('CONFLICTING_EDGE', 'cnt > 1',
             column.aggregate('tbl, idx, col, unnest(list(distinct(val))) as val, count(distinct(val)) as cnt'), val=None)
     if not typ.allows_null(edge):
         flag('MISSING_EDGE', 'true',

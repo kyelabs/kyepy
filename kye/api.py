@@ -36,9 +36,15 @@ def validate(model: str):
             data = fn(*args, **kwargs)
             engine.load_json(model, data)
             engine.validate()
-            num_errors, _ = engine.errors.shape
-            if num_errors > 0:
-                raise Exception('Found errors')
+            errors = engine.get_errors()
+            if len(errors) > 1:
+                messages = '\n\t'.join(
+                    err.message
+                    for err in errors
+                )
+                raise Exception(f'Validation Errors:\n\t{messages}')
+            elif len(errors) == 1:
+                raise Exception(errors[0].message)
             return data
         return wrapped
     return wrapper
