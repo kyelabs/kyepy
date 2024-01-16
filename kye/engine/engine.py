@@ -3,6 +3,7 @@ from duckdb import DuckDBPyConnection
 from kye.types import Type, EDGE, TYPE_REF
 from kye.engine.load_json import json_to_edges
 from kye.engine.validate import check_table
+from kye.errors import error_factory, Error
 import pandas as pd
 
 class DuckDBEngine:
@@ -95,3 +96,32 @@ class DuckDBEngine:
         assert model in self.models
         table = self.get_table(model)
         return table.fetchdf().to_dict(orient='records')
+    
+    def get_errors(self) -> list[Error]:
+        r = self.errors.aggregate('''
+            err,
+            tbl,
+            col,
+            count(distinct row) as num_row,
+            count(distinct idx) as num_idx,
+            count(distinct val) as num_val,
+            first(row) as row_example,
+            first(idx) as idx_example,
+            first(val) as val_example,
+        ''')
+        errors = []
+        for err,tbl,col, \
+            num_row, num_idx, num_val, \
+            row_example, idx_example, val_example in r.fetchall():
+            errors.append(error_factory(
+                err_type=err,
+                table_name=tbl,
+                column_name=col,
+                num_rows=num_row,
+                num_indexes=num_idx,
+                num_values=num_val,
+                row_example=row_example,
+                idx_example=idx_example,
+                val_example=val_example,
+            ))
+        return errors
