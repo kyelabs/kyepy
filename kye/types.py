@@ -142,7 +142,7 @@ GLOBALS = {
     'Boolean': {},
 }
 
-def from_compiled(source, types: dict[TYPE_REF, Type]={}):
+def from_compiled(source, types: dict[TYPE_REF, Type]={}) -> dict[TYPE_REF, Type]:
     source['models'] = {**GLOBALS, **source.get('models',{})}
     # 1. Do first iteration creating a stub type for each name
     for ref in source.get('models',{}):
