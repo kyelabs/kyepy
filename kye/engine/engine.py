@@ -1,6 +1,6 @@
 import duckdb
 from duckdb import DuckDBPyConnection
-from kye.types import Type, EDGE, TYPE_REF
+from kye.compiler.types import Type, EDGE, TYPE_REF
 from kye.engine.load_json import json_to_edges
 from kye.engine.validate import check_table
 from kye.errors import error_factory, Error

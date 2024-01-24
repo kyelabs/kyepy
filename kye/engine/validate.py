@@ -1,4 +1,4 @@
-from kye.types import Type, EDGE
+from kye.compiler.types import Type, EDGE
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
 def struct_pack(edges: list[str], r: DuckDBPyRelation):

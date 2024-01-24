@@ -2,7 +2,7 @@ from functools import wraps
 import inspect
 from pathlib import Path
 import yaml
-from kye.types import from_compiled
+from kye.compiler.types import from_compiled
 from kye.engine.engine import DuckDBEngine
 
 __all__ = [
