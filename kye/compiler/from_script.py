@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Literal, Union
 import kye.parser.kye_ast as AST
+from kye.parser.parser import parse_definitions
 import kye.compiler.types as Types
 from enum import Enum
 from contextlib import contextmanager
@@ -11,20 +12,26 @@ class Status(Enum):
     COMPLETE = 3
 
 class Compiler:
-    models: dict[str, Types.Type]
+    models: Types.Models
     ast: dict[str, AST.Expression]
     status: dict[str, Status]
     
     def __init__(self):
         # Retrieve global types
-        self.models: dict[str, Types.Type] = Types.from_compiled(source={})
+        self.models = Types.Models()
         self.ast = {}
         self.status = {}
 
-        for typ in self.models.values():
+        for typ in self.models:
             self.status[typ.ref] = Status.COMPLETE
             for edge in typ.edges:
                 self.status[typ.ref + '.' + edge] = Status.COMPLETE
+    
+    def get_models(self) -> Types.Models:
+        for ref, ast in self.ast.items():
+            if isinstance(ast, AST.TypeDefinition):
+                self.compile_type(ref)
+        return self.models
     
     def read_definition(self, ast: AST.Definition):
         assert isinstance(ast, AST.Definition)
@@ -69,8 +76,7 @@ class Compiler:
 
         with self._checkout(ref) as ast:
             assert isinstance(ast, AST.TypeDefinition)
-            typ = Types.Type(ast.name)
-            self.models[ref] = typ
+            typ = self.models.define(ref)
 
         if isinstance(ast, AST.AliasDefinition):
             typ.define_parent(self.compile_expression(ast.type, None))
@@ -145,3 +151,8 @@ class Compiler:
         #     return expr
         # else:
         raise Exception('Unknown Expression')
+
+def from_script(script: str) -> Types.Models:
+    ast = parse_definitions(script)
+    compiler = Compiler().read_definitions(ast)
+    return compiler.get_models()

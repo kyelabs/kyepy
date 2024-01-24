@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Iterator
 from kye.parser.parser import parse_expression
 import kye.parser.kye_ast as AST
 import re
@@ -136,67 +136,38 @@ class Type:
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
+Number = Type('Number')
+String = Type('String')
+Boolean = Type('Boolean')
+String.define_edge('length', Number)
+
 GLOBALS = {
-    'Number': {},
-    'String': {'edges':{'length':'Number'}},
-    'Boolean': {},
+    'Number': Number,
+    'String': String,
+    'Boolean': Boolean
 }
 
-def from_compiled(source, types: dict[TYPE_REF, Type]={}) -> dict[TYPE_REF, Type]:
-    source['models'] = {**GLOBALS, **source.get('models',{})}
-    # 1. Do first iteration creating a stub type for each name
-    for ref in source.get('models',{}):
-        types[ref] = Type(ref)
+class Models:
+    _models: dict[TYPE_REF, Type]
+
+    def __init__(self):
+        self._models = {**GLOBALS}
     
-    def get_type(type_ref):
-        assert type_ref in types, f'Undefined type: "{type_ref}"'
-        return types[type_ref]
+    def define(self, ref: TYPE_REF):
+        assert ref not in self._models
+        typ = Type(ref)
+        self._models[ref] = typ
+        return typ
     
-    zipped_source_and_stub: dict[TYPE_REF, tuple[dict, Type]] = {
-        ref: (src, types[ref])
-        for ref, src in source.get('models',{}).items()
-    }
-
-    # 2. During second iteration define the edges, indexes & assertions
-    for src, typ in zipped_source_and_stub.values():
-
-        for edge_name, edge_type_ref in src.get('edges', {}).items():
-            nullable = edge_name.endswith('?') or edge_name.endswith('*')
-            multiple = edge_name.endswith('+') or edge_name.endswith('*')
-            edge_name = edge_name.rstrip('?+*')
-            typ.define_edge(
-                name=edge_name,
-                type=get_type(edge_type_ref),
-                nullable=nullable,
-                multiple=multiple,
-            )
-
-        if 'index' in src:
-            typ.define_index(src['index'])
-        if 'indexes' in src:
-            for idx in src['indexes']:
-                typ.define_index(idx)
-
-        for assertion in src.get('assertions', []):
-            typ.define_assertion(assertion)
-
-    # 3. Wait till the third iteration to define the extends
-    # so that parent edges & assertions will be known
-    def recursively_define_parent(type_ref):
-        src, typ = zipped_source_and_stub[type_ref]
-        if 'extends' in src:
-            parent = get_type(src['extends'])
-            recursively_define_parent(parent.ref)
-            typ.define_parent(parent)
-
-    for type_ref in zipped_source_and_stub.keys():
-        recursively_define_parent(type_ref)
+    def __contains__(self, ref: TYPE_REF):
+        return ref in self._models
     
-
-    # # 4. Now that all edges have been defined, parse the expressions
-    # for src, typ in zipped_source_and_stub:
-    #     for assertion in src.get('assertions', []):
-    #         # TODO: parse the assertion and add type information
-    #         typ.define_assertion(assertion)
-
-    return types
+    def __getitem__(self, ref: TYPE_REF):
+        assert ref in self._models, f'Undefined type: "{ref}"'
+        return self._models[ref]
+    
+    def __iter__(self) -> Iterator[Type]:
+        return iter(
+            model for model in self._models.values()
+            if model.ref not in GLOBALS
+        )
