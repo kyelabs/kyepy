@@ -10,8 +10,10 @@ pip install kye
 ```
 
 ### Define Models
-Create a file called `models.yaml` in the same directory as your python scripts
+Models can be defined in either a `models.yaml` file or a `models.kye` file. Create your models file in the same directory as your python scripts
 
+
+#### Yaml Models
 Here is an example of a `models.yaml` file:
 ```yaml
 # Define a model for each table
@@ -40,6 +42,22 @@ models:
       id: Number
       # Coming soon is the ability to define relationships with other models
       author: User
+```
+
+#### Kye Models
+Here is the same definitions as above, but as a kye script in `models.kye`
+```kye
+model User(id)(username) {
+  id: Number
+  username: String
+  name: String
+  age?: Number
+}
+
+model Post(id) {
+  id: Number
+  author: User
+}
 ```
 
 ### Usage in Python

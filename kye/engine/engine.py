@@ -1,6 +1,6 @@
 import duckdb
 from duckdb import DuckDBPyConnection
-from kye.compiler.types import Type, EDGE, TYPE_REF
+from kye.compiler.types import Type, TYPE_REF, Models
 from kye.engine.load_json import json_to_edges
 from kye.engine.validate import check_table
 from kye.errors import error_factory, Error
@@ -8,9 +8,10 @@ import pandas as pd
 
 class DuckDBEngine:
     db: DuckDBPyConnection
-    models: dict[TYPE_REF, Type]
+    models: Models
 
-    def __init__(self, models: dict[TYPE_REF, Type]):
+    def __init__(self, models: Models):
+        assert isinstance(models, Models)
         self.db = duckdb.connect(':memory:')
         self.models = models
         self.has_validated = True

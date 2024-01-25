@@ -3,7 +3,9 @@ import inspect
 from pathlib import Path
 import yaml
 from kye.compiler.from_json import from_json
+from kye.compiler.from_script import from_script
 from kye.engine.engine import DuckDBEngine
+from kye.compiler.types import Models
 
 __all__ = [
     'validate',
@@ -11,19 +13,33 @@ __all__ = [
 
 _global_engine = None
 
-def find_kye_file(filepath: str):
+def load_yaml_models(filepath: Path):
+    with filepath.open('r') as f:
+        src = yaml.safe_load(f)
+        return from_json(src)
+
+def load_kye_models(filepath: Path):
+    with filepath.open('r') as f:
+        src = f.read()
+        return from_script(src)
+
+def load_models(filepath: str):
     dir = Path(filepath).parent
-    models_file = dir / 'models.yaml'
-    if not models_file.exists():
-        raise Exception(f'Could not find models.yaml file in directory "{dir}"')
-    return models_file
+    yaml_file = dir / 'models.yaml'
+    kye_file = dir / 'models.kye'
+    if yaml_file.exists() and kye_file.exists():
+        raise Exception('Please only define the models.yaml file or the models.kye file, not both')
+    elif yaml_file.exists():
+        return load_yaml_models(yaml_file)
+    elif kye_file.exists():
+        return load_kye_models(kye_file)
+    else:
+        raise Exception(f'Please define either a models.yaml file or models.kye file in "{dir}"')
 
 def get_engine(filepath: str):
     global _global_engine
     if _global_engine is None:
-        with find_kye_file(filepath).open('r') as f:
-            src = yaml.safe_load(f)
-        models = from_compiled(src)
+        models = load_models(filepath)
         _global_engine = DuckDBEngine(models)
     return _global_engine
 
