@@ -1,10 +1,11 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import kye.parser.kye_ast as AST
-from kye.parser.parser import parse_definitions
-from kye.compiler.types import TYPE_REF, EDGE, Type, Models
 from enum import Enum
 from contextlib import contextmanager
+
+if TYPE_CHECKING:
+    from kye.compiler.models import TYPE_REF, EDGE, Type, Models
 
 class Status(Enum):
     INITIALIZED = 1
@@ -16,9 +17,8 @@ class Compiler:
     ast: dict[str, AST.Expression]
     status: dict[str, Status]
     
-    def __init__(self):
-        # Retrieve global types
-        self.models = Models()
+    def __init__(self, models: Models):
+        self.models = models
         self.ast = {}
         self.status = {}
 
@@ -152,7 +152,6 @@ class Compiler:
         # else:
         raise Exception('Unknown Expression')
 
-def from_script(script: str) -> Models:
-    ast = parse_definitions(script)
-    compiler = Compiler().read_definitions(ast)
+def models_from_ast(models: Models, ast: AST.ModuleDefinitions) -> Models:
+    compiler = Compiler(models).read_definitions(ast)
     return compiler.get_models()

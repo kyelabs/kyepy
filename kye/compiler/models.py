@@ -1,19 +1,24 @@
 from __future__ import annotations
 from typing import Optional, Iterator
-from kye.parser.parser import parse_expression
+from kye.compiler.from_ast import models_from_ast
+from kye.compiler.from_compiled import models_from_compiled
+from kye.compiler.assertion import Assertion, assertion_factory
 import kye.parser.kye_ast as AST
+from kye.parser.parser import parse_definitions
 import re
 from collections import OrderedDict
 
 TYPE_REF = str
 EDGE = str
 
+
+
 class Type:
     """ Base Class for Types """
     ref: TYPE_REF
     extends: Optional[Type]
     indexes: tuple[tuple[EDGE]]
-    assertions: list[AST.Expression]
+    assertions: list[Assertion]
     _edges: OrderedDict[EDGE, Type]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
@@ -78,10 +83,9 @@ class Type:
                 )
         self.assertions = parent.assertions + self.assertions
     
-    def define_assertion(self, assertion: str):
-        assert type(assertion) is str
-        ast = parse_expression(assertion)
-        self.assertions.append(ast)
+    def define_assertion(self, op: str, arg):
+        assertion = assertion_factory(op, arg)
+        self.assertions.append(assertion)
 
     @property
     def index(self) -> set[EDGE]:
@@ -140,6 +144,9 @@ Number = Type('Number')
 String = Type('String')
 Boolean = Type('Boolean')
 String.define_edge('length', Number)
+Number.define_assertion('type', 'number')
+String.define_assertion('type','string')
+Boolean.define_assertion('type','boolean')
 
 GLOBALS = {
     'Number': Number,
@@ -152,6 +159,20 @@ class Models:
 
     def __init__(self):
         self._models = {**GLOBALS}
+    
+    @staticmethod
+    def from_script(script: str) -> Models:
+        ast = parse_definitions(script)
+        return models_from_ast(Models(), ast)
+    
+    @staticmethod
+    def from_ast(ast: AST.ModuleDefinitions) -> Models:
+        assert isinstance(ast, AST.ModuleDefinitions)
+        return models_from_ast(Models(), ast)
+    
+    @staticmethod
+    def from_compiled(compiled) -> Models:
+        return models_from_compiled(Models(), compiled)
     
     def define(self, ref: TYPE_REF):
         assert ref not in self._models

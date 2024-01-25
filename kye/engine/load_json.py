@@ -1,4 +1,4 @@
-from kye.compiler.types import Type
+from kye.compiler.models import Type
 from typing import Any
 import re
 

@@ -2,10 +2,8 @@ from functools import wraps
 import inspect
 from pathlib import Path
 import yaml
-from kye.compiler.from_json import from_json
-from kye.compiler.from_script import from_script
 from kye.engine.engine import DuckDBEngine
-from kye.compiler.types import Models
+from kye.compiler.models import Models
 
 __all__ = [
     'validate',
@@ -16,12 +14,12 @@ _global_engine = None
 def load_yaml_models(filepath: Path):
     with filepath.open('r') as f:
         src = yaml.safe_load(f)
-        return from_json(src)
+        return Models.from_compiled(src)
 
 def load_kye_models(filepath: Path):
     with filepath.open('r') as f:
         src = f.read()
-        return from_script(src)
+        return Models.from_script(src)
 
 def load_models(filepath: str):
     dir = Path(filepath).parent

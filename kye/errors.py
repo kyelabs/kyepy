@@ -80,6 +80,15 @@ class ConflictingEdgeError(Error):
         else:
             return f'''Found conflicting "{self.column_name}" values for row {self.row_example}'''
 
+class InvalidValueTypeError(Error):
+    name = 'INVALID_VALUE_TYPE'
+    @property
+    def message(self):
+        if self.num_indexes > 1:
+            return f'''Found invalid "{self.column_name}" value types (ex. {repr(self.val_example)}) across {self.num_indexes} rows'''
+        else:
+            return f'''Found invalid "{self.column_name}" value type ({repr(self.val_example)}) for row {self.row_example}'''
+
 def error_factory(err_type, **kwargs):
     assert err_type in ERROR_CLASSES
     return ERROR_CLASSES[err_type](**kwargs)

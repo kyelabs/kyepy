@@ -1,4 +1,4 @@
-from kye.compiler.types import Type, EDGE
+from kye.compiler.models import Type, EDGE
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
 
 def struct_pack(edges: list[str], r: DuckDBPyRelation):
@@ -82,6 +82,15 @@ def check_edge(typ: Type, edge: EDGE, table: DuckDBPyRelation):
     if not typ.allows_null(edge):
         flag('MISSING_EDGE', 'true',
              table.aggregate('tbl,idx').join(column.select('tbl,idx').set_alias('col'), 'tbl,idx', how='anti'))
+    check_value(typ.get_edge(edge), column)
+
+def check_value(typ: Type, col: DuckDBPyRelation):
+    for assertion in typ.assertions:
+        if assertion.op == 'type':
+            if assertion.arg == 'number':
+                flag('INVALID_VALUE_TYPE', 'TRY_CAST(val as DOUBLE) IS NULL', col)
+            if assertion.arg == 'boolean':
+                flag('INVALID_VALUE_TYPE', 'TRY_CAST(val as BOOLEAN) IS NULL', col)
 
 def check_table(typ: Type, db: DuckDBPyConnection):
     table = db.table('edges').filter(f'''tbl = '{typ.ref}' ''')
