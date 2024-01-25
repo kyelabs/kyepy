@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import Optional, Literal, Union
+from typing import Optional
 import kye.parser.kye_ast as AST
 from kye.parser.parser import parse_definitions
-import kye.compiler.types as Types
+from kye.compiler.types import TYPE_REF, EDGE, Type, Models
 from enum import Enum
 from contextlib import contextmanager
 
@@ -12,13 +12,13 @@ class Status(Enum):
     COMPLETE = 3
 
 class Compiler:
-    models: Types.Models
+    models: Models
     ast: dict[str, AST.Expression]
     status: dict[str, Status]
     
     def __init__(self):
         # Retrieve global types
-        self.models = Types.Models()
+        self.models = Models()
         self.ast = {}
         self.status = {}
 
@@ -27,7 +27,7 @@ class Compiler:
             for edge in typ.edges:
                 self.status[typ.ref + '.' + edge] = Status.COMPLETE
     
-    def get_models(self) -> Types.Models:
+    def get_models(self) -> Models:
         for ref, ast in self.ast.items():
             if isinstance(ast, AST.TypeDefinition):
                 self.compile_type(ref)
@@ -70,7 +70,7 @@ class Compiler:
         finally:
             self.status[ref] = Status.COMPLETE
 
-    def compile_type(self, ref: Types.TYPE_REF) -> Types.Type:
+    def compile_type(self, ref: TYPE_REF) -> Type:
         if ref in self.models:
             return self.models[ref]
 
@@ -87,7 +87,7 @@ class Compiler:
                 typ.define_index(idx)
         return typ
 
-    def compile_edge(self, model: Types.Type, edge: Types.EDGE):
+    def compile_edge(self, model: Type, edge: EDGE):
         if model.has_edge(edge):
             return
         with self._checkout(model.ref + '.' + edge) as ast:
@@ -99,14 +99,14 @@ class Compiler:
                 multiple=ast.cardinality in ('+','*'),
             )
     
-    def compile_expression(self, ast: AST.Expression, ctx_type: Optional[Types.Type]) -> Types.Type:
+    def compile_expression(self, ast: AST.Expression, ctx_type: Optional[Type]) -> Type:
         assert isinstance(ast, AST.Expression)
         if isinstance(ast, AST.Identifier):
             if ast.kind == 'type':
                 return self.compile_type(ast.name)
             # if ast.kind == 'edge':
             #     edge = self.lookup_edge(ctx_type, ast.name)
-            #     return Types.EdgeRefExpression(
+            #     return EdgeRefExpression(
             #         edge=edge,
             #         loc=ast.meta,
             #     )
@@ -119,7 +119,7 @@ class Compiler:
         #         ctx_type = self.get_type('Number')
         #     else:
         #         raise Exception()
-        #     return Types.LiteralExpression(type=ctx_type, value=ast.value, loc=ast.meta)
+        #     return LiteralExpression(type=ctx_type, value=ast.value, loc=ast.meta)
         # elif isinstance(ast, AST.Operation):
         #     assert len(ast.children) >= 1
         #     expr = self.compile_expression(ast.children[0], ctx_type)
@@ -128,7 +128,7 @@ class Compiler:
         #         if len(ast.children) == 2:
         #             assert expr.is_type()
         #             filter = self.compile_expression(ast.children[1], expr.get_context())
-        #             expr = Types.CallExpression(
+        #             expr = CallExpression(
         #                 bound=expr,
         #                 args=[filter],
         #                 edge=self.get_edge('Type.$filter'),
@@ -140,7 +140,7 @@ class Compiler:
         #             expr = self.compile_expression(child, expr.get_context())
         #     else:
         #         for child in ast.children[1:]:
-        #             expr = Types.CallExpression(
+        #             expr = CallExpression(
         #                 bound=expr,
         #                 args=[
         #                     self.compile_expression(child, ctx_type)
@@ -152,7 +152,7 @@ class Compiler:
         # else:
         raise Exception('Unknown Expression')
 
-def from_script(script: str) -> Types.Models:
+def from_script(script: str) -> Models:
     ast = parse_definitions(script)
     compiler = Compiler().read_definitions(ast)
     return compiler.get_models()
