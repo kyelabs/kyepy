@@ -79,7 +79,7 @@ class Compiler:
             typ = self.models.define(ref)
 
         if isinstance(ast, AST.AliasDefinition):
-            typ.define_parent(self.compile_expression(ast.type, None))
+            typ.define_parent(self.compile_expression(ast.type))
         if isinstance(ast, AST.ModelDefinition):
             for edge in ast.edges:
                 self.compile_edge(typ, edge.name)
@@ -94,12 +94,12 @@ class Compiler:
             assert isinstance(ast, AST.EdgeDefinition)
             model.define_edge(
                 name=ast.name,
-                type=self.compile_expression(ast.type, model),
+                type=self.compile_expression(ast.type, model, edge),
                 nullable=ast.cardinality in ('?','*'),
                 multiple=ast.cardinality in ('+','*'),
             )
     
-    def compile_expression(self, ast: AST.Expression, ctx_type: Optional[Type]) -> Type:
+    def compile_expression(self, ast: AST.Expression, model: Optional[Type] = None, edge: Optional[EDGE] = None) -> Type:
         assert isinstance(ast, AST.Expression)
         if isinstance(ast, AST.Identifier):
             if ast.kind == 'type':
@@ -110,15 +110,18 @@ class Compiler:
             #         edge=edge,
             #         loc=ast.meta,
             #     )
-        # elif isinstance(ast, AST.LiteralExpression):
-        #     if type(ast.value) is str:
-        #         ctx_type = self.get_type('String')
-        #     elif type(ast.value) is bool:
-        #         ctx_type = self.get_type('Boolean')
-        #     elif isinstance(ast.value, (int, float)):
-        #         ctx_type = self.get_type('Number')
-        #     else:
-        #         raise Exception()
+        elif isinstance(ast, AST.LiteralExpression):
+            typ = self.models.define(model.ref + '.' + edge)
+            typ.define_assertion('eq', ast.value)
+            if type(ast.value) is str:
+                typ.define_parent(self.models['String'])
+            elif type(ast.value) is bool:
+                typ.define_parent(self.models['Boolean'])
+            elif isinstance(ast.value, (int, float)):
+                typ.define_parent(self.models['Number'])
+            else:
+                raise Exception()
+            return typ
         #     return LiteralExpression(type=ctx_type, value=ast.value, loc=ast.meta)
         # elif isinstance(ast, AST.Operation):
         #     assert len(ast.children) >= 1

@@ -8,9 +8,20 @@ def struct_pack(edges: list[str], r: DuckDBPyRelation):
             if edge_name in r.columns
     ) + ')'
 
-def string_list(strings: list[str]):
-    # TODO: Escape strings
-    return "'" + "','".join(strings) + "'"
+def format_value(val):
+    if isinstance(val, float):
+        val = str(val)
+        return val[:-2] if val.endswith('.0') else val
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, bool):
+        return 'true' if val else 'false'
+    if isinstance(val, str):
+        return "'" + val.replace('\\', '\\\\').replace("'","\\'") + "'"
+    raise ValueError('Unknown value type')
+
+def value_list(strings: list[str]):
+    return ','.join(format_value(string) for string in strings)
 
 def flag(err_msg: str, condition: str, r: DuckDBPyRelation, **kwargs):
     fields = ["'" + err_msg + "'"]
@@ -57,7 +68,7 @@ def row_indexes(edges: DuckDBPyRelation, typ: Type):
     return r
 
 def compute_index(typ: Type, table: DuckDBPyRelation):
-    edges = table.filter(f'''col in ({string_list(typ.index)})''')
+    edges = table.filter(f'''col in ({value_list(typ.index)})''')
     edges = flag('CONFLICTING_INDEX', 'cnt > 1',
         edges.aggregate('''row, col, first(val) as val, count(distinct(val)) as cnt'''), tbl=typ.ref, val=None)
     edges = collect('row', {
@@ -88,9 +99,13 @@ def check_value(typ: Type, col: DuckDBPyRelation):
     for assertion in typ.assertions:
         if assertion.op == 'type':
             if assertion.arg == 'number':
-                flag('INVALID_VALUE_TYPE', 'TRY_CAST(val as DOUBLE) IS NULL', col)
-            if assertion.arg == 'boolean':
-                flag('INVALID_VALUE_TYPE', 'TRY_CAST(val as BOOLEAN) IS NULL', col)
+                col = flag('INVALID_VALUE', 'TRY_CAST(val as DOUBLE) IS NULL', col)
+            elif assertion.arg == 'boolean':
+                col = flag('INVALID_VALUE', 'TRY_CAST(val as BOOLEAN) IS NULL', col)
+        elif assertion.op == 'eq':
+            col = flag('INVALID_VALUE', f'val NOT IN ({value_list(assertion.arg)})', col)
+        elif assertion.op == 'ne':
+            col = flag('INVALID_VALUE', f'val IN ({value_list(assertion.arg)})', col)
 
 def check_table(typ: Type, db: DuckDBPyConnection):
     table = db.table('edges').filter(f'''tbl = '{typ.ref}' ''')
