@@ -11,41 +11,17 @@ OPERATORS_MAP = {
     'is_exp': 'is',
 }
 
-def tokens_to_ast(token: Union[Tree, Token], script: str):
-
-    if isinstance(token, Token):
-        kind = token.type
-        meta = token
-        value = token.value
-        children = [ value ]
-    elif isinstance(token, Tree):
-        kind = token.data
-        meta = token.meta
-        children = [tokens_to_ast(child, script) for child in token.children]
-    
-    meta = TokenPosition(
-        line=meta.line,
-        column=meta.column,
-        end_line=meta.end_line,
-        end_column=meta.end_column,
-        start_pos=meta.start_pos,
-        end_pos=meta.end_pos,
-        text=script[meta.start_pos:meta.end_pos],
-    )
-
-    # Lark prefixes imported rules with '<module_name>__'
-    # we will just make sure that we don't have any name conflicts
-    # across grammar files and remove the prefixes so that we can
-    # use the same transformer independently of how the grammar
-    # was imported
-    if '__' in kind:
-        kind = kind.split('__')[-1]
-        assert kind != '', 'Did not expect rule name to end with a double underscore'
-
+def transform_token(kind, value):
     if kind == 'SIGNED_NUMBER':
         return float(value)
-    if kind == 'ESCAPED_STRING':
+    if kind == 'STRING':
         return value[1:-1]
+    if kind == 'BOOLEAN':
+        return value == 'TRUE'
+    
+    return value
+
+def transform_rule(kind, meta, children):
     if kind == 'identifier':
         return Identifier(name=children[0], meta=meta)
     if kind == 'literal':
@@ -98,12 +74,44 @@ def tokens_to_ast(token: Union[Tree, Token], script: str):
 
     if kind == 'definitions':
         return ModuleDefinitions(children=children, meta=meta)
+    
+    raise Exception(f'Unknown rule: {kind}')
 
+def transform_meta(meta, script: str):
+    return TokenPosition(
+        line=meta.line,
+        column=meta.column,
+        end_line=meta.end_line,
+        end_column=meta.end_column,
+        start_pos=meta.start_pos,
+        end_pos=meta.end_pos,
+        text=script[meta.start_pos:meta.end_pos],
+    )
+
+def remove_prefix(kind):
+    # Lark prefixes imported rules with '<module_name>__'
+    # we will just make sure that we don't have any name conflicts
+    # across grammar files and remove the prefixes so that we can
+    # use the same transformer independently of how the grammar
+    # was imported
+    if '__' in kind:
+        kind = kind.split('__')[-1]
+        assert kind != '', 'Did not expect rule name to end with a double underscore'
+    return kind
+
+
+def tokens_to_ast(token: Union[Tree, Token], script: str):
     if isinstance(token, Token):
-        return value
-    else:
-        raise Exception(f'Unknown rule: {kind}')
-
+        return transform_token(
+            kind=remove_prefix(token.type),
+            value=token.value
+        )
+    elif isinstance(token, Tree):
+        return transform_rule(
+            kind=remove_prefix(token.data),
+            meta=transform_meta(token.meta, script),
+            children=[tokens_to_ast(child, script) for child in token.children]
+        )
 
 def globalize_names(ast: AST, path = tuple(), type_name_map = dict()):
 

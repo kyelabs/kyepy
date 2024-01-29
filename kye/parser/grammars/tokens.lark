@@ -14,6 +14,8 @@ SIGNED_FLOAT: ["+"|"-"] FLOAT
 NUMBER: FLOAT | INT
 SIGNED_NUMBER: ["+"|"-"] NUMBER
 
+BOOLEAN: "TRUE" | "FALSE"
+
 %import common.WS
 %import common.ESCAPED_STRING -> STRING
 %import common.SH_COMMENT -> COMMENT

@@ -34,7 +34,8 @@ identifier: TYPE | EDGE
 
 literal: SIGNED_NUMBER
        | STRING
+       | BOOLEAN
 
-%import tokens (WS, COMMENT, TYPE, EDGE, SIGNED_NUMBER, STRING)
+%import tokens (WS, COMMENT, TYPE, EDGE, SIGNED_NUMBER, STRING, BOOLEAN)
 %ignore WS
 %ignore COMMENT
