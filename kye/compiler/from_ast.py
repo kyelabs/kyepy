@@ -122,10 +122,20 @@ class Compiler:
             else:
                 raise Exception()
             return typ
-        #     return LiteralExpression(type=ctx_type, value=ast.value, loc=ast.meta)
-        # elif isinstance(ast, AST.Operation):
-        #     assert len(ast.children) >= 1
-        #     expr = self.compile_expression(ast.children[0], ctx_type)
+        elif isinstance(ast, AST.Operation):
+            if ast.name in ('gt','gte','lt','lte'):
+                assert len(ast.children) == 2
+                assert isinstance(ast.children[0], AST.Identifier)
+                assert isinstance(ast.children[1], AST.LiteralExpression)
+                typ = self.models.define(model.ref + '.' + edge)
+                typ.define_parent(
+                    parent=self.compile_expression(ast.children[0], model, edge)
+                )
+                typ.define_assertion(
+                    op=ast.name,
+                    arg=ast.children[1].value,
+                )
+                return typ
         #     if ast.name == 'filter':
         #         assert len(ast.children) <= 2
         #         if len(ast.children) == 2:

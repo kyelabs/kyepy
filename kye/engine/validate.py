@@ -106,6 +106,14 @@ def check_value(typ: Type, col: DuckDBPyRelation):
             col = flag('INVALID_VALUE', f'val NOT IN ({value_list(assertion.arg)})', col)
         elif assertion.op == 'ne':
             col = flag('INVALID_VALUE', f'val IN ({value_list(assertion.arg)})', col)
+        elif assertion.op == 'gt':
+            col = flag('INVALID_VALUE', f'val <= {format_value(assertion.arg)}', col)
+        elif assertion.op == 'gte':
+            col = flag('INVALID_VALUE', f'val < {format_value(assertion.arg)}', col)
+        elif assertion.op == 'lt':
+            col = flag('INVALID_VALUE', f'val >= {format_value(assertion.arg)}', col)
+        elif assertion.op == 'lte':
+            col = flag('INVALID_VALUE', f'val > {format_value(assertion.arg)}', col)
 
 def check_table(typ: Type, db: DuckDBPyConnection):
     table = db.table('edges').filter(f'''tbl = '{typ.ref}' ''')

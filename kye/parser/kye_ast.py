@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, model_validator, constr
-from typing import Optional, Literal, Union, Any
+from typing import Optional, Literal, Union
 
 TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
 EDGE = constr(pattern=r'[a-z][a-z_]*')
@@ -26,7 +26,7 @@ class AST(BaseModel):
         end_line = f"-{self.meta.end_line}" if self.meta.end_line != self.meta.line else ''
         return f"{self.__class__.__name__}<{self.__repr_value__()}>:{self.meta.line}{end_line}"
     
-    def __repr_value__(self):
+    def __repr_value__(self) -> str:
         raise Exception('Not implemented __repr_value__')
 
 class Definition(AST):
