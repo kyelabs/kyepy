@@ -1,0 +1,129 @@
+- description: Required columns
+  schema: >
+    model User(id)(name) {
+      id: Number
+      name: String
+      required: Boolean
+    }
+  tests:
+    - description: all columns defined is valid
+      valid: true
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: 1
+    - description: missing column definition
+      valid: false
+      data:
+        User:
+          - id: 0
+            name: bob
+    - description: missing value in row
+      valid: false
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: true
+          - id: 1
+            name: sally
+    - description: missing index columns
+      valid: false
+      data:
+        User:
+          - required: true
+          - required: true
+    - description: missing partial index
+      valid: false
+      data:
+        User:
+          - id: 0
+            required: true
+- description: Optional columns
+  schema: >
+    model User(id) {
+      id: Number
+      optional?: Number
+      many*: Number
+    }
+  tests:
+    - description: allow null value
+      valid: true
+      data:
+        User:
+          - id: 1
+          - id: 2
+            optional: 0
+          - id: 3
+            many: 1
+    - description: allow missing entierly
+      valid: true
+      data:
+        User:
+          - id: 1
+          - id: 2
+- description: Many value columns
+  schema: >
+    model Post(id) {
+      id: Number
+      title: String
+      authors+: String
+      tags*: String
+    }
+  tests:
+    - description: allow list values
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title: "Post 1"
+            authors: 
+              - ben
+              - bob
+            tags:
+              - funny
+              - great
+    - description: allow single value lists
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title:
+              - "Post 1"
+            authors:
+              - ben
+            tags: 
+              - funny
+    - description: don't allow multi-value lists
+      valid: false
+      data: 
+        Post:
+          - id: 1
+            title:
+              - "Post 1"
+              - "Misbehaving alternative title"
+            authors:
+              - ben
+            tags:
+              - funny
+    - description: allow mix of single or missing values
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title: "Post 1"
+            authors: ben
+          - id: 2
+            title: "Post 2"
+            authors:
+              - ben
+            tags: funny
+          - id: 3
+            title: "Post 3"
+            authors:
+              - ben
+              - bob
+            tags:
+              - funny
+              - devlog
