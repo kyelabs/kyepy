@@ -16,6 +16,8 @@ SIGNED_NUMBER: ["+"|"-"] NUMBER
 
 BOOLEAN: "TRUE" | "FALSE"
 
+FORMAT_STRING: "<" /.*?/ ">"
+
 %import common.WS
 %import common.ESCAPED_STRING -> STRING
 %import common.SH_COMMENT -> COMMENT

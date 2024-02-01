@@ -19,16 +19,20 @@ class Type:
     extends: Optional[Type]
     indexes: tuple[tuple[EDGE]]
     assertions: list[Assertion]
+    format: Optional[str]
+    format_regex: Optional[str]
     _edges: OrderedDict[EDGE, Type]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
 
-    def __init__(self, name: TYPE_REF):
+    def __init__(self, name: TYPE_REF, format_regex: Optional[str] = None):
         assert re.match(r'\b[A-Z]+[a-z]\w+\b', name)
         self.ref = name
         self.indexes = tuple()
         self.assertions = []
         self.extends = None
+        self.format = None
+        self.format_regex = format_regex
         self._edges = OrderedDict()
         self._multiple = {}
         self._nullable = {}
@@ -82,6 +86,13 @@ class Type:
                     nullable=parent.allows_null(edge),
                 )
         self.assertions = parent.assertions + self.assertions
+        self.format_regex = parent.format_regex
+    
+    def define_format(self, format: str):
+        assert self.format is None, 'format already set'
+        assert self.format_regex is not None, 'format pattern not defined'
+        assert re.match(self.format_regex, format), 'format does not match pattern'
+        self.format = format
     
     def define_assertion(self, op: str, arg):
         assertion = assertion_factory(op, arg)
@@ -134,13 +145,14 @@ class Type:
             if edge not in self.index
         ]
 
-        return "{}{}{}".format(
+        return "{}{}{}{}".format(
             self.ref or '',
+            '<' + self.format + '>' if self.format is not None else '',
             ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
-Number = Type('Number')
+Number = Type('Number', format_regex=r'[+-]?\d*[_,]?(\.\d+)?[bdoxXnf%]?')
 String = Type('String')
 Boolean = Type('Boolean')
 String.define_edge('length', Number)

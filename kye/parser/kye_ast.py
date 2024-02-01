@@ -131,19 +131,23 @@ class Expression(AST):
     pass
 
 class Identifier(Expression):
+    """ Abstract class for all Identifiers """
     name: str
-
-    @property
-    def kind(self):
-        if self.name[0].isupper():
-            if any(letter.islower() for letter in self.name):
-                return 'type'
-            return 'const'
-        if self.name[0].islower():
-            return 'edge'
 
     def __repr_value__(self):
         return self.name
+
+class TypeIdentifier(Identifier):
+    name: TYPE
+    format: Optional[str] = None
+
+    def __repr_value__(self):
+        if self.format:
+            return f'{self.name}<{self.format}>'
+        return self.name
+
+class EdgeIdentifier(Identifier):
+    name: EDGE
 
 class LiteralExpression(Expression):
     value: Union[str, float, bool]

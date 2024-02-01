@@ -16,14 +16,19 @@ def transform_token(kind, value):
         return float(value)
     if kind == 'STRING':
         return value[1:-1]
+    if kind == 'FORMAT_STRING':
+        return value[1:-1]
     if kind == 'BOOLEAN':
         return value == 'TRUE'
     
     return value
 
 def transform_rule(kind, meta, children):
-    if kind == 'identifier':
-        return Identifier(name=children[0], meta=meta)
+    if kind == 'type_identifier':
+        format = children[1] if len(children) > 1 else None
+        return TypeIdentifier(name=children[0], format=format, meta=meta)
+    if kind == 'edge_identifier':
+        return EdgeIdentifier(name=children[0], meta=meta)
     if kind == 'literal':
         return LiteralExpression(value=children[0], meta=meta)
     if kind in ('comp_exp', 'mult_exp', 'add_exp'):
