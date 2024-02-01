@@ -12,11 +12,11 @@ if __name__ == "__main__":
         print(str(file.relative_to(DIR)))
         test_cases = yaml.safe_load(file.open('r'))
         for test_case in test_cases:
-            print(' ', test_case['description'])
+            print(' ', test_case['feature'])
             models = Models.from_script(test_case['schema'])
             engine = PandasEngine(models)
             for test in test_case['tests']:
-                print('   ', test['description'])
+                print('   ', test['test'])
                 for model, rows in test['data'].items():
                     df = pd.DataFrame(rows)
                     errors = engine.validate(model, df)

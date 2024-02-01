@@ -1,4 +1,4 @@
-- description: Required columns
+- feature: Required columns
   schema: >
     model User(id)(name) {
       id: Number
@@ -6,20 +6,20 @@
       required: Boolean
     }
   tests:
-    - description: all columns defined is valid
+    - test: all columns defined is valid
       valid: true
       data:
         User:
           - id: 0
             name: bob
             required: 1
-    - description: missing column definition
+    - test: missing column definition
       valid: false
       data:
         User:
           - id: 0
             name: bob
-    - description: missing value in row
+    - test: missing value in row
       valid: false
       data:
         User:
@@ -28,19 +28,19 @@
             required: true
           - id: 1
             name: sally
-    - description: missing index columns
+    - test: missing index columns
       valid: false
       data:
         User:
           - required: true
           - required: true
-    - description: missing partial index
+    - test: missing partial index
       valid: false
       data:
         User:
           - id: 0
             required: true
-- description: Optional columns
+- feature: Optional columns
   schema: >
     model User(id) {
       id: Number
@@ -48,7 +48,7 @@
       many*: Number
     }
   tests:
-    - description: allow null value
+    - test: allow null value
       valid: true
       data:
         User:
@@ -57,13 +57,13 @@
             optional: 0
           - id: 3
             many: 1
-    - description: allow missing entierly
+    - test: allow missing entierly
       valid: true
       data:
         User:
           - id: 1
           - id: 2
-- description: Many value columns
+- feature: Multi-Value columns
   schema: >
     model Post(id) {
       id: Number
@@ -72,7 +72,7 @@
       tags*: String
     }
   tests:
-    - description: allow list values
+    - test: allow list values
       valid: true
       data:
         Post:
@@ -84,7 +84,7 @@
             tags:
               - funny
               - great
-    - description: allow single value lists
+    - test: allow single value lists
       valid: true
       data:
         Post:
@@ -95,7 +95,7 @@
               - ben
             tags: 
               - funny
-    - description: don't allow multi-value lists
+    - test: don't allow multi-value lists
       valid: false
       data: 
         Post:
@@ -107,7 +107,7 @@
               - ben
             tags:
               - funny
-    - description: allow mix of single or missing values
+    - test: allow mix of single or missing values
       valid: true
       data:
         Post:
@@ -127,3 +127,24 @@
             tags:
               - funny
               - devlog
+- feature: Extra columns
+  schema: >
+    model User(id) {
+      id: Number
+    }
+  tests:
+    - test: dont allow extra columns
+      valid: false
+      data:
+        User:
+          - id: 1
+            extra: true
+          - id: 2
+    - test: dont allow extra entierly null columns
+      valid: false
+      data:
+        User:
+          - id: 1
+            extra: null
+          - id: 2
+            extra: null
