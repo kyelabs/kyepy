@@ -2,27 +2,19 @@ from __future__ import annotations
 from typing import Any
 import pandas as pd
 from kye.compiler.models import Type, TYPE_REF, Models
+import kye.engine.formats as Formats
 import itertools
 
-def is_number(col: pd.Series):
-    if pd.api.types.is_numeric_dtype(col):
-        return col.notnull()
-    return col.isna()
+def as_string(col: pd.Series):
+    return col.astype(str, errors='ignore')
 
-def is_string(col: pd.Series):
-    if pd.api.types.infer_dtype(col) == 'string':
-        return col.notnull()
-    return col.isna()
-
-def is_boolean(col: pd.Series):
-    if pd.api.types.infer_dtype(col) == 'boolean':
-        return col.notnull()
-    return col.isna()
+def as_boolean(col: pd.Series):
+    return col.astype(bool, errors='ignore')
 
 FORMATS = {
-    'number': is_number,
-    'string': is_string,
-    'boolean': is_boolean,
+    'number': Formats.as_number,
+    'string': as_string,
+    'boolean': as_boolean,
 }
 
 def normalize_type(col: pd.Series, model: Type):
@@ -37,15 +29,16 @@ def normalize_type(col: pd.Series, model: Type):
     for assertion in model.assertions:
         if assertion.op == 'type':
             assert assertion.arg in FORMATS
-            is_valid = FORMATS[assertion.arg](col)
-            if not is_valid.any():
+            formatted = FORMATS[assertion.arg](col, model.format or '')
+            invalid = col[formatted.isna()]
+            if not invalid.empty:
                 errors.append({
-                    'error_type': 'INVALID_TYPE',
+                    'error_type': 'INVALID_VALUE_FORMAT',
                     'type': model.ref,
-                    'rows': col.index[~is_valid].tolist(),
-                    'values': col[~is_valid].tolist(),
+                    'rows': invalid.index.tolist(),
+                    'values': invalid.tolist(),
                 })
-            col = col[is_valid]
+            col = formatted
                 
 
     return col, errors

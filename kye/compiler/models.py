@@ -91,7 +91,7 @@ class Type:
     def define_format(self, format: str):
         assert self.format is None, 'format already set'
         assert self.format_regex is not None, 'format pattern not defined'
-        assert re.match(self.format_regex, format), 'format does not match pattern'
+        assert re.fullmatch(self.format_regex, format), 'format does not match pattern'
         self.format = format
     
     def define_assertion(self, op: str, arg):
@@ -152,7 +152,7 @@ class Type:
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
-Number = Type('Number', format_regex=r'[+-]?\d*[_,]?(\.\d+)?[bdoxXnf%]?')
+Number = Type('Number', format_regex=r'[+-]?\d*,?(\.\d+)?[bdoxXnf%]?')
 String = Type('String')
 Boolean = Type('Boolean')
 String.define_edge('length', Number)
