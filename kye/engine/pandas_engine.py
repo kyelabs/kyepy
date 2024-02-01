@@ -4,16 +4,57 @@ import pandas as pd
 from kye.compiler.models import Type, TYPE_REF, Models
 import itertools
 
+def is_number(col: pd.Series):
+    if pd.api.types.is_numeric_dtype(col):
+        return col.notnull()
+    return col.isna()
+
+def is_string(col: pd.Series):
+    if pd.api.types.infer_dtype(col) == 'string':
+        return col.notnull()
+    return col.isna()
+
+def is_boolean(col: pd.Series):
+    if pd.api.types.infer_dtype(col) == 'boolean':
+        return col.notnull()
+    return col.isna()
+
+FORMATS = {
+    'number': is_number,
+    'string': is_string,
+    'boolean': is_boolean,
+}
+
 def normalize_type(col: pd.Series, model: Type):
     errors = []
     # TODO: split delimited fields
     # TODO: replace empty strings with null and other defined null values
+    # TODO: raise strict mode error for single element lists
     col = col.explode().dropna()
+
+    # TODO: iterate through assertions by recursing on parent types
+
+    for assertion in model.assertions:
+        if assertion.op == 'type':
+            assert assertion.arg in FORMATS
+            is_valid = FORMATS[assertion.arg](col)
+            if not is_valid.any():
+                errors.append({
+                    'error_type': 'INVALID_TYPE',
+                    'type': model.ref,
+                    'rows': col.index[~is_valid].tolist(),
+                    'values': col[~is_valid].tolist(),
+                })
+            col = col[is_valid]
+                
+
     return col, errors
 
 def validate_model(df: pd.DataFrame, model: Type):
     assert df.index.is_unique
     errors = []
+
+    # TODO: recurse on parent models
 
     for col in df.columns:
         if not col in model.edges:
@@ -21,7 +62,7 @@ def validate_model(df: pd.DataFrame, model: Type):
             errors.append({
                 'error_type': 'EXTRA_EDGE',
                 'edge': col,
-                'rows': defined.to_list(),
+                'rows': defined.tolist(),
             })
 
     # TODO: rebuild table from validated edges so that the index analysis
@@ -73,7 +114,7 @@ def validate_model(df: pd.DataFrame, model: Type):
             errors.append({
                 'error_type': 'NON_UNIQUE_INDEX',
                 'index': idx,
-                'rows': non_unique.index.to_list(),
+                'rows': non_unique.index.tolist(),
                 'values': non_unique.drop_duplicates().values.tolist(),
             })
             continue
@@ -82,7 +123,7 @@ def validate_model(df: pd.DataFrame, model: Type):
     
     for idx1, idx2 in itertools.combinations(indexes, 2):
         # Only do comparison if comparing indexes of the same dtype
-        if tuple(idx1.dtypes.to_list()) != tuple(idx2.dtypes.to_list()):
+        if tuple(idx1.dtypes.tolist()) != tuple(idx2.dtypes.tolist()):
             continue
 
         column_names = list(range(len(idx1.columns)))
@@ -97,12 +138,12 @@ def validate_model(df: pd.DataFrame, model: Type):
 
         if not idx_table.empty:
             errors.append({
-                'error_type': 'CONFLICTING_INDEX',
+                'error_type': 'AMBIGUOUS_INDEX',
                 'indexes': [
                     list(idx1.columns),
                     list(idx2.columns),
                 ],
-                'rows': idx_table.index.drop_duplicates().to_list(),
+                'rows': idx_table.index.drop_duplicates().tolist(),
                 'values': idx_table.drop_duplicates().values.tolist(),
             })
 
