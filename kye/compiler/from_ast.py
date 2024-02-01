@@ -101,15 +101,21 @@ class Compiler:
     
     def compile_expression(self, ast: AST.Expression, model: Optional[Type] = None, edge: Optional[EDGE] = None) -> Type:
         assert isinstance(ast, AST.Expression)
-        if isinstance(ast, AST.Identifier):
-            if ast.kind == 'type':
+        if isinstance(ast, AST.TypeIdentifier):
+            if ast.format is not None:
+                typ = self.models.define(model.ref + '.' + edge)
+                typ.define_parent(self.compile_type(ast.name))
+                typ.define_format(ast.format)
+                return typ
+            else:
                 return self.compile_type(ast.name)
-            # if ast.kind == 'edge':
-            #     edge = self.lookup_edge(ctx_type, ast.name)
-            #     return EdgeRefExpression(
-            #         edge=edge,
-            #         loc=ast.meta,
-            #     )
+        # elif isinstance(ast, AST.EdgeIdentifier):
+        #     if ast.kind == 'edge':
+        #         edge = self.lookup_edge(ctx_type, ast.name)
+        #         return EdgeRefExpression(
+        #             edge=edge,
+        #             loc=ast.meta,
+        #         )
         elif isinstance(ast, AST.LiteralExpression):
             typ = self.models.define(model.ref + '.' + edge)
             typ.define_assertion('eq', ast.value)
