@@ -12,7 +12,7 @@
         User:
           - id: 0
             name: bob
-            required: 1
+            required: true
     - test: missing column definition
       valid: false
       data:
@@ -57,7 +57,7 @@
             optional: 0
           - id: 3
             many: 1
-    - test: allow missing entierly
+    - test: allow missing entirely
       valid: true
       data:
         User:
@@ -126,7 +126,7 @@
               - bob
             tags:
               - funny
-              - devlog
+              - wishlist
 - feature: Extra columns
   schema: >
     model User(id) {
@@ -140,7 +140,7 @@
           - id: 1
             extra: true
           - id: 2
-    - test: dont allow extra entierly null columns
+    - test: dont allow extra entirely null columns
       valid: false
       data:
         User:
