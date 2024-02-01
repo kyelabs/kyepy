@@ -39,7 +39,7 @@ class Type:
                     nullable=False,
                     multiple=False
                     ):
-        assert re.fullmatch(r'[a-z_][a-z0-9_]+', name)
+        assert re.fullmatch(r'[a-z_][a-z0-9_]*', name)
         assert isinstance(type, Type)
         self._edges[name] = type
         self._nullable[name] = nullable

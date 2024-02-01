@@ -1,0 +1,117 @@
+- feature: Single Index
+  schema: >
+    model User(id) {
+      id: Number
+    }
+  tests:
+    - test: allow unique indexes
+      valid: true
+      data:
+        User:
+          - id: 0
+          - id: 1
+          - id: 2
+    - test: disallow non-unique indexes
+      valid: false
+      data:
+        User:
+          - id: 0
+          - id: 1
+          - id: 1
+- feature: Composite Index
+  schema: >
+    model Date(year, month, day) {
+      year: Number
+      month: Number
+      day: Number
+    }
+  tests:
+    - test: allow unique composite indexes
+      valid: true
+      data:
+        Date:
+          - year: 2020
+            month: 1
+            day: 1
+          - year: 2021 # different year
+            month: 1
+            day: 1
+          - year: 2020
+            month: 2   # different month
+            day: 1
+          - year: 2020
+            month: 1  
+            day: 2     # different day
+    - test: disallow non-unique composite indexes
+      valid: false
+      data:
+        Date:
+          - year: 2020
+            month: 1
+            day: 1
+          - year: 2020
+            month: 1
+            day: 1
+- feature: Multiple indexes
+  schema: >
+    model Player(id)(domain, username) {
+      id: Number
+      domain: String
+      username: String
+    }
+  tests:
+    - test: allow multiple indexes
+      valid: true
+      data:
+        Player:
+          - id: 0
+            domain: swordsman
+            username: firefighter100
+          - id: 1
+            domain: swordsman
+            username: weedwacker44
+          - id: 2
+            domain: mage
+            username: weedwacker44
+- feature: Conflicting index detection
+  schema: >
+    model Employee(id)(external_id) {
+      id: Number
+      external_id: Number
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      valid: false
+      data:
+        Employee:
+          - id: 0
+            external_id: 1000
+          - id: 1000          # could get confused with external_id of other employee
+            external_id: 1001
+    - test: allow indexes to have the same value
+      valid: true
+      data:
+        Employee:
+          - id: 0
+            external_id: 0
+- feature: Conflicting composite index detection
+  schema: >
+    model Foo(ax,ay)(bx,by) {
+      ax: Number
+      ay: Number
+      bx: Number
+      by: Number
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      valid: false
+      data:
+        Foo:
+          - key1a: 10
+            key1b: 11
+            key2a: 20
+            key2b: 21
+          - key1a: 15
+            key1b: 16
+            key2a: 10
+            key2b: 11
