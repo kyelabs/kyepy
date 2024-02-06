@@ -6,9 +6,9 @@ import kye.engine.formats as Formats
 import itertools
 
 FORMATS = {
-    'number': Formats.as_number,
-    'string': Formats.as_string,
-    'boolean': Formats.as_boolean,
+    'number': Formats.NumberFormat,
+    'string': Formats.StringFormat,
+    'boolean': Formats.BooleanFormat,
 }
 
 def normalize_type(col: pd.Series, model: Type):
@@ -23,18 +23,19 @@ def normalize_type(col: pd.Series, model: Type):
     for assertion in model.assertions:
         if assertion.op == 'type':
             assert assertion.arg in FORMATS
-            formatted = FORMATS[assertion.arg](col, model.format or '')
-            invalid = col[formatted.isna()]
-            if not invalid.empty:
+            fmt = FORMATS[assertion.arg](model.format or '')
+            format_errors = fmt.validate(col)
+            for error_type in format_errors.dropna().unique():
+                invalid = col[format_errors == error_type]
                 errors.append({
                     'error_type': 'INVALID_VALUE_FORMAT',
                     'type': model.ref,
                     'format': model.format,
+                    'format_error': error_type,
                     'rows': invalid.index.tolist(),
-                    'values': invalid.tolist(),
+                    'values': invalid.drop_duplicates().tolist(),
                 })
-            col = formatted
-                
+            col = fmt.coerce(col[format_errors.isnull() | format_errors.str.startswith('WARNING_')])
 
     return col, errors
 
