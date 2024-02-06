@@ -20,19 +20,17 @@ class Type:
     indexes: tuple[tuple[EDGE]]
     assertions: list[Assertion]
     format: Optional[str]
-    format_regex: Optional[str]
     _edges: OrderedDict[EDGE, Type]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
 
-    def __init__(self, name: TYPE_REF, format_regex: Optional[str] = None):
+    def __init__(self, name: TYPE_REF):
         assert re.match(r'\b[A-Z]+[a-z]\w+\b', name)
         self.ref = name
         self.indexes = tuple()
         self.assertions = []
         self.extends = None
         self.format = None
-        self.format_regex = format_regex
         self._edges = OrderedDict()
         self._multiple = {}
         self._nullable = {}
@@ -86,12 +84,9 @@ class Type:
                     nullable=parent.allows_null(edge),
                 )
         self.assertions = parent.assertions + self.assertions
-        self.format_regex = parent.format_regex
     
     def define_format(self, format: str):
         assert self.format is None, 'format already set'
-        assert self.format_regex is not None, 'format pattern not defined'
-        assert re.fullmatch(self.format_regex, format), 'format does not match pattern'
         self.format = format
     
     def define_assertion(self, op: str, arg):
@@ -152,7 +147,7 @@ class Type:
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
 
-Number = Type('Number', format_regex=r'[+-]?\d*,?(\.\d+)?[bdoxXnf%]?')
+Number = Type('Number')
 String = Type('String')
 Boolean = Type('Boolean')
 String.define_edge('length', Number)

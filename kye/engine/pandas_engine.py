@@ -5,16 +5,10 @@ from kye.compiler.models import Type, TYPE_REF, Models
 import kye.engine.formats as Formats
 import itertools
 
-def as_string(col: pd.Series):
-    return col.astype(str, errors='ignore')
-
-def as_boolean(col: pd.Series):
-    return col.astype(bool, errors='ignore')
-
 FORMATS = {
     'number': Formats.as_number,
-    'string': as_string,
-    'boolean': as_boolean,
+    'string': Formats.as_string,
+    'boolean': Formats.as_boolean,
 }
 
 def normalize_type(col: pd.Series, model: Type):
@@ -35,6 +29,7 @@ def normalize_type(col: pd.Series, model: Type):
                 errors.append({
                     'error_type': 'INVALID_VALUE_FORMAT',
                     'type': model.ref,
+                    'format': model.format,
                     'rows': invalid.index.tolist(),
                     'values': invalid.tolist(),
                 })
