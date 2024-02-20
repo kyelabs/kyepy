@@ -1,11 +1,11 @@
 from __future__ import annotations
-from pydantic import BaseModel, model_validator, constr
-from typing import Optional, Union, Literal
+from pydantic import BaseModel, model_validator, constr, StringConstraints
+from typing import Optional, Union, Literal, Annotated
 
-TYPE = constr(pattern=r'[A-Z][a-z][a-zA-Z]*')
-EDGE = constr(pattern=r'[a-z][a-z_]*')
-POSTFIXED_EDGE = constr(pattern=r'[a-z][a-z_]*[*+?]?')
-TYPE_REF = constr(pattern=r'([A-Z]+[a-z][A-Za-z_]*)(\.[A-Za-z_]+)*')
+TYPE = Annotated[str, StringConstraints(pattern=r'[A-Z][a-z][a-zA-Z]*')]
+EDGE = Annotated[str, StringConstraints(pattern=r'[a-z][a-z_]*')]
+POSTFIXED_EDGE = Annotated[str, StringConstraints(pattern=r'[a-z][a-z_]*[*+?]?')]
+TYPE_REF = Annotated[str, StringConstraints(pattern=r'([A-Z]+[a-z][A-Za-z_]*)(\.[A-Za-z_]+)*')]
 
 class Models(BaseModel):
     models: dict[TYPE_REF, Type]
@@ -36,6 +36,8 @@ class Assertion(BaseModel):
     gte: Optional[float] = None
     lt: Optional[float] = None
     lte: Optional[float] = None
+    pipe: Optional[list[Assertion]] = None
+    get: Optional[str] = None
 
     @model_validator(mode='after')
     def check_only_one_assertion(self):

@@ -11,8 +11,6 @@ from collections import OrderedDict
 TYPE_REF = str
 EDGE = str
 
-
-
 class Type:
     """ Base Class for Types """
     ref: TYPE_REF
@@ -181,7 +179,9 @@ class Models:
     def from_compiled(compiled) -> Models:
         return models_from_compiled(Models(), compiled)
     
-    def define(self, ref: TYPE_REF):
+    def define(self, ref: Optional[TYPE_REF] = None):
+        if ref is None:
+            ref = f'LambdaType{len(self._models)}'
         assert ref not in self._models
         typ = Type(ref)
         self._models[ref] = typ
