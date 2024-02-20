@@ -94,30 +94,30 @@ class Compiler:
             assert isinstance(ast, AST.EdgeDefinition)
             model.define_edge(
                 name=ast.name,
-                type=self.compile_expression(ast.type, model, edge),
+                type=self.compile_expression(ast.type, model),
                 nullable=ast.cardinality in ('?','*'),
                 multiple=ast.cardinality in ('+','*'),
             )
     
-    def compile_expression(self, ast: AST.Expression, model: Optional[Type] = None, edge: Optional[EDGE] = None) -> Type:
+    def compile_expression(self, ast: AST.Expression, model: Optional[Type] = None) -> Type:
+        typ = self.models.define()
+
+        def child_expr(i: int, model: Optional[Type] = model):
+            return self.compile_expression(ast.children[i], model)
+
         assert isinstance(ast, AST.Expression)
         if isinstance(ast, AST.TypeIdentifier):
+            typ.define_parent(self.compile_type(ast.name))
             if ast.format is not None:
-                typ = self.models.define(model.ref + '.' + edge)
-                typ.define_parent(self.compile_type(ast.name))
                 typ.define_format(ast.format)
-                return typ
-            else:
-                return self.compile_type(ast.name)
-        # elif isinstance(ast, AST.EdgeIdentifier):
-        #     if ast.kind == 'edge':
-        #         edge = self.lookup_edge(ctx_type, ast.name)
-        #         return EdgeRefExpression(
-        #             edge=edge,
-        #             loc=ast.meta,
-        #         )
+            return typ
+        elif isinstance(ast, AST.EdgeIdentifier):
+            self.compile_edge(model, ast.name)
+            model.get_edge(ast.name)
+            typ = model
+            typ.define_assertion('get', ast.name)
+            return typ
         elif isinstance(ast, AST.LiteralExpression):
-            typ = self.models.define(model.ref + '.' + edge)
             typ.define_assertion('eq', ast.value)
             if type(ast.value) is str:
                 typ.define_parent(self.models['String'])
@@ -133,26 +133,18 @@ class Compiler:
                 assert len(ast.children) == 2
                 assert isinstance(ast.children[0], AST.Identifier)
                 assert isinstance(ast.children[1], AST.LiteralExpression)
-                typ = self.models.define(model.ref + '.' + edge)
-                typ.define_parent(
-                    parent=self.compile_expression(ast.children[0], model, edge)
-                )
+                typ.define_parent(child_expr(0))
                 typ.define_assertion(
                     op=ast.name,
                     arg=ast.children[1].value,
                 )
                 return typ
-        #     if ast.name == 'filter':
-        #         assert len(ast.children) <= 2
-        #         if len(ast.children) == 2:
-        #             assert expr.is_type()
-        #             filter = self.compile_expression(ast.children[1], expr.get_context())
-        #             expr = CallExpression(
-        #                 bound=expr,
-        #                 args=[filter],
-        #                 edge=self.get_edge('Type.$filter'),
-        #                 loc=ast.meta,
-        #             )
+            if ast.name == 'filter':
+                assert len(ast.children) <= 2
+                typ = child_expr(0)
+                if len(ast.children) == 2:
+                    typ = child_expr(1, typ)
+                return typ
         #     elif ast.name == 'dot':
         #         assert len(ast.children) >= 2
         #         for child in ast.children[1:]:
