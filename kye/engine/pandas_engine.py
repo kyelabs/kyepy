@@ -67,7 +67,7 @@ def validate_model(df: pd.DataFrame, model: Type):
             continue
 
         # Normalize value format
-        col, edge_errors = normalize_type(df[edge], model.get_edge(edge))
+        col, edge_errors = normalize_type(df[edge], model[edge].type)
         
         # Skip cardinality check if there are value errors
         # because a value error could make a cardinality error irrelevant
@@ -75,7 +75,7 @@ def validate_model(df: pd.DataFrame, model: Type):
             errors += edge_errors
             continue
 
-        if not model.allows_null(edge):
+        if not model[edge].nullable:
             missing = df.index.difference(col.index)
             if not missing.empty:
                 errors.append({
@@ -84,7 +84,7 @@ def validate_model(df: pd.DataFrame, model: Type):
                     'rows': missing.tolist(),
                 })
         
-        if not model.allows_multiple(edge):
+        if not model[edge].multiple:
             multiple = col.index[col.index.duplicated()]
             if not multiple.empty:
                 errors.append({

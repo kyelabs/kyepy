@@ -25,7 +25,7 @@ class Compiler:
         for typ in self.models:
             self.status[typ.ref] = Status.COMPLETE
             for edge in typ.edges:
-                self.status[typ.ref + '.' + edge] = Status.COMPLETE
+                self.status[edge.ref] = Status.COMPLETE
     
     def get_models(self) -> Models:
         for ref, ast in self.ast.items():
@@ -88,7 +88,7 @@ class Compiler:
         return typ
 
     def compile_edge(self, model: Type, edge: EDGE):
-        if model.has_edge(edge):
+        if edge in model:
             return
         with self._checkout(model.ref + '.' + edge) as ast:
             assert isinstance(ast, AST.EdgeDefinition)
@@ -113,7 +113,6 @@ class Compiler:
             return typ
         elif isinstance(ast, AST.EdgeIdentifier):
             self.compile_edge(model, ast.name)
-            model.get_edge(ast.name)
             typ = model
             typ.define_assertion('get', ast.name)
             return typ

@@ -15,17 +15,17 @@ class Type:
     """ Base Class for Types """
     ref: TYPE_REF
     extends: Optional[Type]
-    indexes: tuple[tuple[EDGE]]
     assertions: list[Assertion]
     format: Optional[str]
-    _edges: OrderedDict[EDGE, Type]
+    _indexes: tuple[tuple[EDGE]]
+    _edges: OrderedDict[EDGE, Edge]
     _multiple: dict[EDGE, bool]
     _nullable: dict[EDGE, bool]
 
     def __init__(self, name: TYPE_REF):
         assert re.match(r'\b[A-Z]+[a-z]\w+\b', name)
         self.ref = name
-        self.indexes = tuple()
+        self._indexes = tuple()
         self.assertions = []
         self.extends = None
         self.format = None
@@ -39,11 +39,8 @@ class Type:
                     nullable=False,
                     multiple=False
                     ):
-        assert re.fullmatch(r'[a-z_][a-z0-9_]*', name)
-        assert isinstance(type, Type)
-        self._edges[name] = type
-        self._nullable[name] = nullable
-        self._multiple[name] = multiple
+        edge = Edge(name, self, type, nullable, multiple)
+        self._edges[edge.name] = edge
     
     def define_index(self, index: tuple[EDGE]):
         # Convert to tuple if passed in a single string
@@ -58,14 +55,29 @@ class Type:
 
         # Validate edges within index
         for edge in index:
-            assert self.has_edge(edge), f'Cannot use undefined edge in index: "{edge}"'
+            assert edge in self, f'Cannot use undefined edge in index: "{edge}"'
             assert not self.allows_null(edge), f'Cannot use a nullable edge in index: "{edge}"'
-
+    
         # Remove any existing indexes that are a superset of the new index
-        self.indexes = tuple(
+        self._indexes = tuple(
             existing_idx for existing_idx in self.indexes
             if not set(index).issubset(set(existing_idx))
         ) + (index,)
+
+    @property
+    def indexes(self) -> tuple[tuple[EDGE]]:
+        if self.extends is None:
+            return self._indexes
+
+        indexes = self.extends.indexes
+        
+        for index in self._indexes:
+            indexes = tuple(
+                existing_idx for existing_idx in indexes
+                if not set(index).issubset(set(existing_idx))
+            )
+    
+        return indexes + self._indexes
     
     def define_parent(self, parent: Type):
         assert isinstance(parent, Type)
@@ -73,15 +85,6 @@ class Type:
             assert self.extends == parent, 'Already assigned a parent'
             return
         self.extends = parent
-        for edge in parent._edges:
-            if not self.has_edge(edge):
-                self.define_edge(
-                    name=edge,
-                    type=parent._edges[edge],
-                    multiple=parent.allows_multiple(edge),
-                    nullable=parent.allows_null(edge),
-                )
-        self.assertions = parent.assertions + self.assertions
     
     def define_format(self, format: str):
         assert self.format is None, 'format already set'
@@ -101,39 +104,38 @@ class Type:
         return len(self.indexes) > 0
 
     @property
-    def edges(self) -> list[EDGE]:
+    def own_edges(self) -> list[Edge]:
+        return list(self._edges.values())
+
+    @property
+    def edges(self) -> list[Edge]:
+        if self.extends is None:
+            return self.own_edges
+        return self.extends.edges + self.own_edges
+    
+    def keys(self) -> list[EDGE]:
         return list(self._edges.keys())
     
-    def has_edge(self, edge: EDGE) -> bool:
+    def __contains__(self, edge: EDGE) -> bool:
+        if self.extends is not None and edge in self.extends:
+            return True
         return edge in self._edges
 
-    def get_edge(self, edge: EDGE) -> Type:
-        assert self.has_edge(edge)
+    def __getitem__(self, edge: EDGE) -> Edge:
+        assert edge in self
+        if edge not in self._edges:
+            return self.extends[edge]
         return self._edges[edge]
     
-    def edge_origin(self, edge: EDGE) -> Optional[Type]:
-        assert self.has_edge(edge)
-        if self.extends and self.extends.has_edge(edge):
-            return self.extends.edge_origin(edge)
-        return self
-
-    def allows_multiple(self, edge: EDGE) -> bool:
-        assert self.has_edge(edge)
-        return self._multiple[edge]
-
-    def allows_null(self, edge: EDGE) -> bool:
-        assert self.has_edge(edge)
-        return self._nullable[edge]
+    def __str__(self):
+        return "{}{}".format(
+            self.ref or '',
+            '<' + self.format + '>' if self.format is not None else '',
+        )
 
     def __repr__(self):
-        def get_cardinality_symbol(edge):
-            nullable = int(self.allows_null(edge))
-            multiple = int(self.allows_multiple(edge))
-            return ([['' ,'+'],
-                     ['?','*']])[nullable][multiple]
-
         non_index_edges = [
-            edge + get_cardinality_symbol(edge)            
+            str(edge)            
             for edge in self._edges
             if edge not in self.index
         ]
@@ -144,6 +146,37 @@ class Type:
             ''.join('(' + ','.join(idx) + ')' for idx in self.indexes),
             '{' + ','.join(non_index_edges) + '}' if len(non_index_edges) else '',
         )
+
+class Edge:
+    def __init__(self, name: str, origin: Type, type: Type, nullable=False, multiple=False):
+        assert isinstance(name, str)
+        assert re.fullmatch(r'[a-z_][a-z0-9_]*', name)
+        assert isinstance(origin, Type)
+        assert isinstance(type, Type)
+        assert isinstance(nullable, bool)
+        assert isinstance(multiple, bool)
+        self.name = name
+        self.origin = origin
+        self.type = type
+        self.nullable = nullable
+        self.multiple = multiple
+    
+    @property
+    def ref(self):
+        return f'{self.origin.ref}.{self.name}'
+    
+    @property
+    def cardinality_symbol(self):
+        nullable = int(self.nullable)
+        multiple = int(self.multiple)
+        return ([['' ,'+'],
+                 ['?','*']])[nullable][multiple]
+
+    def __str__(self):
+        return f'{self.name}{self.cardinality_symbol}'
+
+    def __repr__(self):
+        return f'{self.origin}.{self.name}{self.cardinality_symbol}:{self.type}'
 
 Number = Type('Number')
 String = Type('String')
