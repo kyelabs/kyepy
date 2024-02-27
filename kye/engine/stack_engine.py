@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-# import kye.compiler.models as Models
+import kye.compiler.models as Models
 import typing as t
 
 Literal = t.Union[int, str, float]
@@ -356,7 +356,9 @@ def compute_expression(stack: Stack, expr: dict):
         else:
             assert len(args) == 2
             getattr(stack, op)()
-
+    # get filter lookup and_ or_ not_ xor
+    if op == 'get':
+        pass
 
 
 if __name__ == "__main__":

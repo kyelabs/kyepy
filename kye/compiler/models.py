@@ -19,8 +19,7 @@ class Type:
     format: Optional[str]
     _indexes: tuple[tuple[EDGE]]
     _edges: OrderedDict[EDGE, Edge]
-    _multiple: dict[EDGE, bool]
-    _nullable: dict[EDGE, bool]
+    _operations: dict[str, list[Type]]
 
     def __init__(self, name: TYPE_REF):
         assert re.match(r'\b[A-Z]+[a-z]\w+\b', name)
@@ -30,8 +29,7 @@ class Type:
         self.extends = None
         self.format = None
         self._edges = OrderedDict()
-        self._multiple = {}
-        self._nullable = {}
+        self._operations = {}
 
     def define_edge(self,
                     name: EDGE,
@@ -39,8 +37,9 @@ class Type:
                     nullable=False,
                     multiple=False
                     ):
-        edge = Edge(name, self, type, nullable, multiple)
+        edge = Edge(name=name, origin=self, type=type, nullable=nullable, multiple=multiple)
         self._edges[edge.name] = edge
+        return self
     
     def define_index(self, index: tuple[EDGE]):
         # Convert to tuple if passed in a single string
@@ -56,13 +55,14 @@ class Type:
         # Validate edges within index
         for edge in index:
             assert edge in self, f'Cannot use undefined edge in index: "{edge}"'
-            assert not self.allows_null(edge), f'Cannot use a nullable edge in index: "{edge}"'
+            assert not self[edge].nullable, f'Cannot use a nullable edge in index: "{edge}"'
     
         # Remove any existing indexes that are a superset of the new index
         self._indexes = tuple(
             existing_idx for existing_idx in self.indexes
             if not set(index).issubset(set(existing_idx))
         ) + (index,)
+        return self
 
     @property
     def indexes(self) -> tuple[tuple[EDGE]]:
@@ -85,14 +85,25 @@ class Type:
             assert self.extends == parent, 'Already assigned a parent'
             return
         self.extends = parent
+        return self
     
     def define_format(self, format: str):
         assert self.format is None, 'format already set'
         self.format = format
+        return self
     
     def define_assertion(self, op: str, arg):
         assertion = assertion_factory(op, arg)
         self.assertions.append(assertion)
+        return self
+
+    def define_operations(self, operations: list[str], types: list[Type] = []):
+        if len(types) == 0:
+            types = [self]
+        for op in operations:
+            for typ in types:
+                self._operations.setdefault(op, []).append(typ)
+        return self
 
     @property
     def index(self) -> set[EDGE]:
@@ -112,6 +123,14 @@ class Type:
         if self.extends is None:
             return self.own_edges
         return self.extends.edges + self.own_edges
+    
+    def has_operation(self, operation, type):
+        if type in self._operations.get(operation, []):
+            return True
+
+        if self.extends and self.extends.has_operation(operation, type):
+            return True
+        return False
     
     def keys(self) -> list[EDGE]:
         return list(self._edges.keys())
@@ -178,13 +197,21 @@ class Edge:
     def __repr__(self):
         return f'{self.origin}.{self.name}{self.cardinality_symbol}:{self.type}'
 
-Number = Type('Number')
-String = Type('String')
-Boolean = Type('Boolean')
-String.define_edge('length', Number)
-Number.define_assertion('type', 'number')
-String.define_assertion('type','string')
-Boolean.define_assertion('type','boolean')
+Number = (
+    Type('Number')
+        .define_assertion('type', 'number')
+        .define_operations(['>','+','-','*','/','%'])
+)
+String = (
+    Type('String')
+        .define_edge('length', Number)
+        .define_assertion('type','string')
+        .define_operations(['>','+'])
+)
+Boolean = (
+    Type('Boolean')
+        .define_assertion('type','boolean')
+)
 
 GLOBALS = {
     'Number': Number,
