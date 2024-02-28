@@ -6,6 +6,8 @@ import typing as t
 EXPRESSIONS: dict[str, Expression] = {}
 
 Literal = t.Union[int, float, str, bool]
+ExpOrLiteral = t.Union[Literal, tuple[str, list]]
+Exp = tuple[str, list[ExpOrLiteral]]
 Signature = tuple[list[str], str]
 
 def pop_items(items, i):
@@ -188,22 +190,41 @@ class Sum(Scalar, Aggregation):
 class Avg(Scalar, Aggregation):
     pass
 
-# TODO: instead of returning a list, it returns an expression tree?
-# with the root node being a created function with a known 
-# function signature?
-# It should be trivial to traverse the expression tree to turn it
-# back into a stack, but the tree will help with evaluating the
-# script for correctness
-def compile_expression(src: t.Union[Literal, dict]) -> Expression:
+def normalize_args(src: t.Union[Literal, dict]) -> ExpOrLiteral:
     if type(src) is not dict:
-        return Const(src)
+        return src
     assert len(src) == 1
     op, args = list(src.items())[0]
     args = [args] if not isinstance(args, list) else args
+    return op, [normalize_args(arg) for arg in args]
+
+def normalize_pipes(src: ExpOrLiteral) -> ExpOrLiteral:
+    if type(src) is not tuple:
+        return src
+    op, args = src
+    if op != 'pipe':
+        return op, args
     
+    assert len(args) > 0, 'expected pipe to have at least one item'
+    out = args[0]
+    for arg in args[1:]:
+        assert type(arg) is tuple, 'expected no literal arguments to pipe operation'
+        op, args = arg
+        out = (op, [out, *args])
+    return out
+
+def transform(src: ExpOrLiteral):
+    if type(src) is not tuple:
+        return Const(src)
+    op, args = src
     assert op in EXPRESSIONS, f'Unknown function {op}'
     return EXPRESSIONS[op](*(
-        compile_expression(arg)
+        transform(arg)
         for arg in args
     ))
-    
+
+def compile_expression(src: ExpOrLiteral) -> Expression:
+    src = normalize_args(src)
+    src = normalize_pipes(src)
+    exp = transform(src)
+    return exp
