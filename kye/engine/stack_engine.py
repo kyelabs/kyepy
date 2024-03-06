@@ -103,7 +103,7 @@ class Edge:
     def sum(col): return col.groupby(level=0).sum()
 
     @op('avg')
-    def mean(col): return col.groupby(level=0).mean()
+    def avg(col): return col.groupby(level=0).mean()
 
     @op('min')
     def min(col): return col.groupby(level=0).min()
@@ -282,7 +282,7 @@ class Stack:
         return self
     
     def avg(self):
-        self.top().avg()
+        self.top().mean()
         return self
     
     def min(self):
