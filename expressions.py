@@ -1,5 +1,6 @@
 from __future__ import annotations
 import typing as t
+from typing_extensions import Self
 from collections.abc import Iterable
 from collections import deque
 from copy import deepcopy
@@ -8,7 +9,7 @@ T = t.TypeVar('T')
 E = t.TypeVar('E')
 
 class Expression:
-    arg_types: dict[str, dict]
+    arg_types: dict[str, Arg]
 
     def __init__(self, **kwargs):
         self.args = {}
@@ -17,13 +18,11 @@ class Expression:
         self._type = None
         self._meta: t.Optional[t.Dict[str, t.Any]] = None
 
-        for k in kwargs.keys():
-            if k not in self.arg_types:
-                raise Exception(f'Unexpected property {k}')
         for k in self.arg_types.keys():
-            if not self.arg_types[k]['nullable'] and k not in kwargs:
+            if not self.arg_types[k].optional and k not in kwargs:
                 raise Exception(f'Missing required property "{k}"')
             setattr(self, k, kwargs.get(k))
+        self.check_arg_types()
         
     def __deepcopy__(self, memo):
         copy = self.__class__(**deepcopy(self.args))
@@ -31,8 +30,20 @@ class Expression:
             copy._type = self._type.copy()
         if self._meta is not None:
             copy._meta = deepcopy(self._meta)
+        return copy
     
-    def copy(self):
+    def check_arg_types(self, recurse=False) -> None:
+        for arg, values in self.args.items():
+            for val in list_values(values):
+                if self.arg_types[arg].type is not None and not isinstance(val, self.arg_types[arg].type):
+                    raise TypeError(f'Expected {arg} to be of type {self.arg_types[arg].type}, got {val}')
+                if isinstance(val, Expression):
+                    assert val.parent is self
+                    assert val.arg_key == arg
+                    if recurse:
+                        val.check_arg_types(recurse=recurse)
+    
+    def copy(self) -> Self:
         """
         Returns a deep copy of the expression
         """
@@ -40,7 +51,7 @@ class Expression:
         new.parent = self.parent
         return new
 
-    def depth(self):
+    def depth(self) -> int:
         """ Returns the depth of this tree """
         if self.parent:
             return self.parent.depth + 1
@@ -59,7 +70,7 @@ class Expression:
             expression = expression.parent
         return expression
     
-    def iter_props(self) -> t.Iterator[t.Any]:
+    def iter_props(self) -> t.Iterator[tuple[str, t.Any]]:
         for key, values in self.args.items():
             for val in list_values(values):
                 if not isinstance(val, Expression):
@@ -72,7 +83,7 @@ class Expression:
                 if isinstance(val, Expression):
                     yield val
     
-    def dfs(self, prune:t.Callable[[Expression], bool]=None):
+    def dfs(self, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
         """
         Returns a generator object which visits all nodes in this tree in
         the DFS (Depth-first) order.
@@ -83,7 +94,7 @@ class Expression:
         for v in self.iter_expressions():
             yield from v.dfs(prune)
 
-    def bfs(self, prune:t.Callable[[Expression], bool]=None):
+    def bfs(self, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
         """
         Returns a generator object which visits all nodes in this tree in
         the BFS (Breadth-first) order.
@@ -97,7 +108,7 @@ class Expression:
             for v in item.iter_expressions():
                 queue.append(v)
     
-    def walk(self, bfs: bool=True, prune:t.Callable[[Expression], bool]=None):
+    def walk(self, bfs: bool=True, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
         """
         Returns a generator object which visits all nodes in this tree.
 
@@ -125,7 +136,7 @@ class Expression:
         """
         return next(self.find_all(*types, bfs=bfs), None)
 
-    def replace_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> None:
+    def replace_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> Self:
         """
         Replace children of an expression with the result of a lambda fun(child) -> exp.
         """
@@ -137,55 +148,29 @@ class Expression:
                 else:
                     new_args.append(val)
             setattr(self, k, new_args)
-    
-    def transform_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> dict:
-        """
-        Recursively visits all tree nodes (excluding already transformed ones)
-        and applies the given transformation function to each node.
-        """
-        transformed_args = {}
-        for k, values in self.args.items():
-            new_args = []
-            use_list = is_list(values)
-            for val in list_values(values):
-                if isinstance(val, Expression):
-                    out = fun(val, *args, **kwargs)
-                    use_list |= is_list(out)
-                    new_args += list_values(out)
-                else:
-                    new_args.append(val)
-            # Convert to single value if original was a
-            # single value _and_ the result is a single value
-            if not use_list:
-                new_args = new_args[0] if len(new_args) else None
-            transformed_args[k] = new_args
-        return transformed_args
+        return self
 
-    def transform(self, fun: t.Callable[[Expression, dict], t.Any], *args, **kwargs):
+    def transform(self, fun: t.Callable[[Expression], T], *args, inplace=True, **kwargs) -> T:
         """
-        Recursively visits all tree nodes
-        and applies the given transformation function to each node.
+        Recursively visit all tree nodes and apply the given transformation function to each node.
         """
-        transformed_args = self.transform_children(lambda child: child.transform(fun, *args, **kwargs))
-        new_node = fun(self, transformed_args, *args, **kwargs)
-        if new_node is None or not isinstance(new_node, Expression):
-            return new_node
-        if new_node is not self:
-            new_node.parent = self.parent
-            return new_node
-        
-        new_node.replace_children(lambda child: child.transform(fun, *args, copy=False, **kwargs))
+        node = self if inplace else self.copy()
+        node.replace_children(lambda child: child.transform(fun, *args, **kwargs))
+        new_node = fun(self, *args, **kwargs)
+        if inplace:
+            return self.replace(new_node)
         return new_node
 
-    def replace(self, expression):
-        if isinstance(expression, Expression) and not self.parent:
+    def replace(self, expression: T) -> T:
+        if not self.parent:
             return expression
 
         self.parent.replace_children(lambda child: expression if child is self else child)
         self.parent = None
+        self.arg_key = None
         return expression
 
-    def pop(self):
+    def pop(self) -> Self:
         self.replace(None)
         return self
     
@@ -215,59 +200,65 @@ class Expression:
     
     def __repr__(self):
         return self.to_xml()
-
     
 class Arg:
-    def __init__(self, type=None, nullable=False, multiple=False):
+    def __init__(self, type=None, optional=False, many=False):
         self.name = None
         self.type = type
-        self.nullable = nullable
-        self.multiple = multiple
+        self.optional = optional
+        self.many = many
     
-    def __set_name__(self, owner, name):
+    def __set_name__(self, owner: t.Type[Expression], name):
         self.name = name
         if not hasattr(owner, 'arg_types'):
-            setattr(owner, 'arg_types', {})
-        owner.arg_types[name] = {
-            'type': self.type,
-            'nullable': self.nullable,
-            'multiple': self.multiple,
-        }
+            owner.arg_types = {}
+        owner.arg_types = { **owner.arg_types, self.name: self }
    
     def __set__(self, instance, value):
+        # remove parent of old args
+        for old_value in list_values(instance.args.get(self.name)):
+            if isinstance(old_value, Expression):
+                old_value.parent = None
+                old_value.arg_key = None
+
+        # set parent of new args
+        for new_value in list_values(value):
+            if isinstance(new_value, Expression):
+                new_value.parent = instance
+                new_value.arg_key = self.name
+            
+        instance.args[self.name] = self.coerce_cardinality(value)
+    
+    def __get__(self, instance, owner=None):
+        return self.coerce_cardinality(instance.args.get(self.name))
+
+    def coerce_cardinality(self, value):
         values = list_values(value)
 
-        if not self.nullable and len(values) == 0:
+        if not self.optional and len(values) == 0:
             raise TypeError(f'Expected {self.name} to not be null: {value}')
 
-        for val in values:
-            if self.type is not None and not isinstance(val, self.type):
-                raise TypeError(f'Expected {self.name} to be an instance of {self.type.__name__}: {value}')
-            if isinstance(val, Expression):
-                val.parent = instance
-                val.arg_key = self.name
-
-        if not self.multiple:
+        if not self.many:
             if len(values) > 1:
                 raise TypeError(f'Expected {self.name} to only have one value: {value}')
             values = None if len(values) == 0 else values[0]
-            
-        instance.args[self.name] = values
-    
-    def __get__(self, instance, owner=None):
-        return instance.args.get(self.name)
+        
+        return values
 
 class Model(Expression):
     indexes = Arg(type=str)
 
 class Func(Expression):
-    kwargs = Arg(type=str, nullable=True)
+    kwargs = Arg(type=str, optional=True)
 
 class Binary(Func):
     lhs = Arg(type=Expression)
     rhs = Arg(type=Expression)
 
 class Add(Binary):
+    pass
+
+class Subtract(Binary):
     pass
 
 class Literal(Expression):
@@ -295,10 +286,25 @@ def list_values(values):
     else:
         return [ values ]
 
+def evaluate(exp: Expression) -> t.Any:
+    if isinstance(exp, Literal):
+        return exp.value
+    if isinstance(exp, Add):
+        return exp.lhs + exp.rhs
+    if isinstance(exp, Subtract):
+        return exp.lhs - exp.rhs
+
 if __name__ == '__main__':
-    m = Add(
-        lhs=Literal(value=1),
-        rhs=Literal(value=2)
+    m = Subtract(
+        lhs=Add(
+            lhs=Literal(value=1),
+            rhs=Literal(value=2),
+        ),
+        rhs=Literal(value=3)
     )
-    print(m.to_xml())
+    print(m)
+    add = m.find(Add)
+    add.replace(Subtract(**add.args))
+    print(m)
+    print(m.transform(evaluate))
     print('hi')
