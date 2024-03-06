@@ -31,6 +31,23 @@ class Expression:
         if self._meta is not None:
             copy._meta = deepcopy(self._meta)
         return copy
+
+    @property
+    def hashable_args(self) -> frozenset[tuple]:
+        args = (
+            (arg, *list_values(values))
+            for arg, values in self.args.items()
+        )
+        return frozenset(
+            arg for arg in args
+            if len(arg) > 1
+        )
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other) and hash(self) == hash(other)
+
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.hashable_args))
     
     def check_arg_types(self, recurse=False) -> None:
         for arg, values in self.args.items():
@@ -295,16 +312,13 @@ def evaluate(exp: Expression) -> t.Any:
         return exp.lhs - exp.rhs
 
 if __name__ == '__main__':
-    m = Subtract(
-        lhs=Add(
+    a1 = Add(
             lhs=Literal(value=1),
             rhs=Literal(value=2),
-        ),
-        rhs=Literal(value=3)
-    )
-    print(m)
-    add = m.find(Add)
-    add.replace(Subtract(**add.args))
-    print(m)
-    print(m.transform(evaluate))
+        )
+    a2 = Add(
+            lhs=Literal(value=1),
+            rhs=Literal(value=3),
+        )
+    print(a1 == a2)
     print('hi')
