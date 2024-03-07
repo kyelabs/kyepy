@@ -34,14 +34,15 @@ class Expression:
 
     @property
     def hashable_args(self) -> frozenset[tuple]:
-        args = (
-            (arg, *list_values(values))
-            for arg, values in self.args.items()
-        )
-        return frozenset(
-            arg for arg in args
-            if len(arg) > 1
-        )
+        args = []
+        for arg, values in self.args.items():
+            values = list_values(values)
+            if len(values) == 0:
+                continue
+            # I'm assuming that the order of the values doesn't matter
+            # and that the values are hashable
+            args.append((arg, frozenset(values)))
+        return frozenset(args)
 
     def __eq__(self, other) -> bool:
         return type(self) is type(other) and hash(self) == hash(other)
@@ -266,7 +267,7 @@ class Model(Expression):
     indexes = Arg(type=str)
 
 class Func(Expression):
-    kwargs = Arg(type=str, optional=True)
+    kwargs = Arg(type=str, optional=True, many=True)
 
 class Binary(Func):
     lhs = Arg(type=Expression)
@@ -312,13 +313,7 @@ def evaluate(exp: Expression) -> t.Any:
         return exp.lhs - exp.rhs
 
 if __name__ == '__main__':
-    a1 = Add(
-            lhs=Literal(value=1),
-            rhs=Literal(value=2),
-        )
-    a2 = Add(
-            lhs=Literal(value=1),
-            rhs=Literal(value=3),
-        )
+    a1 = Func(kwargs=[])
+    a2 = Func(kwargs=[])
     print(a1 == a2)
     print('hi')
