@@ -14,18 +14,55 @@ EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
 
 @enum.unique
 class Operator(enum.Enum):
-    ADD = '+'
-    SUB = '-'
-    MUL = '*'
-    DIV = '/'
+    #      symbol, precedence
+    DOT    = '.',  0
+    INVERT = '~',  1
+    MUL    = '*',  2
+    DIV    = '/',  2
+    MOD    = '%',  2
+    ADD    = '+',  3
+    SUB    = '-',  3
+    AND    = '&',  4
+    OR     = '|',  4
+    NOT    = '!',  4
+    NE     = '!=', 5
+    EQ     = '==', 5
+    LT     = '<',  5
+    GT     = '>',  5
+    LE     = '<=', 5
+    GE     = '>=', 5
 
     @property
     def symbol(self):
-        return self.value
+        return self.value[0]
+    
+    @property
+    def precedence(self):
+        return self.value[1]
     
     @property
     def python_name(self):
         return '__' + self.name.lower() + '__'
+    
+    @property
+    def is_binary(self):
+        return not self.is_unary
+    
+    @property
+    def is_unary(self):
+        return self in (Operator.INVERT, Operator.NOT)
+    
+    @property
+    def is_comparison(self):
+        return self in (Operator.NE, Operator.EQ, Operator.LT, Operator.GT, Operator.LE, Operator.GE)
+
+    @property
+    def is_mathematical(self):
+        return self in (Operator.ADD, Operator.SUB, Operator.MUL, Operator.DIV, Operator.MOD)
+    
+    @property
+    def is_logical(self):
+        return self in (Operator.AND, Operator.OR, Operator.NOT)
     
     def __repr__(self):
         return self.symbol
@@ -428,19 +465,38 @@ class Call(Expression):
     fn: Expression = Arg(type=Expression)
     args: list[Expression] = Arg(type=Expression, many=True, optional=True)
     _slurp = 'args'
-    
-class Binary(Call):
-    """ Abstract class for all AST nodes that represent a binary operation """
-    op: Operator = Arg(type=Operator)
-    
+    _num_args = None
+
     def validate(self, **kwargs):
         super().validate(**kwargs)
-        if len(self.args) != 2:
-            raise ValueError(f'Binary operation {self.op} expects 2 arguments, got {len(self.args)}')
+        if self._num_args is not None and len(self.args) != self._num_args:
+            raise ValueError(f'Expected {self._num_args} arguments, got {len(self.args)}')
+    
+    def __init_subclass__(cls, **kwargs):
+        if hasattr(cls, 'name'):
+            cls.fn = Identifier(name=cls.name)
+        return super().__init_subclass__(**kwargs)
+
+class Operation(Call):
+    op: Operator = Arg(type=Operator)
 
     @property
     def fn(self):
         return Identifier(name=f'${self.op.name.lower()}')
+
+class UnaryOp(Operation):
+    _num_args = 1
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not self.op.is_unary:
+            raise ValueError(f'Expected a unary operator, got {self.op}')
+
+class BinaryOp(Operation):
+    _num_args = 2
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not self.op.is_binary:
+            raise ValueError(f'Expected a binary operator, got {self.op}')
 
 def convert() -> Expression:
     """ Convert python value to Expression """
@@ -449,7 +505,7 @@ def convert() -> Expression:
 def evaluate(exp: Expression) -> t.Any:
     if isinstance(exp, Literal):
         return exp.value
-    if isinstance(exp, Binary):
+    if isinstance(exp, Operation) and exp.op.is_binary:
         return getattr(exp.args[0], exp.op.python_name)(exp.args[1])
 
 if __name__ == '__main__':
