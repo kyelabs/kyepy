@@ -5,39 +5,82 @@ from collections.abc import Iterable
 from collections import deque
 from copy import deepcopy
 import regex as re
+import enum
+
+from iter_utils import list_values
 
 TYPE_NAME_REGEX = re.compile(r'[A-Z][a-z][a-zA-Z]*')
 EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
 
-from iter_utils import list_values
+@enum.unique
+class Operator(enum.Enum):
+    ADD = '+'
+    SUB = '-'
+    MUL = '*'
+    DIV = '/'
+
+    @property
+    def symbol(self):
+        return self.value
+    
+    @property
+    def python_name(self):
+        return '__' + self.name.lower() + '__'
+    
+    def __repr__(self):
+        return self.symbol
+
+@enum.unique
+class Cardinality(enum.Enum):
+    ONE = '!'
+    MAYBE = '?'
+    MANY = '*'
+    MORE = '+'
+    
+    def __repr__(self):
+        return self.value
 
 T = t.TypeVar('T')
 E = t.TypeVar('E')
 
 class Expression:
-    arg_types: dict[str, Arg] = {}
+    _arg_types: dict[str, Arg] = {}
+    # The name of the argument that should slurp all positional arguments
+    _slurp: t.Optional[str] = None
 
-    def __init__(self, **kwargs):
-        self.args = {}
+    def __init__(self, *args, **kwargs):
         self.parent: t.Optional[Expression] = None
-        self.arg_key: t.Optional[str] = None
+        self._args = {}
+        self._arg_key: t.Optional[str] = None
         self._type = None
         self._meta: t.Optional[t.Dict[str, t.Any]] = None
 
-        for k in self.arg_types.keys():
-            if not self.arg_types[k].optional and k not in kwargs:
+        if len(args) > 0:
+            assert self._slurp is not None
+            assert self._slurp in self._arg_types
+            assert self._slurp not in kwargs
+            kwargs[self._slurp] = args
+
+        for k in self._arg_types.keys():
+            if not self._arg_types[k].optional and k not in kwargs:
                 raise Exception(f'Missing required property "{k}"')
             setattr(self, k, kwargs.get(k))
         self.validate()
     
     def __init_subclass__(cls, **kwargs):
-        cls.arg_types = {}
+        cls._arg_types = {}
         for attr in dir(cls):
-            if isinstance(getattr(cls, attr), Arg):
-                cls.arg_types[attr] = getattr(cls, attr)
+            arg = getattr(cls, attr)
+            if isinstance(arg, Arg):
+                cls._arg_types[attr] = arg
+        if cls._slurp:
+            assert cls._slurp in cls._arg_types, '_slurp must be set to a valid arg'
+            assert cls._arg_types[cls._slurp].many, '_slurp should only be set to an arg that allows many'
+            args_that_allow_many = [k for k, v in cls._arg_types.items() if v.many]
+            assert len(args_that_allow_many) == 1, '_slurp should only be set if there is only one arg that allows many to avoid ambiguity'
         
     def __deepcopy__(self, memo):
-        copy = self.__class__(**deepcopy(self.args))
+        copy = self.__class__(**deepcopy(self._args))
         if self._type is not None:
             copy._type = self._type.copy()
         if self._meta is not None:
@@ -47,7 +90,7 @@ class Expression:
     @property
     def hashable_args(self) -> frozenset[tuple]:
         args = []
-        for arg, values in self.args.items():
+        for arg, values in self._args.items():
             values = list_values(values)
             if len(values) == 0:
                 continue
@@ -64,18 +107,18 @@ class Expression:
     
     def validate(self, recurse=False) -> None:
         if self.parent:
-            assert self.arg_key is not None
-            assert self.arg_key in self.parent.args
-            assert self in list_values(self.parent.args[self.arg_key])
+            assert self._arg_key is not None
+            assert self._arg_key in self.parent._args
+            assert self in list_values(self.parent._args[self._arg_key])
         else:
-            assert self.arg_key is None
-        for arg, values in self.args.items():
+            assert self._arg_key is None
+        for arg, values in self._args.items():
             for val in list_values(values):
-                if self.arg_types[arg].type is not None and not isinstance(val, self.arg_types[arg].type):
-                    raise TypeError(f'Expected {arg} to be of type {self.arg_types[arg].type}, got {val}')
+                if self._arg_types[arg].type is not None and not isinstance(val, self._arg_types[arg].type):
+                    raise TypeError(f'Expected {arg} to be of type {self._arg_types[arg].type}, got {val}')
                 if isinstance(val, Expression):
                     assert val.parent is self
-                    assert val.arg_key == arg
+                    assert val._arg_key == arg
                     if recurse:
                         val.validate(recurse=recurse)
     
@@ -106,15 +149,9 @@ class Expression:
             expression = expression.parent
         return expression
     
-    def iter_props(self) -> t.Iterator[tuple[str, t.Any]]:
-        for key, values in self.args.items():
-            for val in list_values(values):
-                if not isinstance(val, Expression):
-                    yield key, val
-
     def iter_expressions(self) -> t.Iterator[Expression]:
         """ Yields the key and expression for all arguments, exploding list args. """
-        for values in self.args.values():
+        for values in self._args.values():
             for val in list_values(values):
                 if isinstance(val, Expression):
                     yield val
@@ -176,7 +213,7 @@ class Expression:
         """
         Replace children of an expression with the result of a lambda fun(child) -> exp.
         """
-        for k, values in self.args.items():
+        for k, values in self._args.items():
             new_args = []
             for val in list_values(values):
                 if isinstance(val, Expression):
@@ -203,7 +240,7 @@ class Expression:
 
         self.parent.replace_children(lambda child: expression if child is self else child)
         self.parent = None
-        self.arg_key = None
+        self._arg_key = None
         return expression
 
     def pop(self) -> Self:
@@ -218,10 +255,16 @@ class Expression:
     def to_xml(self, depth=0):
         indent = '  '*depth
         tag_name = self.__class__.__name__
-        props = [
-            f'{k}={repr(v)}'
-            for k,v in self.iter_props()
-        ]
+        props = []
+        for key, values in self._args.items():
+            values = [
+                val for val in list_values(values)
+                if not isinstance(val, Expression)
+            ]
+            if len(values):
+                if len(values) == 1 and not self._arg_types[key].many:
+                    values = values[0]
+                props.append(f'{key}={repr(values)}')
         props = ' ' + ' '.join(props) if len(props) else ''
         children = [
             expr.to_xml(depth=depth+1)
@@ -245,28 +288,28 @@ class Arg:
         self.many = many
     
     def __set_name__(self, owner: t.Type[Expression], name):
-        assert hasattr(owner, 'arg_types')
+        assert hasattr(owner, '_arg_types')
         self.name = name
    
     def __set__(self, instance: Expression, value):
         # remove parent of old args
-        for old_value in list_values(instance.args.get(self.name)):
+        for old_value in list_values(instance._args.get(self.name)):
             if isinstance(old_value, Expression):
                 old_value.parent = None
-                old_value.arg_key = None
+                old_value._arg_key = None
 
         # set parent of new args
         for new_value in list_values(value):
             if isinstance(new_value, Expression):
                 new_value.parent = instance
-                new_value.arg_key = self.name
+                new_value._arg_key = self.name
             
-        instance.args[self.name] = self.coerce_cardinality(value)
+        instance._args[self.name] = self.coerce_cardinality(value)
     
     def __get__(self, instance: t.Optional[Expression], owner=None):
         if instance is None:
             return self
-        return self.coerce_cardinality(instance.args.get(self.name))
+        return self.coerce_cardinality(instance._args.get(self.name))
 
     def coerce_cardinality(self, value):
         values = list_values(value)
@@ -309,6 +352,7 @@ class EdgeDefinition(Definition, Query):
 class TypesContainer(Expression):
     """ Abstract class for all AST nodes that have child type definitions """
     models: list[TypeDefinition] = Arg(type=TypeDefinition, many=True, optional=True)
+    _slurp = 'models'
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -321,6 +365,7 @@ class TypesContainer(Expression):
 class EdgesContainer(Expression):
     """ Abstract class for all AST nodes that have child edge definitions """
     edges: list[EdgeDefinition] = Arg(type=EdgeDefinition, many=True, optional=True)
+    _slurp = 'edges'
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -338,6 +383,7 @@ class TypeAlias(TypeDefinition, Query):
 
 class Index(Expression):
     names: list[str] = Arg(type=str, many=True)
+    _slurp = 'names'
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -351,6 +397,7 @@ class Index(Expression):
 
 class Model(TypeDefinition, TypesContainer, EdgesContainer):
     indexes: list[Index] = Arg(type=Index, many=True)
+    _slurp = None
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -360,22 +407,42 @@ class Model(TypeDefinition, TypesContainer, EdgesContainer):
                 if name not in edge_names:
                     raise ValueError(f'edge referenced in index not defined in model: {name}')
 
-class Call(Expression):
-    """ Abstract class for all AST nodes that call a function """
-    pass
-    
-class Binary(Call):
-    lhs = Arg(type=Expression)
-    rhs = Arg(type=Expression)
-
-class Add(Binary):
-    pass
-
-class Subtract(Binary):
-    pass
-
 class Literal(Expression):
     value: t.Union[int, float, str] = Arg(type=(int, float, str))
+
+class Identifier(Expression):
+    name: str = Arg(type=str)
+
+class EdgeIdentifier(Identifier):
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not EDGE_NAME_REGEX.match(self.name):
+            raise ValueError(f'Invalid edge name {self.name}')
+
+class TypeIdentifier(Identifier):
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not TYPE_NAME_REGEX.match(self.name):
+            raise ValueError(f'Invalid type name {self.name}')
+
+class Call(Expression):
+    """ Abstract class for all AST nodes that call a function """
+    fn: Expression = Arg(type=Expression)
+    args: list[Expression] = Arg(type=Expression, many=True, optional=True)
+    _slurp = 'args'
+    
+class Binary(Call):
+    """ Abstract class for all AST nodes that represent a binary operation """
+    op: Operator = Arg(type=Operator)
+    
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if len(self.args) != 2:
+            raise ValueError(f'Binary operation {self.op} expects 2 arguments, got {len(self.args)}')
+
+    @property
+    def fn(self):
+        return Identifier(name=f'${self.op.name.lower()}')
 
 def convert() -> Expression:
     """ Convert python value to Expression """
@@ -384,35 +451,32 @@ def convert() -> Expression:
 def evaluate(exp: Expression) -> t.Any:
     if isinstance(exp, Literal):
         return exp.value
-    if isinstance(exp, Add):
-        return exp.lhs + exp.rhs
-    if isinstance(exp, Subtract):
-        return exp.lhs - exp.rhs
+    if isinstance(exp, Binary):
+        return getattr(exp.args[0], exp.op.python_name)(exp.args[1])
 
 if __name__ == '__main__':
     a = Module(
-        models=[
-            Model(
-                name='Person',
-                indexes=[
-                    Index(names=['id']),
-                ],
-                edges=[
-                    EdgeDefinition(name='id', value=Literal(value=1)),
-                    EdgeDefinition(name='name', value=Literal(value='John')),
-                    EdgeDefinition(name='age', value=Literal(value=30)),
-                ],
-            ),
-            Model(
-                name='Company',
-                indexes=[
-                    Index(names=['name']),
-                ],
-                edges=[
-                    EdgeDefinition(name='name', value=Literal(value='Apple')),
-                    EdgeDefinition(name='location', value=Literal(value='Cupertino')),
-                ]
-            ),
-        ]
+        Model(
+            name='Person',
+            indexes=[
+                Index('id', 'name'),
+            ],
+            edges=[
+                EdgeDefinition(name='id', value=Literal(value=1)),
+                EdgeDefinition(name='name', value=Literal(value='John')),
+                EdgeDefinition(name='age', value=Literal(value=30)),
+            ],
+        ),
+        Model(
+            name='Company',
+            indexes=[
+                Index('name'),
+            ],
+            edges=[
+                EdgeDefinition(name='name', value=Literal(value='Apple')),
+                EdgeDefinition(name='location', value=Literal(value='Cupertino')),
+            ]
+        ),
     )
+    # a = Binary(Literal(value=1), Literal(value=2), op=Operator.ADD)
     print('hi')
