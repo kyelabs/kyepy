@@ -44,26 +44,6 @@ class Operator(enum.Enum):
     def python_name(self):
         return '__' + self.name.lower() + '__'
     
-    @property
-    def is_binary(self):
-        return not self.is_unary
-    
-    @property
-    def is_unary(self):
-        return self in (Operator.INVERT, Operator.NOT)
-    
-    @property
-    def is_comparison(self):
-        return self in (Operator.NE, Operator.EQ, Operator.LT, Operator.GT, Operator.LE, Operator.GE)
-
-    @property
-    def is_mathematical(self):
-        return self in (Operator.ADD, Operator.SUB, Operator.MUL, Operator.DIV, Operator.MOD)
-    
-    @property
-    def is_logical(self):
-        return self in (Operator.AND, Operator.OR, Operator.NOT)
-    
     def __repr__(self):
         return self.symbol
 
@@ -82,8 +62,6 @@ E = t.TypeVar('E')
 
 class Expression:
     _arg_types: dict[str, Arg] = {}
-    # The name of the argument that should slurp all positional arguments
-    _slurp: t.Optional[str] = None
 
     def __init__(self, *args, **kwargs):
         self.parent: t.Optional[Expression] = None
@@ -91,12 +69,6 @@ class Expression:
         self._arg_key: t.Optional[str] = None
         self._type = None
         self._meta: t.Optional[t.Dict[str, t.Any]] = None
-
-        if len(args) > 0:
-            assert self._slurp is not None
-            assert self._slurp in self._arg_types
-            assert self._slurp not in kwargs
-            kwargs[self._slurp] = args
 
         for k in self._arg_types.keys():
             if not self._arg_types[k].optional and k not in kwargs:
@@ -110,12 +82,7 @@ class Expression:
             arg = getattr(cls, attr)
             if isinstance(arg, Arg):
                 cls._arg_types[attr] = arg
-        if cls._slurp:
-            assert cls._slurp in cls._arg_types, '_slurp must be set to a valid arg'
-            assert cls._arg_types[cls._slurp].many, '_slurp should only be set to an arg that allows many'
-            args_that_allow_many = [k for k, v in cls._arg_types.items() if v.many]
-            assert len(args_that_allow_many) == 1, '_slurp should only be set if there is only one arg that allows many to avoid ambiguity'
-        
+
     def __deepcopy__(self, memo):
         copy = self.__class__(**deepcopy(self._args))
         if self._type is not None:
@@ -230,7 +197,7 @@ class Expression:
         """
         return self.bfs(prune=prune) if bfs else self.dfs(prune=prune)
 
-    def find_all(self, *types: t.Type[E], bfs: bool = True) -> t.Iterator[E]:
+    def findall(self, *types: t.Type[E], bfs: bool = True) -> t.Iterator[E]:
         """
         Returns a generator object which visits all nodes in this tree and only
         yields those that match at least one of the specified expression types.
@@ -244,7 +211,7 @@ class Expression:
         Returns the first node in this tree which matches at least one of
         the specified types.
         """
-        return next(self.find_all(*types, bfs=bfs), None)
+        return next(self.findall(*types, bfs=bfs), None)
 
     def replace_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> Self:
         """
@@ -376,7 +343,7 @@ class TypeDefinition(Definition):
         if not TYPE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid type name {self.name}')
 
-class EdgeDefinition(Definition, Query):
+class Edge(Definition, Query):
     cardinality: Cardinality = Arg(type=Cardinality, optional=True)
 
     def validate(self, **kwargs):
@@ -387,7 +354,6 @@ class EdgeDefinition(Definition, Query):
 class TypesContainer(Expression):
     """ Abstract class for all AST nodes that have child type definitions """
     models: list[TypeDefinition] = Arg(type=TypeDefinition, many=True, optional=True)
-    _slurp = 'models'
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -399,8 +365,7 @@ class TypesContainer(Expression):
 
 class EdgesContainer(Expression):
     """ Abstract class for all AST nodes that have child edge definitions """
-    edges: list[EdgeDefinition] = Arg(type=EdgeDefinition, many=True, optional=True)
-    _slurp = 'edges'
+    edges: list[Edge] = Arg(type=Edge, many=True, optional=True)
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -418,7 +383,6 @@ class TypeAlias(TypeDefinition, Query):
 
 class Index(Expression):
     names: list[str] = Arg(type=str, many=True)
-    _slurp = 'names'
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -432,7 +396,6 @@ class Index(Expression):
 
 class Model(TypeDefinition, TypesContainer, EdgesContainer):
     indexes: list[Index] = Arg(type=Index, many=True)
-    _slurp = None
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
@@ -461,42 +424,79 @@ class TypeIdentifier(Identifier):
             raise ValueError(f'Invalid type name {self.name}')
 
 class Call(Expression):
-    """ Abstract class for all AST nodes that call a function """
     fn: Expression = Arg(type=Expression)
     args: list[Expression] = Arg(type=Expression, many=True, optional=True)
-    _slurp = 'args'
-    _num_args = None
 
-    def validate(self, **kwargs):
-        super().validate(**kwargs)
-        if self._num_args is not None and len(self.args) != self._num_args:
-            raise ValueError(f'Expected {self._num_args} arguments, got {len(self.args)}')
-    
-    def __init_subclass__(cls, **kwargs):
-        if hasattr(cls, 'name'):
-            cls.fn = Identifier(name=cls.name)
-        return super().__init_subclass__(**kwargs)
-
-class Operation(Call):
-    op: Operator = Arg(type=Operator)
-
-    @property
-    def fn(self):
-        return Identifier(name=f'${self.op.name.lower()}')
+class Operation(Expression):
+    """ Abstract class for all AST nodes that represent an operation"""
+    op: Operator
 
 class UnaryOp(Operation):
-    _num_args = 1
-    def validate(self, **kwargs):
-        super().validate(**kwargs)
-        if not self.op.is_unary:
-            raise ValueError(f'Expected a unary operator, got {self.op}')
+    """ Abstract class for all AST nodes that represent a unary operation"""
+    value = Arg(type=Expression)
 
 class BinaryOp(Operation):
-    _num_args = 2
-    def validate(self, **kwargs):
-        super().validate(**kwargs)
-        if not self.op.is_binary:
-            raise ValueError(f'Expected a binary operator, got {self.op}')
+    """ Abstract class for all AST nodes that represent a binary operation"""
+    lhs = Arg(type=Expression)
+    rhs = Arg(type=Expression)
+
+class Dot(BinaryOp):
+    op = Operator.DOT
+
+class Invert(UnaryOp):
+    op = Operator.INVERT
+
+class Mul(BinaryOp):
+    op = Operator.MUL
+
+class Div(BinaryOp):
+    op = Operator.DIV
+
+class Mod(BinaryOp):
+    op = Operator.MOD
+
+class Add(BinaryOp):
+    op = Operator.ADD
+
+class Sub(BinaryOp):
+    op = Operator.SUB
+
+class Composite(BinaryOp):
+    pass
+
+class Intersection(Composite):
+    op = Operator.AND
+
+class Union(Composite):
+    op = Operator.OR
+
+class Not(UnaryOp):
+    op = Operator.NOT
+
+class Comparison(BinaryOp):
+    pass
+
+class Equals(Comparison):
+    op = Operator.EQ
+
+class NotEquals(Comparison):
+    op = Operator.NE
+
+class LessThan(Comparison):
+    op = Operator.LT
+
+class GreaterThan(Comparison):
+    op = Operator.GT
+
+class LessThanOrEquals(Comparison):
+    op = Operator.LE
+
+class GreaterThanOrEquals(Comparison):
+    op = Operator.GE
+
+class Filter(Expression):
+    type: Expression = Arg(type=Expression)
+    condition: Expression = Arg(type=Expression, many=True)
 
 def convert() -> Expression:
     """ Convert python value to Expression """
@@ -505,32 +505,34 @@ def convert() -> Expression:
 def evaluate(exp: Expression) -> t.Any:
     if isinstance(exp, Literal):
         return exp.value
-    if isinstance(exp, Operation) and exp.op.is_binary:
-        return getattr(exp.args[0], exp.op.python_name)(exp.args[1])
+    if isinstance(exp, BinaryOp):
+        return getattr(exp.lhs, exp.op.python_name)(exp.rhs)
 
 if __name__ == '__main__':
     a = Module(
-        Model(
-            name='Person',
-            indexes=[
-                Index('id', 'name'),
-            ],
-            edges=[
-                EdgeDefinition(name='id', value=Literal(value=1)),
-                EdgeDefinition(name='name', value=Literal(value='John')),
-                EdgeDefinition(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
-            ],
-        ),
-        Model(
-            name='Company',
-            indexes=[
-                Index('name'),
-            ],
-            edges=[
-                EdgeDefinition(name='name', value=Literal(value='Apple')),
-                EdgeDefinition(name='location', value=Literal(value='Cupertino')),
-            ]
-        ),
+        models=[
+            Model(
+                name='Person',
+                indexes=[
+                    Index(names=['id', 'name']),
+                ],
+                edges=[
+                    Edge(name='id', value=Literal(value=1)),
+                    Edge(name='name', value=Literal(value='John')),
+                    Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
+                ],
+            ),
+            Model(
+                name='Company',
+                indexes=[
+                    Index(names=['name']),
+                ],
+                edges=[
+                    Edge(name='name', value=Literal(value='Apple')),
+                    Edge(name='location', value=Literal(value='Cupertino')),
+                ]
+            ),
+        ]
     )
-    # a = Binary(Literal(value=1), Literal(value=2), op=Operator.ADD)
+    a = Add(lhs=Literal(value=1), rhs=Literal(value=2))
     print('hi')
