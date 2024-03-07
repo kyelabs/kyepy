@@ -4,14 +4,18 @@ from typing_extensions import Self
 from collections.abc import Iterable
 from collections import deque
 from copy import deepcopy
+import regex as re
 
-from inspired_by_sqlglot.iter_utils import list_values
+TYPE_NAME_REGEX = re.compile(r'[A-Z][a-z][a-zA-Z]*')
+EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
+
+from iter_utils import list_values
 
 T = t.TypeVar('T')
 E = t.TypeVar('E')
 
 class Expression:
-    arg_types: dict[str, Arg]
+    arg_types: dict[str, Arg] = {}
 
     def __init__(self, **kwargs):
         self.args = {}
@@ -24,7 +28,13 @@ class Expression:
             if not self.arg_types[k].optional and k not in kwargs:
                 raise Exception(f'Missing required property "{k}"')
             setattr(self, k, kwargs.get(k))
-        self.check_arg_types()
+        self.validate()
+    
+    def __init_subclass__(cls, **kwargs):
+        cls.arg_types = {}
+        for attr in dir(cls):
+            if isinstance(getattr(cls, attr), Arg):
+                cls.arg_types[attr] = getattr(cls, attr)
         
     def __deepcopy__(self, memo):
         copy = self.__class__(**deepcopy(self.args))
@@ -52,7 +62,13 @@ class Expression:
     def __hash__(self) -> int:
         return hash((self.__class__, self.hashable_args))
     
-    def check_arg_types(self, recurse=False) -> None:
+    def validate(self, recurse=False) -> None:
+        if self.parent:
+            assert self.arg_key is not None
+            assert self.arg_key in self.parent.args
+            assert self in list_values(self.parent.args[self.arg_key])
+        else:
+            assert self.arg_key is None
         for arg, values in self.args.items():
             for val in list_values(values):
                 if self.arg_types[arg].type is not None and not isinstance(val, self.arg_types[arg].type):
@@ -61,7 +77,7 @@ class Expression:
                     assert val.parent is self
                     assert val.arg_key == arg
                     if recurse:
-                        val.check_arg_types(recurse=recurse)
+                        val.validate(recurse=recurse)
     
     def copy(self) -> Self:
         """
@@ -229,12 +245,10 @@ class Arg:
         self.many = many
     
     def __set_name__(self, owner: t.Type[Expression], name):
+        assert hasattr(owner, 'arg_types')
         self.name = name
-        if not hasattr(owner, 'arg_types'):
-            owner.arg_types = {}
-        owner.arg_types = { **owner.arg_types, self.name: self }
    
-    def __set__(self, instance, value):
+    def __set__(self, instance: Expression, value):
         # remove parent of old args
         for old_value in list_values(instance.args.get(self.name)):
             if isinstance(old_value, Expression):
@@ -249,7 +263,9 @@ class Arg:
             
         instance.args[self.name] = self.coerce_cardinality(value)
     
-    def __get__(self, instance, owner=None):
+    def __get__(self, instance: t.Optional[Expression], owner=None):
+        if instance is None:
+            return self
         return self.coerce_cardinality(instance.args.get(self.name))
 
     def coerce_cardinality(self, value):
@@ -265,13 +281,90 @@ class Arg:
         
         return values
 
-class Model(Expression):
-    indexes = Arg(type=str)
+class Query(Expression):
+    """ Abstract class for all AST nodes who wrap an expression  """
+    value: Expression = Arg(type=Expression)
 
-class Func(Expression):
-    kwargs = Arg(type=str, optional=True, many=True)
+class Definition(Expression):
+    """ Abstract class for all AST nodes that define a name """
+    name: str = Arg(type=str)
 
-class Binary(Func):
+class TypeDefinition(Definition):
+    """ Abstract class for all AST nodes that define a type """
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not TYPE_NAME_REGEX.match(self.name):
+            raise ValueError(f'Invalid type name {self.name}')
+
+class EdgeDefinition(Definition, Query):
+    cardinality: str = Arg(type=str, optional=True)
+
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if self.cardinality and self.cardinality not in ('+', '?', '*', '!'):
+            raise ValueError(f'Invalid cardinality {self.cardinality}')
+        if not EDGE_NAME_REGEX.match(self.name):
+            raise ValueError(f'Invalid edge name {self.name}')
+
+class TypesContainer(Expression):
+    """ Abstract class for all AST nodes that have child type definitions """
+    models: list[TypeDefinition] = Arg(type=TypeDefinition, many=True, optional=True)
+
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        type_names = set()
+        for child in self.models:
+            if child.name in type_names:
+                raise ValueError(f'multiple definitions with same name: {child.name}')
+            type_names.add(child.name)
+
+class EdgesContainer(Expression):
+    """ Abstract class for all AST nodes that have child edge definitions """
+    edges: list[EdgeDefinition] = Arg(type=EdgeDefinition, many=True, optional=True)
+
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        type_names = set()
+        for child in self.edges:
+            if child.name in type_names:
+                raise ValueError(f'multiple definitions with same name: {child.name}')
+            type_names.add(child.name)
+
+class Module(TypesContainer):
+    pass
+
+class TypeAlias(TypeDefinition, Query):
+    pass
+
+class Index(Expression):
+    names: list[str] = Arg(type=str, many=True)
+
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        names_set = set()
+        for name in self.names:
+            if not EDGE_NAME_REGEX.match(name):
+                raise ValueError(f'Invalid edge name {name}')
+            if name in names_set:
+                raise ValueError(f'edge referenced multiple times in same index: {name}')
+            names_set.add(name)
+
+class Model(TypeDefinition, TypesContainer, EdgesContainer):
+    indexes: list[Index] = Arg(type=Index, many=True)
+
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        edge_names = {edge.name for edge in self.edges}
+        for idx in self.indexes:
+            for name in idx.names:
+                if name not in edge_names:
+                    raise ValueError(f'edge referenced in index not defined in model: {name}')
+
+class Call(Expression):
+    """ Abstract class for all AST nodes that call a function """
+    pass
+    
+class Binary(Call):
     lhs = Arg(type=Expression)
     rhs = Arg(type=Expression)
 
@@ -297,7 +390,29 @@ def evaluate(exp: Expression) -> t.Any:
         return exp.lhs - exp.rhs
 
 if __name__ == '__main__':
-    a1 = Func(kwargs=[])
-    a2 = Func(kwargs=[])
-    print(a1 == a2)
+    a = Module(
+        models=[
+            Model(
+                name='Person',
+                indexes=[
+                    Index(names=['id']),
+                ],
+                edges=[
+                    EdgeDefinition(name='id', value=Literal(value=1)),
+                    EdgeDefinition(name='name', value=Literal(value='John')),
+                    EdgeDefinition(name='age', value=Literal(value=30)),
+                ],
+            ),
+            Model(
+                name='Company',
+                indexes=[
+                    Index(names=['name']),
+                ],
+                edges=[
+                    EdgeDefinition(name='name', value=Literal(value='Apple')),
+                    EdgeDefinition(name='location', value=Literal(value='Cupertino')),
+                ]
+            ),
+        ]
+    )
     print('hi')
