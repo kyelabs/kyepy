@@ -340,12 +340,10 @@ class TypeDefinition(Definition):
             raise ValueError(f'Invalid type name {self.name}')
 
 class EdgeDefinition(Definition, Query):
-    cardinality: str = Arg(type=str, optional=True)
+    cardinality: Cardinality = Arg(type=Cardinality, optional=True)
 
     def validate(self, **kwargs):
         super().validate(**kwargs)
-        if self.cardinality and self.cardinality not in ('+', '?', '*', '!'):
-            raise ValueError(f'Invalid cardinality {self.cardinality}')
         if not EDGE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid edge name {self.name}')
 
@@ -464,7 +462,7 @@ if __name__ == '__main__':
             edges=[
                 EdgeDefinition(name='id', value=Literal(value=1)),
                 EdgeDefinition(name='name', value=Literal(value='John')),
-                EdgeDefinition(name='age', value=Literal(value=30)),
+                EdgeDefinition(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
             ],
         ),
         Model(
