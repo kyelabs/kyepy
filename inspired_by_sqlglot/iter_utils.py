@@ -1,5 +1,6 @@
 from __future__ import annotations
 import typing as t
+from collections import deque
 
 T = t.TypeVar('T')
 
@@ -20,3 +21,25 @@ def list_values(values):
         return [v for v in values if v is not None]
     else:
         return [ values ]
+
+
+def walk_dfs(node: T, iterator:t.Callable[[T], t.Iterator[T]]) -> t.Iterator[T]:
+    """
+    Returns a generator object which visits all nodes in this tree in
+    the DFS (Depth-first) order.
+    """
+    yield node
+    for child in iterator(node):
+        yield from walk_dfs(child, iterator)
+
+def walk_bfs(node: T, iterator:t.Callable[[T], t.Iterator[T]]) -> t.Iterator[T]:
+    """
+    Returns a generator object which visits all nodes in this tree in
+    the BFS (Breadth-first) order.
+    """
+    queue = deque([node])
+    while queue:
+        item = queue.popleft()
+        yield item
+        for v in iterator(item):
+            queue.append(v)
