@@ -1,13 +1,11 @@
 from __future__ import annotations
 import typing as t
 from typing_extensions import Self
-from collections.abc import Iterable
-from collections import deque
 from copy import deepcopy
 import regex as re
 import enum
 
-from iter_utils import list_values
+from iter_utils import list_values, walk_bfs, walk_dfs
 
 TYPE_NAME_REGEX = re.compile(r'[A-Z][a-z][a-zA-Z]*')
 EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
@@ -160,58 +158,48 @@ class Expression:
                 if isinstance(val, Expression):
                     yield val
     
-    def dfs(self, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
-        """
-        Returns a generator object which visits all nodes in this tree in
-        the DFS (Depth-first) order.
-        """
-        yield self
-        if prune and prune(self):
-            return
-        for v in self.iter_expressions():
-            yield from v.dfs(prune)
-
-    def bfs(self, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
-        """
-        Returns a generator object which visits all nodes in this tree in
-        the BFS (Breadth-first) order.
-        """
-        queue = deque([self])
-        while queue:
-            item = queue.popleft()
-            yield item
-            if prune and prune(item):
-                continue
-            for v in item.iter_expressions():
-                queue.append(v)
-    
-    def walk(self, bfs: bool=True, prune:t.Callable[[Expression], bool]=None) -> t.Iterator[Expression]:
+    def walk(self, bfs: bool=True, within_scope: bool=False) -> t.Iterator[Expression]:
         """
         Returns a generator object which visits all nodes in this tree.
 
         Args:
             bfs (bool): if set to True the BFS traversal order will be applied,
                 otherwise the DFS traversal will be used instead.
-            prune ((node) -> bool): callable that returns True if
-                the generator should stop traversing this branch of the tree.
+            within_scope (bool): if set to True, the walk will stop at scope boundaries
         """
-        return self.bfs(prune=prune) if bfs else self.dfs(prune=prune)
+        def iterator(node: Expression) -> t.Iterator[Expression]:
+            # if within_scope is set and this node is a scope boundary,
+            # only walk the root arg of the scope boundary
+            if within_scope and isinstance(node, ScopeBoundary) and not node == self:
+                if node._root_arg:
+                    return list_values(getattr(node, node._root_arg))
+                else:
+                    return []
+            return node.iter_expressions()
+        return walk_bfs(self, iterator=iterator) if bfs else walk_dfs(self, iterator=iterator)
 
-    def findall(self, *types: t.Type[E], bfs: bool = True) -> t.Iterator[E]:
+    def findall(self, *types: t.Type[E], bfs: bool = True, within_scope: bool=False) -> t.Iterator[E]:
         """
         Returns a generator object which visits all nodes in this tree and only
         yields those that match at least one of the specified expression types.
         """
-        for expression in self.walk(bfs=bfs):
+        for expression in self.walk(bfs=bfs, within_scope=within_scope):
             if isinstance(expression, types):
                 yield expression
     
-    def find(self, *types: t.Type[E], bfs: bool = True) -> t.Optional[E]:
+    def find(self, *types: t.Type[E], bfs: bool = True, within_scope: bool=False) -> t.Optional[E]:
         """
         Returns the first node in this tree which matches at least one of
         the specified types.
         """
-        return next(self.findall(*types, bfs=bfs), None)
+        return next(self.findall(*types, bfs=bfs, within_scope=within_scope), None)
+    
+    def scope(self) -> t.Optional[Expression]:
+        """ Returns the nearest scope boundary """
+        scope = self.find_ancestor(ScopeBoundary).root
+        if scope == self:
+            return self.parent.scope()
+        return scope
 
     def replace_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> Self:
         """
@@ -328,6 +316,16 @@ class Arg:
         
         return values
 
+class ScopeBoundary(Expression):
+    """ Tells walk function to stop at this node when set to only walk within scope """
+    _root_arg = None
+
+    @property
+    def root(self):
+        if self._root_arg is None:
+            return self
+        return getattr(self, self._root_arg)
+
 class Query(Expression):
     """ Abstract class for all AST nodes who wrap an expression  """
     value: Expression = Arg(type=Expression)
@@ -375,7 +373,7 @@ class EdgesContainer(Expression):
                 raise ValueError(f'multiple definitions with same name: {child.name}')
             type_names.add(child.name)
 
-class Module(TypesContainer):
+class Module(TypesContainer, ScopeBoundary):
     pass
 
 class TypeAlias(TypeDefinition, Query):
@@ -394,7 +392,7 @@ class Index(Expression):
                 raise ValueError(f'edge referenced multiple times in same index: {name}')
             names_set.add(name)
 
-class Model(TypeDefinition, TypesContainer, EdgesContainer):
+class Model(TypeDefinition, TypesContainer, EdgesContainer, ScopeBoundary):
     indexes: list[Index] = Arg(type=Index, many=True)
 
     def validate(self, **kwargs):
@@ -440,8 +438,9 @@ class BinaryOp(Operation):
     lhs = Arg(type=Expression)
     rhs = Arg(type=Expression)
 
-class Dot(BinaryOp):
+class Dot(BinaryOp, ScopeBoundary):
     op = Operator.DOT
+    _root_arg = 'lhs'
 
 class Invert(UnaryOp):
     op = Operator.INVERT
@@ -494,9 +493,10 @@ class LessThanOrEquals(Comparison):
 class GreaterThanOrEquals(Comparison):
     op = Operator.GE
 
-class Filter(Expression):
+class Filter(ScopeBoundary):
     type: Expression = Arg(type=Expression)
     condition: Expression = Arg(type=Expression, many=True)
+    _root_arg = 'type'
 
 def convert() -> Expression:
     """ Convert python value to Expression """
@@ -528,11 +528,15 @@ if __name__ == '__main__':
                     Index(names=['name']),
                 ],
                 edges=[
-                    Edge(name='name', value=Literal(value='Apple')),
+                    Edge(name='name', value=Dot(
+                        lhs=Identifier(name='location'),
+                        rhs=Identifier(name='name')
+                    )),
                     Edge(name='location', value=Literal(value='Cupertino')),
                 ]
             ),
         ]
     )
-    a = Add(lhs=Literal(value=1), rhs=Literal(value=2))
+    for exp in a.models[1].findall(Identifier):
+        print(exp, exp.scope())
     print('hi')
