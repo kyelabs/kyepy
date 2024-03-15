@@ -4,6 +4,7 @@ from typing_extensions import Self
 from copy import deepcopy
 import regex as re
 import enum
+from collections import OrderedDict
 
 from iter_utils import list_values, walk_bfs, walk_dfs
 
@@ -59,7 +60,7 @@ T = t.TypeVar('T')
 E = t.TypeVar('E')
 
 class Expression:
-    _arg_types: dict[str, Arg] = {}
+    _arg_types: OrderedDict[str, Arg] = {}
 
     def __init__(self, *args, **kwargs):
         self.parent: t.Optional[Expression] = None
@@ -75,11 +76,23 @@ class Expression:
         self.validate()
     
     def __init_subclass__(cls, **kwargs):
-        cls._arg_types = {}
-        for attr in dir(cls):
-            arg = getattr(cls, attr)
-            if isinstance(arg, Arg):
-                cls._arg_types[attr] = arg
+        cls._arg_types = OrderedDict()
+        mro = list(cls.mro())
+        # Get attributes that are instances of Arg
+        args = [
+            getattr(cls, attr)
+            for attr in dir(cls)
+            if isinstance(getattr(cls, attr), Arg)
+        ]
+        # Key the args by their order
+        args = {
+            (mro.index(arg.owner), arg.order): arg
+            for arg in args
+        }
+        # Set the args to the _arg_types attribute
+        # in the correct order
+        for order in sorted(args.keys()):
+            cls._arg_types[args[order].name] = args[order]
 
     def __deepcopy__(self, memo):
         copy = self.__class__(**deepcopy(self._args))
@@ -278,10 +291,18 @@ class Arg:
         self.type = type
         self.optional = optional
         self.many = many
+        self.order = None
+        self.owner = None
     
     def __set_name__(self, owner: t.Type[Expression], name):
-        assert hasattr(owner, '_arg_types')
+        assert issubclass(owner, Expression)
         self.name = name
+        # The _arg_types property will be overwritten by the __init_subclass__ method
+        # we are just using it temporarily to calculate the order of the args
+        owner._arg_types = {**owner._arg_types, name: self}
+        self.order = len(owner._arg_types)
+        self.owner = owner
+        
    
     def __set__(self, instance: Expression, value):
         # remove parent of old args
@@ -392,7 +413,7 @@ class Index(Expression):
                 raise ValueError(f'edge referenced multiple times in same index: {name}')
             names_set.add(name)
 
-class Model(TypeDefinition, TypesContainer, EdgesContainer, ScopeBoundary):
+class Model(TypeDefinition, EdgesContainer, TypesContainer, ScopeBoundary):
     indexes: list[Index] = Arg(type=Index, many=True)
 
     def validate(self, **kwargs):
@@ -515,39 +536,39 @@ def evaluate(exp: Expression) -> t.Any:
         return getattr(exp.lhs, exp.op.python_name)(exp.rhs)
 
 if __name__ == '__main__':
-    # a = Module(
-    #     models=[
-    #         Model(
-    #             name='Company',
-    #             indexes=[
-    #                 Index(names=['name']),
-    #             ],
-    #             edges=[
-    #                 Edge(name='name', value=Dot(
-    #                     lhs=Identifier(name='location'),
-    #                     rhs=Identifier(name='name')
-    #                 )),
-    #                 Edge(name='location', value=Literal(value='Cupertino')),
-    #             ],
-    #             models=[
-    #                 Model(
-    #                     name='Person',
-    #                     indexes=[
-    #                         Index(names=['id', 'name']),
-    #                     ],
-    #                     edges=[
-    #                         Edge(name='id', value=Literal(value=1)),
-    #                         Edge(name='name', value=Dot(
-    #                             lhs=Identifier(name='id'),
-    #                             rhs=Identifier(name='name')
-    #                         )),
-    #                         Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
-    #                     ],
-    #                 ),
-    #             ]
-    #         ),
-    #     ]
-    # )
+    a = Module(
+        models=[
+            Model(
+                name='Company',
+                indexes=[
+                    Index(names=['name']),
+                ],
+                edges=[
+                    Edge(name='name', value=Dot(
+                        lhs=Identifier(name='location'),
+                        rhs=Identifier(name='name')
+                    )),
+                    Edge(name='location', value=Literal(value='Cupertino')),
+                ],
+                models=[
+                    Model(
+                        name='Person',
+                        indexes=[
+                            Index(names=['id', 'name']),
+                        ],
+                        edges=[
+                            Edge(name='id', value=Literal(value=1)),
+                            Edge(name='name', value=Dot(
+                                lhs=Identifier(name='id'),
+                                rhs=Identifier(name='name')
+                            )),
+                            Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
+                        ],
+                    ),
+                ]
+            ),
+        ]
+    )
     def replace_operators_with_invocations(exp: Expression) -> Expression:
         if isinstance(exp, UnaryOp):
             return Invocation(
@@ -561,8 +582,8 @@ if __name__ == '__main__':
             )
         return exp
 
-    a = Edge(name='name', value=Add(lhs=Literal(value=1), rhs=Literal(value=2)))
     a.transform(replace_operators_with_invocations)
+    # a = Edge(name='name', value=Add(lhs=Literal(value=1), rhs=Literal(value=2)))
 
 
     # for exp in a.models[1].findall(Identifier):
