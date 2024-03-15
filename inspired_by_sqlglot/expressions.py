@@ -425,7 +425,29 @@ class Model(TypeDefinition, EdgesContainer, TypesContainer, ScopeBoundary):
                     raise ValueError(f'edge referenced in index not defined in model: {name}')
 
 class Literal(Expression):
-    value: t.Union[int, float, str] = Arg(type=(int, float, str))
+    """ Abstract class for all AST nodes that represent a literal value """
+    value = Arg(type=(int, float, str, bool))
+
+class String(Literal):
+    value: str = Arg(type=str)
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not isinstance(self.value, str):
+            raise ValueError(f'Expected string, got {self.value}')
+
+class Number(Literal):
+    value: t.Union[int, float] = Arg(type=(int, float))
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not isinstance(self.value, (int, float)):
+            raise ValueError(f'Expected number, got {self.value}')
+
+class Boolean(Literal):
+    value: bool = Arg(type=bool)
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if not isinstance(self.value, bool):
+            raise ValueError(f'Expected boolean, got {self.value}')
 
 class Identifier(Expression):
     name: str = Arg(type=str)
@@ -548,7 +570,7 @@ if __name__ == '__main__':
                         lhs=Identifier(name='location'),
                         rhs=Identifier(name='name')
                     )),
-                    Edge(name='location', value=Literal(value='Cupertino')),
+                    Edge(name='location', value=String(value='Cupertino')),
                 ],
                 models=[
                     Model(
@@ -557,18 +579,27 @@ if __name__ == '__main__':
                             Index(names=['id', 'name']),
                         ],
                         edges=[
-                            Edge(name='id', value=Literal(value=1)),
+                            Edge(name='id', value=Number(value=1)),
                             Edge(name='name', value=Dot(
                                 lhs=Identifier(name='id'),
                                 rhs=Identifier(name='name')
                             )),
-                            Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
+                            Edge(name='age', value=Number(value=30), cardinality=Cardinality.ONE),
                         ],
                     ),
                 ]
             ),
         ]
     )
+    def replace_dot_with_get(exp: Expression) -> Expression:
+        if isinstance(exp, Dot):
+            if isinstance(exp.rhs, Identifier):
+                exp.rhs = String(value=exp.rhs.name)
+            return Invocation(
+                fn=EdgeIdentifier(name='get'),
+                args=[exp.lhs, exp.rhs]
+            )
+        return exp
     def replace_operators_with_invocations(exp: Expression) -> Expression:
         if isinstance(exp, UnaryOp):
             return Invocation(
@@ -582,8 +613,15 @@ if __name__ == '__main__':
             )
         return exp
 
+    a = Edge(name='city', value=Dot(
+        lhs=Dot(
+            lhs=TypeIdentifier(name='School'),
+            rhs=EdgeIdentifier(name='location')
+        ),
+        rhs=EdgeIdentifier(name='city')
+        ))
+    a.transform(replace_dot_with_get)
     a.transform(replace_operators_with_invocations)
-    # a = Edge(name='name', value=Add(lhs=Literal(value=1), rhs=Literal(value=2)))
 
 
     # for exp in a.models[1].findall(Identifier):
