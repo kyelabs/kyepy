@@ -15,6 +15,7 @@ EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
 class Operator(enum.Enum):
     #      symbol, precedence
     DOT    = '.',  0
+    FILTER = '[]', 0
     INVERT = '~',  1
     MUL    = '*',  2
     DIV    = '/',  2
@@ -207,12 +208,9 @@ class Expression:
         """
         return next(self.findall(*types, bfs=bfs, within_scope=within_scope), None)
     
-    def scope(self) -> t.Optional[Expression]:
+    def scope(self) -> t.Optional[ScopeBoundary]:
         """ Returns the nearest scope boundary """
-        scope = self.find_ancestor(ScopeBoundary).root
-        if scope == self:
-            return self.parent.scope()
-        return scope
+        return self.find_ancestor(ScopeBoundary)
 
     def replace_children(self, fun: t.Callable[[Expression], t.Any], *args, **kwargs) -> Self:
         """
@@ -347,6 +345,30 @@ class ScopeBoundary(Expression):
             return self
         return getattr(self, self._root_arg)
 
+    def resolve_type(self, name: str) -> t.Optional[TypeDefinition]:
+        if isinstance(self, TypesContainer):
+            for model in self.models:
+                if model.name == name:
+                    return model
+        parent_container = self.find_ancestor(ScopeBoundary)
+        if parent_container:
+            return parent_container.resolve_type(name)
+        return None
+
+    def resolve_edge(self, name: str) -> t.Optional[Edge]:
+        if isinstance(self, Filter):
+            if name == 'this':
+                return self.scope()
+            return self.type.resolve().resolve_edge(name)
+        if isinstance(self, EdgesContainer):
+            for edge in self.edges:
+                if edge.name == name:
+                    return edge
+        parent_container = self.find_ancestor(ScopeBoundary)
+        if parent_container:
+            return parent_container.resolve_edge(name)
+        return None
+
 class Query(Expression):
     """ Abstract class for all AST nodes who wrap an expression  """
     value: Expression = Arg(type=Expression)
@@ -464,11 +486,24 @@ class TypeIdentifier(Identifier):
         if not TYPE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid type name {self.name}')
 
+    def resolve(self) -> t.Optional[TypeDefinition]:
+        container = self.scope()
+        if container:
+            return container.resolve_type(self.name)
+        return None
+
 class OperatorIdentifier(Identifier):
     def validate(self, **kwargs):
         super().validate(**kwargs)
         if self.name not in {op.name for op in Operator}:
             raise ValueError(f'Invalid operator name {self.name}')
+
+class This(Identifier):
+    name = 'this'
+
+class Lambda(ScopeBoundary):
+    args: list[str] = Arg(type=str, many=True, optional=True)
+    body: Expression = Arg(type=Expression)
 
 class Invocation(Expression):
     fn: Expression = Arg(type=Expression)
@@ -487,9 +522,8 @@ class BinaryOp(Operation):
     lhs: Expression = Arg(type=Expression)
     rhs: Expression = Arg(type=Expression)
 
-class Dot(BinaryOp, ScopeBoundary):
+class Dot(BinaryOp):
     op = Operator.DOT
-    _root_arg = 'lhs'
 
 class Invert(UnaryOp):
     op = Operator.INVERT
@@ -544,7 +578,7 @@ class GreaterThanOrEquals(Comparison):
 
 class Filter(ScopeBoundary):
     type: Expression = Arg(type=Expression)
-    condition: Expression = Arg(type=Expression, many=True)
+    condition: list[Expression] = Arg(type=Expression, many=True, optional=True)
     _root_arg = 'type'
 
 def convert() -> Expression:
@@ -591,15 +625,23 @@ if __name__ == '__main__':
             ),
         ]
     )
-    def replace_dot_with_get(exp: Expression) -> Expression:
-        if isinstance(exp, Dot):
-            if isinstance(exp.rhs, Identifier):
-                exp.rhs = String(value=exp.rhs.name)
-            return Invocation(
-                fn=EdgeIdentifier(name='get'),
-                args=[exp.lhs, exp.rhs]
-            )
+
+    def replace_filter(exp: Expression) -> Expression:
+        if isinstance(exp, Filter):
+            nested = exp.type
+            for cond in exp.condition:
+                for edge in cond.findall(EdgeIdentifier, within_scope=True):
+                    edge.replace(Invocation(
+                        fn=OperatorIdentifier(name=Operator.DOT.name),
+                        args=[This(), String(value=edge.name)]
+                    ))
+                nested = Invocation(
+                    fn=OperatorIdentifier(name=Operator.FILTER.name),
+                    args=[nested, cond]
+                )
+            return nested
         return exp
+    
     def replace_operators_with_invocations(exp: Expression) -> Expression:
         if isinstance(exp, UnaryOp):
             return Invocation(
@@ -607,6 +649,8 @@ if __name__ == '__main__':
                 args=[exp.value]
             )
         if isinstance(exp, BinaryOp):
+            if isinstance(exp, Dot) and isinstance(exp.rhs, Identifier):
+                exp.rhs = String(value=exp.rhs.name)
             return Invocation(
                 fn=OperatorIdentifier(name=exp.op.name),
                 args=[exp.lhs, exp.rhs]
@@ -620,7 +664,17 @@ if __name__ == '__main__':
         ),
         rhs=EdgeIdentifier(name='city')
         ))
-    a.transform(replace_dot_with_get)
+
+    a = Edge(name='name', value=Filter(
+        type=TypeIdentifier(name='String'),
+        condition=[
+            LessThan(
+                lhs=EdgeIdentifier(name='length'),
+                rhs=Number(value=30)
+            ),
+        ]
+    ))
+    a.transform(replace_filter)
     a.transform(replace_operators_with_invocations)
 
 
