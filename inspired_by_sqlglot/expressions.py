@@ -22,13 +22,13 @@ class Operator(enum.Enum):
     SUB    = '-',  3
     AND    = '&',  4
     OR     = '|',  4
-    NOT    = '!',  4
-    NE     = '!=', 5
-    EQ     = '==', 5
-    LT     = '<',  5
-    GT     = '>',  5
-    LE     = '<=', 5
-    GE     = '>=', 5
+    NOT    = '!',  5
+    NE     = '!=', 6
+    EQ     = '==', 6
+    LT     = '<',  6
+    GT     = '>',  6
+    LE     = '<=', 6
+    GE     = '>=', 6
 
     @property
     def symbol(self):
@@ -421,7 +421,13 @@ class TypeIdentifier(Identifier):
         if not TYPE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid type name {self.name}')
 
-class Call(Expression):
+class OperatorIdentifier(Identifier):
+    def validate(self, **kwargs):
+        super().validate(**kwargs)
+        if self.name not in {op.name for op in Operator}:
+            raise ValueError(f'Invalid operator name {self.name}')
+
+class Invocation(Expression):
     fn: Expression = Arg(type=Expression)
     args: list[Expression] = Arg(type=Expression, many=True, optional=True)
 
@@ -431,12 +437,12 @@ class Operation(Expression):
 
 class UnaryOp(Operation):
     """ Abstract class for all AST nodes that represent a unary operation"""
-    value = Arg(type=Expression)
+    value: Expression = Arg(type=Expression)
 
 class BinaryOp(Operation):
     """ Abstract class for all AST nodes that represent a binary operation"""
-    lhs = Arg(type=Expression)
-    rhs = Arg(type=Expression)
+    lhs: Expression = Arg(type=Expression)
+    rhs: Expression = Arg(type=Expression)
 
 class Dot(BinaryOp, ScopeBoundary):
     op = Operator.DOT
@@ -509,34 +515,57 @@ def evaluate(exp: Expression) -> t.Any:
         return getattr(exp.lhs, exp.op.python_name)(exp.rhs)
 
 if __name__ == '__main__':
-    a = Module(
-        models=[
-            Model(
-                name='Person',
-                indexes=[
-                    Index(names=['id', 'name']),
-                ],
-                edges=[
-                    Edge(name='id', value=Literal(value=1)),
-                    Edge(name='name', value=Literal(value='John')),
-                    Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
-                ],
-            ),
-            Model(
-                name='Company',
-                indexes=[
-                    Index(names=['name']),
-                ],
-                edges=[
-                    Edge(name='name', value=Dot(
-                        lhs=Identifier(name='location'),
-                        rhs=Identifier(name='name')
-                    )),
-                    Edge(name='location', value=Literal(value='Cupertino')),
-                ]
-            ),
-        ]
-    )
-    for exp in a.models[1].findall(Identifier):
-        print(exp, exp.scope())
+    # a = Module(
+    #     models=[
+    #         Model(
+    #             name='Company',
+    #             indexes=[
+    #                 Index(names=['name']),
+    #             ],
+    #             edges=[
+    #                 Edge(name='name', value=Dot(
+    #                     lhs=Identifier(name='location'),
+    #                     rhs=Identifier(name='name')
+    #                 )),
+    #                 Edge(name='location', value=Literal(value='Cupertino')),
+    #             ],
+    #             models=[
+    #                 Model(
+    #                     name='Person',
+    #                     indexes=[
+    #                         Index(names=['id', 'name']),
+    #                     ],
+    #                     edges=[
+    #                         Edge(name='id', value=Literal(value=1)),
+    #                         Edge(name='name', value=Dot(
+    #                             lhs=Identifier(name='id'),
+    #                             rhs=Identifier(name='name')
+    #                         )),
+    #                         Edge(name='age', value=Literal(value=30), cardinality=Cardinality.ONE),
+    #                     ],
+    #                 ),
+    #             ]
+    #         ),
+    #     ]
+    # )
+    def replace_operators_with_invocations(exp: Expression) -> Expression:
+        if isinstance(exp, UnaryOp):
+            return Invocation(
+                fn=OperatorIdentifier(name=exp.op.name),
+                args=[exp.value]
+            )
+        if isinstance(exp, BinaryOp):
+            return Invocation(
+                fn=OperatorIdentifier(name=exp.op.name),
+                args=[exp.lhs, exp.rhs]
+            )
+        return exp
+
+    a = Edge(name='name', value=Add(lhs=Literal(value=1), rhs=Literal(value=2)))
+    a.transform(replace_operators_with_invocations)
+
+
+    # for exp in a.models[1].findall(Identifier):
+    #     print(exp, exp.scope())
+    print(a)
     print('hi')
