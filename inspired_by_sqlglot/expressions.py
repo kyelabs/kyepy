@@ -60,6 +60,16 @@ class Cardinality(enum.Enum):
 T = t.TypeVar('T')
 E = t.TypeVar('E')
 
+def abstract(abstract_cls):
+    @staticmethod
+    def __new__(cls, *args, **kwargs):
+        if cls is abstract_cls:
+            raise TypeError(f"Cannot instantiate abstract class '{cls.__name__}'")
+        return super(abstract_cls, cls).__new__(cls)
+    abstract_cls.__new__ = __new__
+    return abstract_cls
+
+@abstract
 class Expression:
     _arg_types: OrderedDict[str, Arg] = {}
 
@@ -335,6 +345,7 @@ class Arg:
         
         return values
 
+@abstract
 class ScopeBoundary(Expression):
     """ Tells walk function to stop at this node when set to only walk within scope """
     _root_arg = None
@@ -369,14 +380,17 @@ class ScopeBoundary(Expression):
             return parent_container.resolve_edge(name)
         return None
 
+@abstract
 class Query(Expression):
     """ Abstract class for all AST nodes who wrap an expression  """
     value: Expression = Arg(type=Expression)
 
+@abstract
 class Definition(Expression):
     """ Abstract class for all AST nodes that define a name """
     name: str = Arg(type=str)
 
+@abstract
 class TypeDefinition(Definition):
     """ Abstract class for all AST nodes that define a type """
     def validate(self, **kwargs):
@@ -392,6 +406,7 @@ class Edge(Definition, Query):
         if not EDGE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid edge name {self.name}')
 
+@abstract
 class TypesContainer(Expression):
     """ Abstract class for all AST nodes that have child type definitions """
     models: list[TypeDefinition] = Arg(type=TypeDefinition, many=True, optional=True)
@@ -404,6 +419,7 @@ class TypesContainer(Expression):
                 raise ValueError(f'multiple definitions with same name: {child.name}')
             type_names.add(child.name)
 
+@abstract
 class EdgesContainer(Expression):
     """ Abstract class for all AST nodes that have child edge definitions """
     edges: list[Edge] = Arg(type=Edge, many=True, optional=True)
@@ -415,6 +431,7 @@ class EdgesContainer(Expression):
             if child.name in type_names:
                 raise ValueError(f'multiple definitions with same name: {child.name}')
             type_names.add(child.name)
+
 
 class Module(TypesContainer, ScopeBoundary):
     pass
@@ -446,6 +463,7 @@ class Model(TypeDefinition, EdgesContainer, TypesContainer, ScopeBoundary):
                 if name not in edge_names:
                     raise ValueError(f'edge referenced in index not defined in model: {name}')
 
+@abstract
 class Literal(Expression):
     """ Abstract class for all AST nodes that represent a literal value """
     value = Arg(type=(int, float, str, bool))
@@ -471,6 +489,7 @@ class Boolean(Literal):
         if not isinstance(self.value, bool):
             raise ValueError(f'Expected boolean, got {self.value}')
 
+@abstract
 class Identifier(Expression):
     name: str = Arg(type=str)
 
@@ -509,14 +528,18 @@ class Invocation(Expression):
     fn: Expression = Arg(type=Expression)
     args: list[Expression] = Arg(type=Expression, many=True, optional=True)
 
+
+@abstract
 class Operation(Expression):
     """ Abstract class for all AST nodes that represent an operation"""
     op: Operator
 
+@abstract
 class UnaryOp(Operation):
     """ Abstract class for all AST nodes that represent a unary operation"""
     value: Expression = Arg(type=Expression)
 
+@abstract
 class BinaryOp(Operation):
     """ Abstract class for all AST nodes that represent a binary operation"""
     lhs: Expression = Arg(type=Expression)
@@ -601,8 +624,8 @@ if __name__ == '__main__':
                 ],
                 edges=[
                     Edge(name='name', value=Dot(
-                        lhs=Identifier(name='location'),
-                        rhs=Identifier(name='name')
+                        lhs=EdgeIdentifier(name='location'),
+                        rhs=EdgeIdentifier(name='name')
                     )),
                     Edge(name='location', value=String(value='Cupertino')),
                 ],
@@ -615,8 +638,8 @@ if __name__ == '__main__':
                         edges=[
                             Edge(name='id', value=Number(value=1)),
                             Edge(name='name', value=Dot(
-                                lhs=Identifier(name='id'),
-                                rhs=Identifier(name='name')
+                                lhs=EdgeIdentifier(name='id'),
+                                rhs=EdgeIdentifier(name='name')
                             )),
                             Edge(name='age', value=Number(value=30), cardinality=Cardinality.ONE),
                         ],
@@ -672,6 +695,10 @@ if __name__ == '__main__':
                 lhs=EdgeIdentifier(name='length'),
                 rhs=Number(value=30)
             ),
+            GreaterThan(
+                lhs=EdgeIdentifier(name='length'),
+                rhs=Number(value=10)
+            )
         ]
     ))
     a.transform(replace_filter)
