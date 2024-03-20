@@ -55,6 +55,12 @@ class Cardinality(enum.Enum):
     MAYBE = '?'
     MANY = '*'
     MORE = '+'
+
+    def nullable(self) -> bool:
+        return self in (self.MAYBE, self.MANY)
+
+    def multiple(self) -> bool:
+        return self in (self.MANY, self.MORE)
     
     def __repr__(self):
         return self.value
@@ -304,6 +310,67 @@ class Expression:
         else:
             return f'{indent}<{tag_name}{props}>{children}\n{indent}<{tag_name}/>'
     
+    def compile(self):
+        if isinstance(self, Module):
+            return {
+                'models': {
+                    exp.ref: exp.compile()
+                    for exp in self.models
+                }
+            }
+        if isinstance(self, Model):
+            compiled = {
+                'indexes': [
+                    idx.names for idx
+                    in self.indexes
+                ],
+                'edges': {
+                    edge.name + (edge.cardinality.value if edge.cardinality else ''): edge.compile()
+                    for edge in self.edges
+                },
+                'assert': [
+                    assertion.compile()
+                    for assertion in self.assertions
+                ]
+            }
+            if len(compiled['indexes']) == 1:
+                compiled['index'] = compiled['indexes'][0]
+                del compiled['indexes']
+                if len(compiled['index']) == 1:
+                    compiled['index'] = compiled['index'][0]
+            if len(compiled['assert']) == 0:
+                del compiled['assert']
+            if len(compiled['edges']) == 0:
+                del compiled['edges']
+            return compiled
+        if isinstance(self, Edge):
+            if isinstance(self.value, TypeIdentifier):
+                return self.value.name
+            compiled = {
+                'query': self.value.compile(),
+            }
+            return compiled
+        if isinstance(self, Literal):
+            return self.value
+        if isinstance(self, TypeIdentifier):
+            return { 'select': self.name }
+        if isinstance(self, EdgeIdentifier):
+            return { 'get', self.name }
+        if isinstance(self, Self):
+            return { 'self': None }
+        if isinstance(self, UnaryOp):
+            return { self.op.name.lower(): self.value.compile() }
+        if isinstance(self, Filter):
+            node = self.value.compile()
+            for cond in self.conditions:
+                node = { 'filter': [node, cond.compile()] }
+            return node
+        if isinstance(self, Dot):
+            return { 'with': [self.lhs.compile(), self.rhs.compile()] }
+        if isinstance(self, BinaryOp):
+            return { self.op.name.lower(): [self.lhs.compile(), self.rhs.compile()] }
+        raise NotImplementedError(f'Unknown type {self}')
+    
     def __repr__(self):
         return self.to_xml()
     
@@ -486,7 +553,7 @@ class Index(Expression):
                 raise ValueError(f'edge referenced multiple times in same index: {name}')
             names_set.add(name)
 
-class Model(TypeDefinition, EdgesContainer, TypesContainer, ScopeBoundary):
+class Model(TypeDefinition, EdgesContainer, ScopeBoundary):
     indexes: list[Index] = Arg(type=Index, many=True)
 
     def validate(self, **kwargs):
@@ -676,34 +743,33 @@ def test_query_type():
             rhs=Number(value=4)
         )
     ).query_type() == QueryType.CONSTANT
+    
 
 if __name__ == '__main__':
-    # a = Module(
-    #     models=[
-    #         Model(
-    #             name='Person',
-    #             indexes=[
-    #                 Index(names=['name', 'age'])
-    #             ],
-    #             edges=[
-    #                 Edge(name='name', value=TypeIdentifier(name='String')),
-    #                 Edge(name='age', value=Number(value=25)),
-    #             ],
-    #             models=[
-    #                 Model(
-    #                     name='Car',
-    #                     edges=[
-    #                         Edge(name='brand', value=String(value='Toyota')),
-    #                         Edge(name='year', value=Number(value=2020)),
-    #                     ],
-    #                     indexes=[
-    #                         Index(names=['brand', 'year'])
-    #                     ],
-    #                 )
-    #             ]
-    #         ),
-    #     ]
-    # )
+    a = Module(
+        models=[
+            Model(
+                name='Person',
+                indexes=[
+                    Index(names=['name'])
+                ],
+                edges=[
+                    Edge(name='name', value=TypeIdentifier(name='String')),
+                    Edge(name='age', value=Number(value=25)),
+                ],
+            ),
+            Model(
+                name='Car',
+                edges=[
+                    Edge(name='brand', value=String(value='Toyota')),
+                    Edge(name='year', value=Number(value=2020)),
+                ],
+                indexes=[
+                    Index(names=['brand', 'year'])
+                ],
+            )
+        ]
+    )
 
 
     # for exp in a.models[1].findall(Identifier):
@@ -720,4 +786,13 @@ if __name__ == '__main__':
     
     # print(externalize_filter_cond(edge.value.conditions[0]))
     # a,b = split_out_external_assertions(edge.value)
+    # a = Filter(
+    #     value=TypeIdentifier(name='Post'),
+    #     conditions=[
+    #         Equals(lhs=EdgeIdentifier(name='author'), rhs=Dot(lhs=Self(), rhs=EdgeIdentifier(name='name'))),
+    #         GreaterThan(lhs=EdgeIdentifier(name='age'), rhs=Number(value=0)),
+    #     ]
+    # )
+    import yaml
+    print(yaml.dump(a.compile(), sort_keys=False))
     print('hi')
