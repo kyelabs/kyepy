@@ -13,24 +13,26 @@ EDGE_NAME_REGEX = re.compile(r'[a-z][a-z_]*')
 
 @enum.unique
 class Operator(enum.Enum):
-    #      symbol, precedence
-    DOT    = '.',  0
-    FILTER = '[]', 0
-    INVERT = '~',  1
-    MUL    = '*',  2
-    DIV    = '/',  2
-    MOD    = '%',  2
-    ADD    = '+',  3
-    SUB    = '-',  3
-    AND    = '&',  4
-    OR     = '|',  4
-    NOT    = '!',  5
-    NE     = '!=', 6
-    EQ     = '==', 6
-    LT     = '<',  6
-    GT     = '>',  6
-    LE     = '<=', 6
-    GE     = '>=', 6
+    #        symbol, precedence
+    DOT    = '.',    0
+    FILTER = '[]',   0
+    INVERT = '~',    1
+    MUL    = '*',    2
+    DIV    = '/',    2
+    MOD    = '%',    2
+    ADD    = '+',    3
+    SUB    = '-',    3
+    INTER  = '&',    4
+    UNION  = '|',    4
+    NOT    = '!',    5
+    AND    = 'and',  6
+    OR     = 'or',   6
+    NE     = '!=',   6
+    EQ     = '==',   6
+    LT     = '<',    6
+    GT     = '>',    6
+    LE     = '<=',   6
+    GE     = '>=',   6
 
     @property
     def symbol(self):
@@ -61,7 +63,6 @@ T = t.TypeVar('T')
 E = t.TypeVar('E')
 
 def abstract(abstract_cls):
-    @staticmethod
     def __new__(cls, *args, **kwargs):
         if cls is abstract_cls:
             raise TypeError(f"Cannot instantiate abstract class '{cls.__name__}'")
@@ -148,12 +149,15 @@ class Expression:
                     if recurse:
                         val.validate(recurse=recurse)
     
-    def copy(self) -> Self:
+    def copy(self, **kwargs) -> Self:
         """
         Returns a deep copy of the expression
         """
         new = deepcopy(self)
         new.parent = self.parent
+        for k in self._arg_types.keys():
+            if k in kwargs:
+                setattr(new, k, kwargs[k])
         return new
 
     def depth(self) -> int:
@@ -168,12 +172,22 @@ class Expression:
             ancestor = ancestor.parent
         return ancestor # type: ignore
     
+    @property
     def root(self) -> Expression:
         """ Returns the root expression of this tree """
         expression = self
         while expression.parent:
             expression = expression.parent
         return expression
+
+    @property
+    def path(self) -> list[str]:
+        if isinstance(self, Module):
+            return []
+        parent_path = self.parent.path if self.parent else []
+        if isinstance(self, Definition):
+            return [*parent_path, self.name]
+        return parent_path
     
     def iter_expressions(self) -> t.Iterator[Expression]:
         """ Yields the key and expression for all arguments, exploding list args. """
@@ -194,7 +208,7 @@ class Expression:
         def iterator(node: Expression) -> t.Iterator[Expression]:
             # if within_scope is set and this node is a scope boundary,
             # only walk the root arg of the scope boundary
-            if within_scope and isinstance(node, ScopeBoundary) and not node == self:
+            if within_scope and isinstance(node, ScopeBoundary):
                 if node._root_arg:
                     return list_values(getattr(node, node._root_arg))
                 else:
@@ -350,12 +364,6 @@ class ScopeBoundary(Expression):
     """ Tells walk function to stop at this node when set to only walk within scope """
     _root_arg = None
 
-    @property
-    def root(self):
-        if self._root_arg is None:
-            return self
-        return getattr(self, self._root_arg)
-
     def resolve_type(self, name: str) -> t.Optional[TypeDefinition]:
         if isinstance(self, TypesContainer):
             for model in self.models:
@@ -380,19 +388,45 @@ class ScopeBoundary(Expression):
             return parent_container.resolve_edge(name)
         return None
 
+class QueryType(enum.Enum):
+    CONSTANT = 'constant'
+    RELATIVE = 'relative'
+    ABSOLUTE = 'absolute'
+    DYNAMIC = 'dynamic'
+
 @abstract
 class Query(Expression):
     """ Abstract class for all AST nodes who wrap an expression  """
     value: Expression = Arg(type=Expression)
+
+    def query_type(self) -> QueryType:
+        contains_type_ref = self.value.find(TypeIdentifier, within_scope=True) is not None
+        contains_edge_ref = self.value.find(EdgeIdentifier, within_scope=True) is not None or self.value.find(Self) is not None
+        if contains_type_ref and contains_edge_ref:
+            return QueryType.DYNAMIC
+        if contains_type_ref and not contains_edge_ref:
+            return QueryType.ABSOLUTE
+        if not contains_type_ref and contains_edge_ref:
+            return QueryType.RELATIVE
+        return QueryType.CONSTANT
 
 @abstract
 class Definition(Expression):
     """ Abstract class for all AST nodes that define a name """
     name: str = Arg(type=str)
 
+    @property
+    def ref(self):
+        return '.'.join(self.path)
+
+class Assert(Expression):
+    condition: Expression = Arg(type=Expression)
+
 @abstract
 class TypeDefinition(Definition):
     """ Abstract class for all AST nodes that define a type """
+    assertions: list[Assert] = Arg(type=Assert, many=True, optional=True)
+
     def validate(self, **kwargs):
         super().validate(**kwargs)
         if not TYPE_NAME_REGEX.match(self.name):
@@ -505,29 +539,8 @@ class TypeIdentifier(Identifier):
         if not TYPE_NAME_REGEX.match(self.name):
             raise ValueError(f'Invalid type name {self.name}')
 
-    def resolve(self) -> t.Optional[TypeDefinition]:
-        container = self.scope()
-        if container:
-            return container.resolve_type(self.name)
-        return None
-
-class OperatorIdentifier(Identifier):
-    def validate(self, **kwargs):
-        super().validate(**kwargs)
-        if self.name not in {op.name for op in Operator}:
-            raise ValueError(f'Invalid operator name {self.name}')
-
-class This(Identifier):
-    name = 'this'
-
-class Lambda(ScopeBoundary):
-    args: list[str] = Arg(type=str, many=True, optional=True)
-    body: Expression = Arg(type=Expression)
-
-class Invocation(Expression):
-    fn: Expression = Arg(type=Expression)
-    args: list[Expression] = Arg(type=Expression, many=True, optional=True)
-
+class Self(Identifier):
+    name = 'self'
 
 @abstract
 class Operation(Expression):
@@ -545,8 +558,9 @@ class BinaryOp(Operation):
     lhs: Expression = Arg(type=Expression)
     rhs: Expression = Arg(type=Expression)
 
-class Dot(BinaryOp):
+class Dot(BinaryOp, ScopeBoundary):
     op = Operator.DOT
+    _root_arg = 'lhs'
 
 class Invert(UnaryOp):
     op = Operator.INVERT
@@ -566,18 +580,26 @@ class Add(BinaryOp):
 class Sub(BinaryOp):
     op = Operator.SUB
 
-class Composite(BinaryOp):
-    pass
-
-class Intersection(Composite):
+class And(BinaryOp):
     op = Operator.AND
 
-class Union(Composite):
+class Or(BinaryOp):
     op = Operator.OR
 
 class Not(UnaryOp):
     op = Operator.NOT
 
+@abstract
+class Composite(BinaryOp):
+    pass
+
+class Intersection(Composite):
+    op = Operator.INTER
+
+class Union(Composite):
+    op = Operator.UNION
+
+@abstract
 class Comparison(BinaryOp):
     pass
 
@@ -600,9 +622,9 @@ class GreaterThanOrEquals(Comparison):
     op = Operator.GE
 
 class Filter(ScopeBoundary):
-    type: Expression = Arg(type=Expression)
-    condition: list[Expression] = Arg(type=Expression, many=True, optional=True)
-    _root_arg = 'type'
+    value: Expression = Arg(type=Expression)
+    conditions: list[Expression] = Arg(type=Expression, many=True, optional=True)
+    _root_arg = 'value'
 
 def convert() -> Expression:
     """ Convert python value to Expression """
@@ -614,98 +636,88 @@ def evaluate(exp: Expression) -> t.Any:
     if isinstance(exp, BinaryOp):
         return getattr(exp.lhs, exp.op.python_name)(exp.rhs)
 
-if __name__ == '__main__':
-    a = Module(
-        models=[
-            Model(
-                name='Company',
-                indexes=[
-                    Index(names=['name']),
-                ],
-                edges=[
-                    Edge(name='name', value=Dot(
-                        lhs=EdgeIdentifier(name='location'),
-                        rhs=EdgeIdentifier(name='name')
-                    )),
-                    Edge(name='location', value=String(value='Cupertino')),
-                ],
-                models=[
-                    Model(
-                        name='Person',
-                        indexes=[
-                            Index(names=['id', 'name']),
-                        ],
-                        edges=[
-                            Edge(name='id', value=Number(value=1)),
-                            Edge(name='name', value=Dot(
-                                lhs=EdgeIdentifier(name='id'),
-                                rhs=EdgeIdentifier(name='name')
-                            )),
-                            Edge(name='age', value=Number(value=30), cardinality=Cardinality.ONE),
-                        ],
-                    ),
-                ]
-            ),
-        ]
-    )
-
-    def replace_filter(exp: Expression) -> Expression:
-        if isinstance(exp, Filter):
-            nested = exp.type
-            for cond in exp.condition:
-                for edge in cond.findall(EdgeIdentifier, within_scope=True):
-                    edge.replace(Invocation(
-                        fn=OperatorIdentifier(name=Operator.DOT.name),
-                        args=[This(), String(value=edge.name)]
-                    ))
-                nested = Invocation(
-                    fn=OperatorIdentifier(name=Operator.FILTER.name),
-                    args=[nested, cond]
-                )
-            return nested
-        return exp
-    
-    def replace_operators_with_invocations(exp: Expression) -> Expression:
-        if isinstance(exp, UnaryOp):
-            return Invocation(
-                fn=OperatorIdentifier(name=exp.op.name),
-                args=[exp.value]
-            )
-        if isinstance(exp, BinaryOp):
-            if isinstance(exp, Dot) and isinstance(exp.rhs, Identifier):
-                exp.rhs = String(value=exp.rhs.name)
-            return Invocation(
-                fn=OperatorIdentifier(name=exp.op.name),
-                args=[exp.lhs, exp.rhs]
-            )
-        return exp
-
-    a = Edge(name='city', value=Dot(
-        lhs=Dot(
-            lhs=TypeIdentifier(name='School'),
-            rhs=EdgeIdentifier(name='location')
+def test_query_type():
+    assert Edge(
+        name='count',
+        value=GreaterThanOrEquals(
+            lhs=TypeIdentifier(name='Number'),
+            rhs=Number(value=1)
         ),
-        rhs=EdgeIdentifier(name='city')
-        ))
+    ).query_type() == QueryType.ABSOLUTE
+    assert Edge(
+        name='name',
+        value=Filter(
+            value=TypeIdentifier(name='String'),
+            conditions=[
+                GreaterThan(lhs=EdgeIdentifier(name='length'), rhs=Number(value=0)),
+            ]
+        )
+    ).query_type() == QueryType.ABSOLUTE
+    assert Edge(
+        name='posts',
+        value=Filter(
+            value=TypeIdentifier(name='Posts'),
+            conditions=[
+                Equals(lhs=EdgeIdentifier(name='id'), rhs=Self()),
+            ]
+        )
+    ).query_type() == QueryType.DYNAMIC
+    assert Edge(
+        name='full_name',
+        value=Add(
+            lhs=String(value='Mr. '),
+            rhs=EdgeIdentifier(name='name')
+        )
+    ).query_type() == QueryType.RELATIVE
+    assert Edge(
+        name='two_plus_four',
+        value=Add(
+            lhs=Number(value=2),
+            rhs=Number(value=4)
+        )
+    ).query_type() == QueryType.CONSTANT
 
-    a = Edge(name='name', value=Filter(
-        type=TypeIdentifier(name='String'),
-        condition=[
-            LessThan(
-                lhs=EdgeIdentifier(name='length'),
-                rhs=Number(value=30)
-            ),
-            GreaterThan(
-                lhs=EdgeIdentifier(name='length'),
-                rhs=Number(value=10)
-            )
-        ]
-    ))
-    a.transform(replace_filter)
-    a.transform(replace_operators_with_invocations)
+if __name__ == '__main__':
+    # a = Module(
+    #     models=[
+    #         Model(
+    #             name='Person',
+    #             indexes=[
+    #                 Index(names=['name', 'age'])
+    #             ],
+    #             edges=[
+    #                 Edge(name='name', value=TypeIdentifier(name='String')),
+    #                 Edge(name='age', value=Number(value=25)),
+    #             ],
+    #             models=[
+    #                 Model(
+    #                     name='Car',
+    #                     edges=[
+    #                         Edge(name='brand', value=String(value='Toyota')),
+    #                         Edge(name='year', value=Number(value=2020)),
+    #                     ],
+    #                     indexes=[
+    #                         Index(names=['brand', 'year'])
+    #                     ],
+    #                 )
+    #             ]
+    #         ),
+    #     ]
+    # )
 
 
     # for exp in a.models[1].findall(Identifier):
     #     print(exp, exp.scope())
-    print(a)
+    # flatten_models(a)
+    # print(a)
+    # edge = Edge(name='posts', value=Filter(
+    #     value=TypeIdentifier(name='Post'),
+    #     conditions=[
+    #         Equals(lhs=EdgeIdentifier(name='author'), rhs=Dot(lhs=Self(), rhs=EdgeIdentifier(name='name'))),
+    #         GreaterThan(lhs=EdgeIdentifier(name='age'), rhs=Number(value=0)),
+    #     ]
+    # ))
+    
+    # print(externalize_filter_cond(edge.value.conditions[0]))
+    # a,b = split_out_external_assertions(edge.value)
     print('hi')
