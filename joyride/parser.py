@@ -2,7 +2,7 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 from enum import Enum
-from lark import Lark, Transformer, Tree, Token
+import lark
 import pandas as pd
 
 class Environment:
@@ -12,9 +12,6 @@ class Environment:
     def __init__(self, enclosing: t.Optional[Environment]=None):
         self.values = {}
         self.enclosing = enclosing
-    
-    def create_child(self) -> Environment:
-        return Environment(self)
     
     def get_owner(self, name: str) -> t.Optional[Environment]:
         if name in self.values:
@@ -59,18 +56,25 @@ class Type(Callable):
 
 class Edge(Callable):
     closure: Environment
-    declaration: Tree
+    params: t.List[str]
+    block: lark.Tree
+    cardinality: Cardinality
 
-    def __init__(self, closure: Environment, declaration: Tree):
+    def __init__(self, closure: Environment, params: t.List[str], block: lark.Tree, cardinality: Cardinality):
         self.closure = closure
-        self.declaration = declaration
+        self.params = params
+        assert block.data == 'block'
+        assert block.children[-1].data == 'return_stmt'
+        self.block = block
+        self.cardinality = cardinality
     
     def call(self, interpreter: Interpreter, arguments):
-        env = self.closure.create_child()
-        self.declaration.children[0].children
-        for i, param in enumerate(self.declaration.children):
-            env.define(param, arguments[i])
-
+        env = Environment(self.closure)
+        for name, val in zip(self.params, arguments):
+            env.define(name, val)
+        result = interpreter.visit_with_env(self.block, env)
+        assert type(result) is list
+        return result[-1]
 
 class Const:
     type: Type
@@ -101,36 +105,16 @@ class Operator(Enum):
     INV = '~'
     IS = 'is'
 
+class Cardinality(Enum):
+    ONE = '!'
+    MANY = '*'
+    MAYBE = '?'
+    MORE = '+'
+
 GRAMMAR = Path(__file__).parent / 'grammer.lark'
 
 def get_parser(start):
-    return Lark(GRAMMAR.read_text(), parser='lalr', propagate_positions=True, start=start)
-
-def operator_token(self, token):
-    return Operator(token[0])
-
-def get_binary_operation(operator: Operator):
-    def binary_operation(self, values):
-        return operation(operator, values)
-    return binary_operation
-
-def binary_operation(self, children):
-    value1, operator, value2 = children
-    return operation(operator, [value1, value2])
-
-def get_name(child: t.Union[Tree, Token]):
-    if isinstance(child, Token):
-        return child.type
-    return child.data
-
-def get_children(children: t.List[t.Union[Tree, Token]], *names: str):
-    return [child for child in children if get_name(child) in names]
-
-def get_child(children: t.List[t.Union[Tree, Token]], *names: str):
-    found = get_children(children, *names)
-    if not found:
-        return None
-    return found[0]
+    return lark.Lark(GRAMMAR.read_text(), parser='lalr', propagate_positions=True, start=start)
 
 def operation(operator: Operator, values: t.List[t.Any]):
     if operator == Operator.ADD:
@@ -156,11 +140,11 @@ def operation(operator: Operator, values: t.List[t.Any]):
     elif operator == Operator.GE:
         return values[0] >= values[1]
     elif operator == Operator.AND:
-        return values[0] & values[1]
+        return values[0] and values[1]
     elif operator == Operator.XOR:
         return values[0] ^ values[1]
     elif operator == Operator.OR:
-        return values[0] | values[1]
+        return values[0] or values[1]
     elif operator == Operator.NOT:
         return not values[0]
     elif operator == Operator.INV:
@@ -169,55 +153,117 @@ def operation(operator: Operator, values: t.List[t.Any]):
         return values[0] is values[1]
     raise ValueError(f'Invalid operator {operator}')
 
+def _operator(operator: Operator):
+    def visit_operator(self: Interpreter, values):
+        return operation(operator, self.visit_all(values))
+    return visit_operator
 
-class Interpreter(Transformer):
+def get_name(child: t.Union[lark.Token, lark.Tree]) -> str:
+    if isinstance(child, lark.Token):
+        return child.type
+    return child.data
+
+def get_children(node: lark.Tree, *names: str) -> t.List[lark.Tree]:
+    return [child for child in node.children if get_name(child) in names]
+
+def get_child(node: lark.Tree, *names: str) -> lark.Tree:
+    children = get_children(node, *names)
+    if not children:
+        return None
+    return children[0]
+
+class Interpreter(lark.visitors.Interpreter):
     def __init__(self, env: Environment):
-        self.global_env = env
-        self.current_env = env
+        self.env = env
     
-    def _execute_block(self, tree: Tree, env: Environment) -> t.Any:
-        previous = self.current_env
+    def visit_with_env(self, tree: lark.Tree, env: Environment) -> t.Any:
+        previous = self.env
         value = None
         try:
-            self.current_env = env
-            value = self.transform(tree)
+            self.env = env
+            value = self.visit(tree)
         finally:
-            self.current_env = previous
+            self.env = previous
         return value
 
-    SIGNED_NUMBER = lambda self, token: float(token[0])
-    BOOLEAN = lambda self, token: token[0] == 'TRUE'
-    STRING = lambda self, token: token[0][1:-1]
-    UNARY_OP = operator_token
-    ADDITION_OP = operator_token
-    MULTIPLICATION_OP = operator_token
-    COMPARISON_OP = operator_token
+    def visit_all(self, values):
+        return [
+            self.visit(value) if isinstance(value, lark.Tree) else value
+            for value in values
+        ]
 
-    literal = lambda self, token: token[0]
-    add_exp = binary_operation
-    mult_exp = binary_operation
-    comp_exp = binary_operation
-    and_exp = get_binary_operation(Operator.AND)
-    xor_exp = get_binary_operation(Operator.XOR)
-    or_exp = get_binary_operation(Operator.OR)
-    is_exp = get_binary_operation(Operator.IS)
+    def _list(self, node):
+        return self.visit_all(node.children)
+    
+    @lark.v_args(inline=True)
+    def _binary(self, value1, operator, value2):
+        return operation(Operator(operator), [
+            self.visit(value1),
+            self.visit(value2)
+        ])
+
+    @lark.v_args(inline=True)
+    def literal(self, val: lark.Token):
+        if val.type == 'SIGNED_NUMBER':
+            return float(val)
+        if val.type == 'BOOLEAN':
+            return val == 'TRUE'
+        if val.type == 'STRING':
+            return val[1:-1]
+        raise Exception(f'Unknown token type: {val.type}({val.value})')
+
+    add_exp = _binary
+    mult_exp = _binary
+    comp_exp = _binary
+    and_exp = _operator(Operator.AND)
+    xor_exp = _operator(Operator.XOR)
+    or_exp = _operator(Operator.OR)
+    is_exp = _operator(Operator.IS)
+
+    block = _list
+    statement = _list
+    index = _list
+    return_stmt = lambda self, value: self.visit(value.children[0])
+
+    def edge_def(self, edge_def: lark.Tree):
+        name = get_child(edge_def, 'EDGE')
+        indexes = self.visit_all(get_children(edge_def, 'index'))
+        cardinality = Cardinality(get_child(edge_def, 'CARDINALITY') or '!')
+        block: lark.Tree = edge_def.children[-1]
+        if block.data != 'block':
+            block = lark.Tree('block', [lark.Tree('return_stmt', [block])])
+        # TODO: figure out how to do function overloads
+        params = indexes[0] if indexes else []
+        self.env.define(name, Edge(self.env, params, block, cardinality))
+    
+    @lark.v_args(inline=True)
+    def edge_identifier(self, name):
+        edge: Edge = self.env.get(name)
+        if not edge.params:
+            return edge.call(self, [])
+        return edge
+
+    def type_def(self, name, extends, block):
+        if not isinstance(extends, Type):
+            raise RuntimeError('parent type must be a Type')
+        
 
 if __name__ == '__main__':
     definitions_parser = get_parser('statements')
     tree = definitions_parser.parse('''
-    # name(param1, param2)(param2): type + 1
-    name(param1, param2)+ {
-        return param1
-    }
+    a: 1
+    b: a + 1
     ''')
-    edge = get_child(tree.children, 'edge_def')
-    name = get_child(edge.children, 'EDGE')
-    cardinality = get_child(edge.children, 'CARDINALITY')
-    indexes = get_children(edge.children, 'index')
-    print(name, cardinality, indexes)
+    print(tree)
+    env = Environment()
+    interpreter = Interpreter(env)
+    result = interpreter.visit(tree)
+    b = env.get('b').call(interpreter, [])
+    print(b)
     print('hi')
+
     # expressions_parser = get_parser('exp')
-    # tree = expressions_parser.parse('1 + 2 * 3')
+    # tree = expressions_parser.parse('FALSE & 1 + 2 * 3')
     # env = Environment()
     # df = pd.DataFrame([
     #     {'a': 1, 'b': 2},
@@ -225,7 +271,7 @@ if __name__ == '__main__':
     #     {'a': 5, 'b': 6}
     # ])
     # env.define('self', df)
-    # evaluator = Interpreter(env)
-    # tree = evaluator.transform(tree)
-    # print(tree)
+    # interpreter = Interpreter(env)
+    # result = interpreter.visit(tree)
+    # print(result)
     # print('hi')
