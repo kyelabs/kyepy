@@ -65,6 +65,7 @@ class Cardinality(enum.Enum):
     def __repr__(self):
         return self.value
 
+
 T = t.TypeVar('T')
 E = t.TypeVar('E')
 
@@ -79,6 +80,7 @@ def abstract(abstract_cls):
 @abstract
 class Expression:
     _arg_types: OrderedDict[str, Arg] = {}
+    _type: Type
 
     def __init__(self, *args, **kwargs):
         self.parent: t.Optional[Expression] = None
@@ -321,8 +323,8 @@ class Expression:
         if isinstance(self, Model):
             compiled = {
                 'indexes': [
-                    idx.names for idx
-                    in self.indexes
+                    idx.names if len(idx.names) > 1 else idx.names[0]
+                    for idx in self.indexes
                 ],
                 'edges': {
                     edge.name + (edge.cardinality.value if edge.cardinality else ''): edge.compile()
@@ -336,16 +338,12 @@ class Expression:
             if len(compiled['indexes']) == 1:
                 compiled['index'] = compiled['indexes'][0]
                 del compiled['indexes']
-                if len(compiled['index']) == 1:
-                    compiled['index'] = compiled['index'][0]
             if len(compiled['assert']) == 0:
                 del compiled['assert']
             if len(compiled['edges']) == 0:
                 del compiled['edges']
             return compiled
         if isinstance(self, Edge):
-            if isinstance(self.value, TypeIdentifier):
-                return self.value.name
             compiled = {
                 'query': self.value.compile(),
             }
@@ -743,7 +741,214 @@ def test_query_type():
             rhs=Number(value=4)
         )
     ).query_type() == QueryType.CONSTANT
+
+class Type:
+    def __init__(self,
+                 name: str,
+                 extends: Type = None,
+                 dynamic: bool = False,
+                 foreign: bool = False,
+                 range: bool = False):
+        assert name is not None
+        self.name = name
+        self.extends = extends
+        self.dynamic = dynamic
+        self.foreign = foreign
+        self.range = range
     
+    @property
+    def root(self) -> Type:
+        return self.extends.root if self.extends else self
+    
+    def hierarchy(self) -> list[Type]:
+        if self.extends:
+            return [self] + self.extends.hierarchy()
+        return [self]
+    
+    def copy(self,**kwargs) -> Type:
+        return Type(
+            name=self.name,
+            extends=kwargs.get('extends', self.extends),
+            dynamic=kwargs.get('dynamic', self.dynamic),
+            foreign=kwargs.get('foreign', self.foreign),
+            range=kwargs.get('range', self.range),
+        )
+    
+    def equals(self, other: Type) -> Type:
+        r, c = None, None
+        if self.range and not other.range:
+            r, c = self, other
+        if not self.range and other.range:
+            r, c = other, self
+        if r and c:
+            if self.name != other.name:
+                raise ValueError("Cannot compare two different types")
+            return Type(
+                name=r.name,
+                dynamic=r.dynamic or c.dynamic,
+                foreign=r.foreign or c.foreign,
+                range=False)
+        return self.compare(other)
+
+    def compare(self, other: Type) -> Type:
+        if self.range and other.range:
+            raise ValueError("Cannot compare two range types")
+        if not self.range and not other.range:
+            return Type('Boolean',
+                        dynamic=self.dynamic or other.dynamic,
+                        foreign=self.foreign or other.foreign,
+                        range=False)
+        if self.name != other.name:
+            raise ValueError("Cannot compare two different types")
+        return Type(
+            name=self.name,
+            dynamic=self.dynamic or other.dynamic,
+            foreign=self.foreign or other.foreign,
+            range=True)
+
+from contextlib import contextmanager
+class EnvDefinitionStatus(enum.Enum):
+    INITIALIZED = 1
+    PENDING = 2
+    COMPLETE = 3
+
+class EnvDefinition:
+    ast: t.Optional[Definition]
+    status: EnvDefinitionStatus
+    _type: t.Optional[Type]
+
+    def __init__(self, ast: t.Optional[Definition], status: EnvDefinitionStatus, type: t.Optional[Type] = None):
+        self.ast = ast
+        self.status = status
+        self._type = type
+    
+    @staticmethod
+    def from_ast(ast: Definition) -> EnvDefinition:
+        return EnvDefinition(ast=ast, status=EnvDefinitionStatus.INITIALIZED)
+    
+    @staticmethod
+    def from_native(type: Type) -> EnvDefinition:
+        return EnvDefinition(ast=None, status=EnvDefinitionStatus.COMPLETE, type=type)
+    
+    @property
+    def type(self) -> t.Optional[Type]:
+        return self._type or self.ast._type
+
+    @property
+    def is_native(self) -> bool:
+        return self._type is not None
+    
+    def __enter__(self) -> Definition:
+        """
+        Using the 'status' property makes sure that there are no circular references
+        (i.e. trying to use a reference during its own compilation)
+        """
+        assert self.status == EnvDefinitionStatus.INITIALIZED
+        assert self.ast is not None
+        assert self.ast._type is None
+        self.status = EnvDefinitionStatus.PENDING
+        return self.ast
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        if exc_type is not None:
+            assert self.ast._type is not None
+            self.status = EnvDefinitionStatus.COMPLETE
+
+class Env:
+    _types: t.Dict[str, EnvDefinition]
+
+    def __init__(self):
+        self._types = {
+            'String': EnvDefinition.from_native(Type('String', range=True)),
+            'Number': EnvDefinition.from_native(Type('Number', range=True)),
+            'Boolean': EnvDefinition.from_native(Type('Boolean', range=True)),
+        }
+    
+    def read_ast(self, ast: Expression):
+        for child in ast.findall(Definition):
+            self._types[child.ref] = EnvDefinition.from_ast(child)
+        return self
+    
+    def _get_def(self, ref: str):
+        if ref not in self._types:
+            raise KeyError(f'Unknown symbol `{ref}`')
+        return self._types[ref]
+    
+    def compile_ref(self, ref: str) -> Type:
+        typ_def = self._get_def(ref)
+        
+        # Check if already compiled
+        if typ_def.type is None:
+
+            # Checkout the definition, locking it out from recursion
+            with typ_def as ast:
+                if isinstance(ast, Model):
+                    ast._type = Type(
+                        name=ast.ref,
+                    )
+                elif isinstance(ast, TypeAlias):
+                    ast._type = Type(
+                        name=ast.ref,
+                        extends=self.compile_ast(ast.value),
+                    )
+                elif isinstance(ast, Edge):
+                    if isinstance(ast.value, TypeIdentifier):
+                        ast._type = self.compile_ast(ast.value)
+                    else:
+                        model_type = self.compile_ref(ast.find_ancestor(TypeDefinition).ref)
+                        ast._type = Type(
+                            name=ast.ref,
+                            extends=self.compile_ast(
+                                ast.value,
+                                model=model_type,
+                                this=model_type,
+                            ),
+                        )
+                else:
+                    raise NotImplementedError(f'Unknown type {ast}')
+
+        return typ_def.type
+    
+    def compile_ast(self, ast: Expression, model: Type = None, this: Type = None) -> Type:
+        if isinstance(ast, String):
+            return Type('String')
+        if isinstance(ast, Number):
+            return Type('Number')
+        if isinstance(ast, Boolean):
+            return Type('Boolean')
+        if isinstance(ast, TypeIdentifier):
+            return self.compile_ref(ast.name).copy(dynamic=False, foreign=True, range=True)
+        if isinstance(ast, EdgeIdentifier):
+            return self.compile_ref(this.name + '.' + ast.name).copy(
+                foreign=False,
+                dynamic=True,
+                range=False
+            )
+        if isinstance(ast, Self):
+            return model.copy(foreign=False, dynamic=True, range=False)
+        if isinstance(ast, UnaryOp):
+            return self.compile_ast(ast.value, model=model, this=this)
+        if isinstance(ast, BinaryOp):
+            lhs = self.compile_ast(ast.lhs, model=model, this=this)
+            rhs = self.compile_ast(ast.rhs, model=model, this=this)
+            return lhs.equals(rhs)
+        if isinstance(ast, Filter):
+            root = self.compile_ast(ast.root, model=model, this=this)
+            foreign = root.foreign
+            dynamic = root.dynamic
+            for cond in ast.conditions:
+                cond_type = self.compile_ast(cond, model=model, this=root)
+                foreign |= cond_type.foreign
+                dynamic |= cond_type.dynamic
+            return root.copy(foreign=foreign, dynamic=dynamic)
+        if isinstance(ast, Dot):
+            root = self.compile_ast(ast.rhs, model=model, this=this)
+            return self.compile_ast(
+                ast.lhs,
+                model=model,
+                this=root
+            ).copy(foreign=root.foreign, dynamic=root.dynamic)
+        raise NotImplementedError(f'Unknown type {ast}')
 
 if __name__ == '__main__':
     a = Module(
@@ -751,25 +956,40 @@ if __name__ == '__main__':
             Model(
                 name='Person',
                 indexes=[
-                    Index(names=['name'])
+                    Index(names=['id']),
                 ],
                 edges=[
-                    Edge(name='name', value=TypeIdentifier(name='String')),
-                    Edge(name='age', value=Number(value=25)),
+                    Edge(name='id', value=TypeIdentifier(name='Number')),
+                    Edge(name='age', value=GreaterThan(lhs=TypeIdentifier(name='Number'), rhs=Number(value=0))),
                 ],
             ),
+            # Model(
+            #     name='Rect',
+            #     indexes=[
+            #         Index(names=['width','height']),
+            #     ],
+            #     edges=[
+            #         Edge(name='width', value=TypeIdentifier(name='Number')),
+            #         Edge(name='height', value=GreaterThan(
+            #             lhs=TypeIdentifier(name='Number'),
+            #             rhs=EdgeIdentifier(name='width'))
+            #         ),
+            #     ],
+            # ),
             Model(
-                name='Car',
-                edges=[
-                    Edge(name='brand', value=String(value='Toyota')),
-                    Edge(name='year', value=Number(value=2020)),
-                ],
+                name='Square',
                 indexes=[
-                    Index(names=['brand', 'year'])
+                    Index(names=['width']),
+                ],
+                edges=[
+                    Edge(name='width', value=TypeIdentifier(name='Number')),
+                    Edge(name='height', value=EdgeIdentifier(name='width')),
                 ],
             )
         ]
     )
+    e = Env().read_ast(a)
+    # e.compile_ref('Person')
 
 
     # for exp in a.models[1].findall(Identifier):
@@ -793,6 +1013,16 @@ if __name__ == '__main__':
     #         GreaterThan(lhs=EdgeIdentifier(name='age'), rhs=Number(value=0)),
     #     ]
     # )
-    import yaml
-    print(yaml.dump(a.compile(), sort_keys=False))
+    # import yaml
+    # print(yaml.dump(a.compile(), sort_keys=False))
+    for ref, typ_def in e._types.items():
+        if ref.split('.')[-1].islower():
+            typ = e.compile_ref(ref)
+            print(ref, ''.join([
+                'dynamic ' if typ.dynamic else '',
+                'foreign ' if typ.foreign else '',
+                '$' if typ_def.is_native else '',
+                ' > '.join([p.name for p in typ.hierarchy()]),
+                '[]' if typ.range else '',
+            ]))
     print('hi')
