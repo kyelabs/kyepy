@@ -28,7 +28,7 @@ formatter: "<" TYPE ">"
 
 index: "(" _comma_delimited{ EDGE } ")"
 
-block: "{" statements "}"
+block: "{" _line_delimited{ statement } "}"
 
 OPERATION: ">" | "<" | "-" | "+" | "~" | "*" | "/" | "%"
 

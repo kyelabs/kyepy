@@ -76,6 +76,9 @@ class Edge(Callable):
         assert type(result) is list
         return result[-1]
 
+    def arity(self):
+        return len(self.params)
+
 class Const:
     type: Type
     value: t.Any
@@ -238,21 +241,23 @@ class Interpreter(lark.visitors.Interpreter):
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
-        edge: Edge = self.env.get(name)
-        if not edge.params:
-            return edge.call(self, [])
-        return edge
+        return self.env.get(name)
 
-    def type_def(self, name, extends, block):
-        if not isinstance(extends, Type):
-            raise RuntimeError('parent type must be a Type')
-        
+    def call_exp(self, call_exp: lark.Tree):
+        edge = self.visit(call_exp.children[0])
+        assert isinstance(edge, Callable)
+        arguments = self.visit_all(call_exp.children[1:])
+        assert len(arguments) == edge.arity()
+        return edge.call(self, arguments)
+
 
 if __name__ == '__main__':
     definitions_parser = get_parser('statements')
     tree = definitions_parser.parse('''
-    a: 1
-    b: a + 1
+    a(n): n * n
+    b {
+      return a(3) + 1
+    }
     ''')
     print(tree)
     env = Environment()
