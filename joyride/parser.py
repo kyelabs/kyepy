@@ -104,7 +104,6 @@ class Boolean(Abstract):
 class Model(Type):
     name: str
     index: t.List[str]
-    block: lark.Tree
     dataframe: pd.DataFrame
     edges: t.Dict[str, Edge]
 
@@ -379,12 +378,7 @@ class Interpreter(lark.visitors.Interpreter):
 
 if __name__ == '__main__':
     definitions_parser = get_parser('statements')
-    tree = definitions_parser.parse('''
-    User(id) {
-        id: Number
-    }
-    ''')
-    print(tree)
+    expressions_parser = get_parser('exp')
     env = Environment()
     env.define('Number', Number())
     env.define('String', String())
@@ -394,7 +388,15 @@ if __name__ == '__main__':
             {'id': 1}
         ])
     })
-    result = interpreter.visit(tree)
+    interpreter.visit(definitions_parser.parse('''
+    User(id) {
+        id: Number
+    }
+    '''))
+    result = interpreter.visit(expressions_parser.parse('''
+    User(4)
+    '''))
+    print(result)
     print('hi')
 
     # expressions_parser = get_parser('exp')
