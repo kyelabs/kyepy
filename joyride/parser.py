@@ -52,14 +52,60 @@ class Type(Callable):
     def get(self, name: str):
         raise NotImplementedError()
     
+    def has(self, val: t.Any) -> bool:
+        raise NotImplementedError()
+    
     def __str__(self):
         return self.name
+
+class Abstract(Type):
+    pass
+
+class Number(Abstract):
+    name = 'Number'
+
+    def has(self, val: t.Any):
+        try:
+            float(val)
+            return True
+        except:
+            return False
+
+    def call(self, interpreter: Interpreter, arguments):
+        return float(arguments[0])
+
+    def arity(self):
+        return 1
+
+class String(Abstract):
+    name = 'String'
+
+    def has(self, val: t.Any):
+        return True
+
+    def call(self, interpreter: Interpreter, arguments):
+        return str(arguments[0])
+
+    def arity(self):
+        return 1
+
+class Boolean(Abstract):
+    name = 'Boolean'
+
+    def has(self, val: t.Any):
+        return True
+
+    def call(self, interpreter: Interpreter, arguments):
+        return bool(arguments[0])
+
+    def arity(self):
+        return 1
 
 class Model(Type):
     name: str
     index: t.List[str]
     block: lark.Tree
-    dataframe: t.Optional[pd.DataFrame]
+    dataframe: pd.DataFrame
     edges: t.Dict[str, Edge]
 
     def __init__(self, name: str, index: t.List[str], dataframe: pd.DataFrame):
@@ -75,12 +121,22 @@ class Model(Type):
         if name in self.edges:
             return self.edges[name]
         raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
+
+    def _select(self, keys: t.List[t.Any]):
+        selection = self.dataframe
+        assert len(self.index) == len(keys)
+        for name, val in zip(self.index, keys):
+            selection = selection[selection[name] == val]
+        return selection
+    
+    def has(self, val: t.Any):
+        if len(self.index) != 1:
+            raise NotImplementedError()
+        selection = self._select([val])
+        return not selection.empty
     
     def call(self, interpreter: Interpreter, arguments):
-        assert self.dataframe is not None
-        selection = self.dataframe
-        for name, val in zip(self.index, arguments):
-            selection = selection[selection[name] == val]
+        selection = self._select(arguments)
         assert len(selection) == 1, f"Expected exactly one row, got {len(selection)}"
         return selection.iloc[0]
 
@@ -297,13 +353,20 @@ class Interpreter(lark.visitors.Interpreter):
         actual_value: pd.Series = model.dataframe[name]
         expected_value = self.visit(edge_def.children[-1])
         if isinstance(expected_value, Type):
-            pass
+            for key, val in actual_value.iteritems():
+                assert expected_value.has(val)
         else:
             assert (actual_value == expected_value).all()
         self.env.define(name, actual_value)
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
+        return self.env.get(name)
+    
+    @lark.v_args(inline=True)
+    def type_identifier(self, name, format=None):
+        if format is not None:
+            raise NotImplementedError()
         return self.env.get(name)
 
     def call_exp(self, call_exp: lark.Tree):
@@ -318,11 +381,14 @@ if __name__ == '__main__':
     definitions_parser = get_parser('statements')
     tree = definitions_parser.parse('''
     User(id) {
-        id: 1
+        id: Number
     }
     ''')
     print(tree)
     env = Environment()
+    env.define('Number', Number())
+    env.define('String', String())
+    env.define('Boolean', Boolean())
     interpreter = Interpreter(env, data={
         'User': pd.DataFrame([
             {'id': 1}
