@@ -48,19 +48,54 @@ class Callable:
 class Type(Callable):
     """ Abstract class for types/tables/models """
     name: str
-    parent: t.Optional[Type]
-    edges: t.List[Type]
+
+    def get(self, name: str):
+        raise NotImplementedError()
     
-    def __init__(self, name: str):
+    def __str__(self):
+        return self.name
+
+class Model(Type):
+    name: str
+    index: t.List[str]
+    block: lark.Tree
+    dataframe: t.Optional[pd.DataFrame]
+    edges: t.Dict[str, Edge]
+
+    def __init__(self, name: str, index: t.List[str], dataframe: pd.DataFrame):
         self.name = name
+        self.index = index
+        self.dataframe = dataframe
+        self.edges = {}
+    
+    def define(self, name: str, edge: pd.Series):
+        self.edges[name] = edge
+    
+    def get(self, name: str):
+        if name in self.edges:
+            return self.edges[name]
+        raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
+    
+    def call(self, interpreter: Interpreter, arguments):
+        assert self.dataframe is not None
+        selection = self.dataframe
+        for name, val in zip(self.index, arguments):
+            selection = selection[selection[name] == val]
+        assert len(selection) == 1, f"Expected exactly one row, got {len(selection)}"
+        return selection.iloc[0]
+
+    def arity(self):
+        return len(self.index)
 
 class Edge(Callable):
+    name: str
     closure: Environment
     params: t.List[str]
     block: lark.Tree
     cardinality: Cardinality
 
-    def __init__(self, closure: Environment, params: t.List[str], block: lark.Tree, cardinality: Cardinality):
+    def __init__(self, name: str, closure: Environment, params: t.List[str], block: lark.Tree, cardinality: Cardinality):
+        self.name = name
         self.closure = closure
         self.params = params
         assert block.data == 'block'
@@ -78,6 +113,9 @@ class Edge(Callable):
 
     def arity(self):
         return len(self.params)
+    
+    def __str__(self):
+        return self.name
 
 class Const:
     type: Type
@@ -176,8 +214,12 @@ def get_child(node: lark.Tree, *names: str) -> lark.Tree:
     return children[0]
 
 class Interpreter(lark.visitors.Interpreter):
-    def __init__(self, env: Environment):
+    env: Environment
+    data: t.Dict[str, pd.DataFrame]
+
+    def __init__(self, env: Environment, data: t.Dict[str, pd.DataFrame]):
         self.env = env
+        self.data = data
     
     def visit_with_env(self, tree: lark.Tree, env: Environment) -> t.Any:
         previous = self.env
@@ -228,16 +270,37 @@ class Interpreter(lark.visitors.Interpreter):
     index = _list
     return_stmt = lambda self, value: self.visit(value.children[0])
 
+    def model_def(self, model_def: lark.Tree):
+        name = get_child(model_def, 'TYPE')
+        format = get_child(model_def, 'FORMAT')
+        indexes = self.visit_all(get_children(model_def, 'index'))
+        block: lark.Tree = model_def.children[-1]
+        assert len(indexes) == 1
+        assert name in self.data
+        data = self.data[name]
+        model = Model(name, indexes[0], data)
+        self.env.define(name, model)
+        previous = self.env
+        self.env = Environment(previous)
+        self.env.define('this', model)
+        self.visit(block)
+        self.env = previous
+
     def edge_def(self, edge_def: lark.Tree):
         name = get_child(edge_def, 'EDGE')
         indexes = self.visit_all(get_children(edge_def, 'index'))
+        assert len(indexes) == 0
         cardinality = Cardinality(get_child(edge_def, 'CARDINALITY') or '!')
-        block: lark.Tree = edge_def.children[-1]
-        if block.data != 'block':
-            block = lark.Tree('block', [lark.Tree('return_stmt', [block])])
-        # TODO: figure out how to do function overloads
-        params = indexes[0] if indexes else []
-        self.env.define(name, Edge(self.env, params, block, cardinality))
+        model = self.env.get('this')
+        assert isinstance(model, Model)
+        assert name in model.dataframe.columns
+        actual_value: pd.Series = model.dataframe[name]
+        expected_value = self.visit(edge_def.children[-1])
+        if isinstance(expected_value, Type):
+            pass
+        else:
+            assert (actual_value == expected_value).all()
+        self.env.define(name, actual_value)
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
@@ -254,17 +317,18 @@ class Interpreter(lark.visitors.Interpreter):
 if __name__ == '__main__':
     definitions_parser = get_parser('statements')
     tree = definitions_parser.parse('''
-    a(n): n * n
-    b {
-      return a(3) + 1
+    User(id) {
+        id: 1
     }
     ''')
     print(tree)
     env = Environment()
-    interpreter = Interpreter(env)
+    interpreter = Interpreter(env, data={
+        'User': pd.DataFrame([
+            {'id': 1}
+        ])
+    })
     result = interpreter.visit(tree)
-    b = env.get('b').call(interpreter, [])
-    print(b)
     print('hi')
 
     # expressions_parser = get_parser('exp')
