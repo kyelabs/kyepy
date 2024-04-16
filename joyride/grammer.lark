@@ -15,7 +15,7 @@ statements: _line_delimited{ statement }
           | "null" exp     -> null_stmt
           | "return" exp   -> return_stmt
 
-model_def: TYPE formatter? index+ block
+model_def: TYPE FORMAT? index+ block
 type_def: TYPE ":" exp block?
 
 edge_def: EDGE index* CARDINALITY? (":" exp | block)
@@ -24,7 +24,7 @@ if_stmt: "if" exp block ( "else" block )?
 
 op_stmt: "operation" OPERATION+ (exp (":" exp)?)?
 
-formatter: "<" TYPE ">"
+FORMAT: "<" TYPE ">"
 
 index: "(" _comma_delimited{ EDGE } ")"
 
