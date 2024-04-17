@@ -20,7 +20,7 @@ class Environment:
             return self.enclosing.get_owner(name)
         return None
 
-    def define(self, name: str, value: t.Any):
+    def define(self, name: t.Union[str, lark.Token], value: t.Any):
         if name in self.values:
             raise RuntimeError(f'Variable "{name}" already defined.')
         self.values[name] = value
@@ -105,7 +105,7 @@ class Model(Type):
     name: str
     index: t.List[str]
     dataframe: pd.DataFrame
-    edges: t.Dict[str, Edge]
+    edges: t.Dict[str, pd.Series]
 
     def __init__(self, name: str, index: t.List[str], dataframe: pd.DataFrame):
         self.name = name
@@ -154,7 +154,7 @@ class Edge(Callable):
         self.closure = closure
         self.params = params
         assert block.data == 'block'
-        assert block.children[-1].data == 'return_stmt'
+        assert t.cast(lark.Tree, block.children[-1]).data == 'return_stmt'
         self.block = block
         self.cardinality = cardinality
     
@@ -207,7 +207,7 @@ class Cardinality(Enum):
     MAYBE = '?'
     MORE = '+'
 
-GRAMMAR = Path(__file__).parent / 'grammer.lark'
+GRAMMAR = Path(__file__).parent / 'grammar.lark'
 
 def get_parser(start):
     return lark.Lark(GRAMMAR.read_text(), parser='lalr', propagate_positions=True, start=start)
@@ -254,19 +254,57 @@ def _operator(operator: Operator):
         return operation(operator, self.visit_all(values))
     return visit_operator
 
-def get_name(child: t.Union[lark.Token, lark.Tree]) -> str:
-    if isinstance(child, lark.Token):
-        return child.type
-    return child.data
+Ast = t.Union[lark.Tree, lark.Token]
 
-def get_children(node: lark.Tree, *names: str) -> t.List[lark.Tree]:
-    return [child for child in node.children if get_name(child) in names]
+def iter_children(node: Ast) -> t.Iterator[lark.Tree]:
+    if isinstance(node, lark.Tree):
+        for child in node.children:
+            if isinstance(child, lark.Tree):
+                yield child
 
-def get_child(node: lark.Tree, *names: str) -> lark.Tree:
-    children = get_children(node, *names)
-    if not children:
-        return None
-    return children[0]
+def iter_tokens(node: Ast) -> t.Iterator[lark.Token]:
+    if isinstance(node, lark.Tree):
+        for child in node.children:
+            if isinstance(child, lark.Token):
+                yield child
+
+def find_children(node: Ast, *names: str) -> t.List[lark.Tree]:
+    return [
+        child
+        for child in iter_children(node)
+        if child.data in names
+    ]
+
+def find_tokens(node: Ast, *names: str) -> t.List[lark.Token]:
+    return [
+        token
+        for token in iter_tokens(node)
+        if token.type in names
+    ]
+
+def find_child(node: Ast, *names: str) -> t.Optional[lark.Tree]:
+    for child in iter_children(node):
+        if child.data in names:
+            return child
+    return None
+
+def find_token(node: Ast, *names: str) -> t.Optional[lark.Token]:
+    for token in iter_tokens(node):
+        if token.type in names:
+            return token
+    return None
+
+def get_token(node: Ast, *names: str) -> lark.Token:
+    token = find_token(node, *names)
+    if token is None:
+        raise ValueError(f'Token {names} not found.')
+    return token
+
+def get_child_by_index(node: Ast, index: int) -> lark.Tree:
+    children = list(iter_children(node))
+    if (index < 0 and abs(index) > len(children)) or index >= len(children):
+        raise IndexError(f'Index {index} out of bounds.')
+    return children[index]
 
 class Interpreter(lark.visitors.Interpreter):
     env: Environment
@@ -286,9 +324,9 @@ class Interpreter(lark.visitors.Interpreter):
             self.env = previous
         return value
 
-    def visit_all(self, values):
+    def visit_all(self, values: t.List[lark.Tree]):
         return [
-            self.visit(value) if isinstance(value, lark.Tree) else value
+            self.visit(value)
             for value in values
         ]
 
@@ -326,10 +364,10 @@ class Interpreter(lark.visitors.Interpreter):
     return_stmt = lambda self, value: self.visit(value.children[0])
 
     def model_def(self, model_def: lark.Tree):
-        name = get_child(model_def, 'TYPE')
-        format = get_child(model_def, 'FORMAT')
-        indexes = self.visit_all(get_children(model_def, 'index'))
-        block: lark.Tree = model_def.children[-1]
+        name = get_token(model_def, 'TYPE')
+        format = find_token(model_def, 'FORMAT')
+        indexes = self.visit_all(find_children(model_def, 'index'))
+        block = get_child_by_index(model_def, -1)
         assert len(indexes) == 1
         assert name in self.data
         data = self.data[name]
@@ -342,15 +380,16 @@ class Interpreter(lark.visitors.Interpreter):
         self.env = previous
 
     def edge_def(self, edge_def: lark.Tree):
-        name = get_child(edge_def, 'EDGE')
-        indexes = self.visit_all(get_children(edge_def, 'index'))
+        name = get_token(edge_def, 'EDGE')
+        indexes = self.visit_all(find_children(edge_def, 'index'))
         assert len(indexes) == 0
-        cardinality = Cardinality(get_child(edge_def, 'CARDINALITY') or '!')
+        cardinality = Cardinality(find_token(edge_def, 'CARDINALITY') or '!')
         model = self.env.get('this')
         assert isinstance(model, Model)
         assert name in model.dataframe.columns
         actual_value: pd.Series = model.dataframe[name]
-        expected_value = self.visit(edge_def.children[-1])
+        exp = get_child_by_index(edge_def, -1)
+        expected_value = self.visit(exp)
         if isinstance(expected_value, Type):
             for key, val in actual_value.iteritems():
                 assert expected_value.has(val)
@@ -368,10 +407,11 @@ class Interpreter(lark.visitors.Interpreter):
             raise NotImplementedError()
         return self.env.get(name)
 
+    @lark.v_args(inline=True)
     def call_exp(self, call_exp: lark.Tree):
-        edge = self.visit(call_exp.children[0])
+        edge = self.visit(get_child_by_index(call_exp, 0))
         assert isinstance(edge, Callable)
-        arguments = self.visit_all(call_exp.children[1:])
+        arguments = self.visit_all(list(iter_children(call_exp))[1:])
         assert len(arguments) == edge.arity()
         return edge.call(self, arguments)
 
