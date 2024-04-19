@@ -48,28 +48,38 @@ class Callable:
 class Type(Callable):
     """ Abstract class for types/tables/models """
     name: str
-
-    def get(self, name: str):
+    
+    def contains(self, val: t.Any) -> bool:
         raise NotImplementedError()
     
-    def has(self, val: t.Any) -> bool:
+    def allows(self, interpreter: Interpreter, val: t.Any) -> bool:
+        raise NotImplementedError()
+
+    def get_edge(self, name: str):
+        raise NotImplementedError()
+    
+    def list_edges(self) -> t.Set[str]:
         raise NotImplementedError()
     
     def __str__(self):
         return self.name
 
 class Abstract(Type):
-    pass
+    def allows(self, interpreter: Interpreter, val: t.Any) -> bool:
+        return self.contains(val)
 
 class Number(Abstract):
     name = 'Number'
 
-    def has(self, val: t.Any):
+    def contains(self, val: t.Any):
         try:
             float(val)
             return True
         except:
             return False
+    
+    def list_edges(self) -> t.Set[str]:
+        return set()
 
     def call(self, interpreter: Interpreter, arguments):
         return float(arguments[0])
@@ -80,8 +90,11 @@ class Number(Abstract):
 class String(Abstract):
     name = 'String'
 
-    def has(self, val: t.Any):
+    def contains(self, val: t.Any):
         return True
+
+    def list_edges(self) -> t.List[str]:
+        return ['length']
 
     def call(self, interpreter: Interpreter, arguments):
         return str(arguments[0])
@@ -92,8 +105,11 @@ class String(Abstract):
 class Boolean(Abstract):
     name = 'Boolean'
 
-    def has(self, val: t.Any):
+    def contains(self, val: t.Any):
         return True
+    
+    def list_edges(self) -> t.Set[str]:
+        return set()
 
     def call(self, interpreter: Interpreter, arguments):
         return bool(arguments[0])
@@ -104,31 +120,62 @@ class Boolean(Abstract):
 class Model(Type):
     name: str
     index: t.List[str]
-    dataframe: pd.DataFrame
-    edges: t.Dict[str, pd.Series]
+    env: Environment
+    conditions: t.List[lark.Tree]
+    frame: pd.DataFrame
 
-    def __init__(self, name: str, index: t.List[str], dataframe: pd.DataFrame):
+    def __init__(self, name: str, index: t.List[str], env: Environment):
         self.name = name
         self.index = index
-        self.dataframe = dataframe
-        self.edges = {}
+        self.env = env
+        self.conditions = []
+        self.frame = pd.DataFrame()
     
-    def define(self, name: str, edge: pd.Series):
-        self.edges[name] = edge
-    
-    def get(self, name: str):
-        if name in self.edges:
-            return self.edges[name]
+    def get_edge(self, name: str):
+        if name in self.frame.columns:
+            return self.frame[name].explode().dropna().infer_objects().groupby(level=0).unique()
         raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
 
-    def _select(self, keys: t.List[t.Any]):
-        selection = self.dataframe
+    def list_edges(self):
+        return set(self.frame.columns)
+
+    def _select(self, keys: t.List[t.Any]) -> pd.DataFrame:
+        selection = pd.Series(True, index=self.frame.index)
         assert len(self.index) == len(keys)
         for name, val in zip(self.index, keys):
-            selection = selection[selection[name] == val]
-        return selection
+            selection &= self.get_edge(name) == val
+        return self.frame[selection]
     
-    def has(self, val: t.Any):
+    def _merge_frame(self, other: pd.DataFrame) -> pd.DataFrame:
+        def normalize_columns(s: pd.Series):
+            t = s.explode().dropna().infer_objects()
+            return t.groupby(t.index).unique()
+        combined = pd.concat([self.frame, other], ignore_index=True)
+        for col in self.index:
+            combined = combined.explode(column=col)
+        combined = combined.set_index(self.index)
+        if not combined.empty:
+            combined = pd.concat([
+                normalize_columns(combined[col])
+                for col in combined.columns
+            ], axis=1)
+        combined.index.names = self.index
+        return combined.reset_index()
+    
+    def allows(self, interpreter: Interpreter, val: t.Any):
+        assert isinstance(val, pd.DataFrame)
+        for column in val.columns:
+            if not self.env.has(column):
+                # TODO: Warn about unknown column
+                continue
+            edge = self.env.get(column)
+            assert isinstance(edge, Edge)
+            edge.allows(interpreter, val)
+        for condition in self.conditions:
+            assert interpreter.visit(condition)
+        self.frame = self._merge_frame(val)
+    
+    def contains(self, val: t.Any):
         if len(self.index) != 1:
             raise NotImplementedError()
         selection = self._select([val])
@@ -141,6 +188,35 @@ class Model(Type):
 
     def arity(self):
         return len(self.index)
+
+# class SubModel(Type):
+#     parent: Type
+#     conditions: t.List[lark.Tree]
+#     edges: t.Dict[str, pd.Series]
+
+#     def __init__(self, parent: Type, condition: lark.Tree):
+#         self.parent = parent
+#         self.condition = condition
+    
+#     def define(self, name: str, edge: pd.Series):
+#         self.edges[name] = edge
+    
+#     def get_edge(self, name: str):
+#         if name in self.edges:
+#             return self.edges[name]
+#         return self.parent.get_edge(name)
+    
+#     def list_edges(self) -> t.Set[str]:
+#         return set(self.edges.keys()) | self.parent.list_edges()
+
+#     def has(self, interpreter: Interpreter, val: t.Any):
+#         if not self.parent.has(interpreter, val):
+#             return False
+#         env = Environment(interpreter.env)
+#         for edge in self.list_edges():
+#             env.define(edge, self.get_edge(edge))
+#         return interpreter.visit_with_env(self.condition, env)
+        
 
 class Edge(Callable):
     name: str
@@ -157,6 +233,20 @@ class Edge(Callable):
         assert t.cast(lark.Tree, block.children[-1]).data == 'return_stmt'
         self.block = block
         self.cardinality = cardinality
+    
+    def allows(self, interpreter: Interpreter, val: t.Any):
+        assert isinstance(val, pd.DataFrame)
+        previous = interpreter.env
+        interpreter.env = Environment(self.closure)
+        interpreter.env.define('this', val)
+        assert self.arity() == 1
+        actual_value = val[self.name]
+        expected_value = self.call(interpreter, [val])
+        if isinstance(expected_value, Type):
+            for index, val in actual_value.iteritems():
+                assert expected_value.allows(interpreter, val)
+        else:
+            assert (actual_value == expected_value).all()
     
     def call(self, interpreter: Interpreter, arguments):
         env = Environment(self.closure)
@@ -324,13 +414,13 @@ class Interpreter(lark.visitors.Interpreter):
             self.env = previous
         return value
 
-    def visit_all(self, values: t.List[lark.Tree]):
+    def visit_all(self, values):
         return [
-            self.visit(value)
+            self.visit(value) if isinstance(value, lark.Tree) else value
             for value in values
         ]
 
-    def _list(self, node):
+    def _list(self, node: lark.Tree):
         return self.visit_all(node.children)
     
     @lark.v_args(inline=True)
@@ -370,32 +460,28 @@ class Interpreter(lark.visitors.Interpreter):
         block = get_child_by_index(model_def, -1)
         assert len(indexes) == 1
         assert name in self.data
-        data = self.data[name]
-        model = Model(name, indexes[0], data)
+        model = Model(name, indexes[0], Environment(self.env))
+        model.env.define('this', model)
         self.env.define(name, model)
-        previous = self.env
-        self.env = Environment(previous)
-        self.env.define('this', model)
-        self.visit(block)
-        self.env = previous
+        self.visit_with_env(block, model.env)
+        data = self.data[name]
+        model.allows(self, data)
 
     def edge_def(self, edge_def: lark.Tree):
         name = get_token(edge_def, 'EDGE')
         indexes = self.visit_all(find_children(edge_def, 'index'))
-        assert len(indexes) == 0
+        params = indexes[0] if len(indexes) > 0 else []
         cardinality = Cardinality(find_token(edge_def, 'CARDINALITY') or '!')
-        model = self.env.get('this')
-        assert isinstance(model, Model)
-        assert name in model.dataframe.columns
-        actual_value: pd.Series = model.dataframe[name]
         exp = get_child_by_index(edge_def, -1)
-        expected_value = self.visit(exp)
-        if isinstance(expected_value, Type):
-            for key, val in actual_value.iteritems():
-                assert expected_value.has(val)
-        else:
-            assert (actual_value == expected_value).all()
-        self.env.define(name, actual_value)
+
+        if self.env.has('this'):
+            params = ['this', *params]
+        
+        if exp.data != 'block':
+            exp = lark.Tree('block', [lark.Tree('return_stmt', [exp])])
+        
+        edge = Edge(name, Environment(self.env), params, exp, cardinality)
+        self.env.define(name, edge)
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
@@ -407,7 +493,6 @@ class Interpreter(lark.visitors.Interpreter):
             raise NotImplementedError()
         return self.env.get(name)
 
-    @lark.v_args(inline=True)
     def call_exp(self, call_exp: lark.Tree):
         edge = self.visit(get_child_by_index(call_exp, 0))
         assert isinstance(edge, Callable)
@@ -434,7 +519,7 @@ if __name__ == '__main__':
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
-    User(4)
+    User(1)
     '''))
     print(result)
     print('hi')
