@@ -15,7 +15,7 @@ statements: _line_delimited{ statement }
           | "null" exp     -> null_stmt
           | "return" exp   -> return_stmt
 
-model_def: TYPE FORMAT? index+ block
+model_def: TYPE index+ block
 type_def: TYPE ":" exp block?
 
 edge_def: EDGE index* CARDINALITY? (":" exp | block)
