@@ -49,12 +49,9 @@ class Type(Callable):
     """ Abstract class for types/tables/models """
     name: str
     
-    def contains(self, val: t.Any) -> bool:
+    def parse(self, interpreter: Interpreter, val: t.Any, format: t.Optional[str]) -> t.Any:
         raise NotImplementedError()
     
-    def allows(self, interpreter: Interpreter, val: t.Any) -> bool:
-        raise NotImplementedError()
-
     def get_edge(self, name: str):
         raise NotImplementedError()
     
@@ -65,18 +62,16 @@ class Type(Callable):
         return self.name
 
 class Abstract(Type):
-    def allows(self, interpreter: Interpreter, val: t.Any) -> bool:
-        return self.contains(val)
+    pass
 
 class Number(Abstract):
     name = 'Number'
 
-    def contains(self, val: t.Any):
-        try:
-            float(val)
-            return True
-        except:
-            return False
+    def parse(self, interpreter: Interpreter, val: t.Any, format: t.Optional[str]):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_numeric_dtype(val)
+            return val
+        return float(val)
     
     def list_edges(self) -> t.Set[str]:
         return set()
@@ -90,8 +85,11 @@ class Number(Abstract):
 class String(Abstract):
     name = 'String'
 
-    def contains(self, val: t.Any):
-        return True
+    def parse(self, interpreter: Interpreter, val: t.Any, format: t.Optional[str]):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_string_dtype(val)
+            return val
+        return str(val)
 
     def list_edges(self) -> t.List[str]:
         return ['length']
@@ -105,8 +103,11 @@ class String(Abstract):
 class Boolean(Abstract):
     name = 'Boolean'
 
-    def contains(self, val: t.Any):
-        return True
+    def parse(self, interpreter: Interpreter, val: t.Any, format: t.Optional[str]):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_bool_dtype(val)
+            return val
+        return bool(val)
     
     def list_edges(self) -> t.Set[str]:
         return set()
@@ -117,12 +118,23 @@ class Boolean(Abstract):
     def arity(self):
         return 1
 
+def normalize_column(s: pd.Series) -> pd.Series:
+    t = s.explode().dropna().infer_objects()
+    return t.groupby(t.index).unique()
+
+def normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    return pd.concat([
+        normalize_column(frame[col])
+        for col in frame.columns
+    ], axis=1)
+
 class Model(Type):
     name: str
     index: t.List[str]
     env: Environment
     conditions: t.List[lark.Tree]
     frame: pd.DataFrame
+    edges: t.Dict[str, Edge]
 
     def __init__(self, name: str, index: t.List[str], env: Environment):
         self.name = name
@@ -130,61 +142,98 @@ class Model(Type):
         self.env = env
         self.conditions = []
         self.frame = pd.DataFrame()
+        self.edges = {}
+        self.env.define('this', self)
     
-    def get_edge(self, name: str):
-        if name in self.frame.columns:
-            return self.frame[name].explode().dropna().infer_objects().groupby(level=0).unique()
-        raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
+    def define_edge(self, edge: Edge):
+        assert edge.name not in self.edges
+        assert isinstance(edge, Edge)
+        self.edges[edge.name] = edge
+        self.env.define(edge.name, edge)
+    
+    def get_edge(self, name: str) -> Edge:
+        if name not in self.edges:
+            raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
+        return self.edges[name]
 
     def list_edges(self):
-        return set(self.frame.columns)
+        return set(self.edges.keys())
 
-    def _select(self, keys: t.List[t.Any]) -> pd.DataFrame:
-        selection = pd.Series(True, index=self.frame.index)
-        assert len(self.index) == len(keys)
-        for name, val in zip(self.index, keys):
-            selection &= self.get_edge(name) == val
-        return self.frame[selection]
+    def parse_edge(self, interpreter: Interpreter, edge_name: str, val: pd.Series) -> pd.Series:
+        val = val.explode().dropna().infer_objects()
+        val = self.edges[edge_name].parse(interpreter, val, None)
+        val = val.groupby(val.index).unique()
+        val.name = edge_name
+        return val
     
-    def _merge_frame(self, other: pd.DataFrame) -> pd.DataFrame:
-        def normalize_columns(s: pd.Series):
-            t = s.explode().dropna().infer_objects()
-            return t.groupby(t.index).unique()
-        combined = pd.concat([self.frame, other], ignore_index=True)
-        for col in self.index:
-            combined = combined.explode(column=col)
-        combined = combined.set_index(self.index)
-        if not combined.empty:
-            combined = pd.concat([
-                normalize_columns(combined[col])
-                for col in combined.columns
-            ], axis=1)
-        combined.index.names = self.index
-        return combined.reset_index()
-    
-    def allows(self, interpreter: Interpreter, val: t.Any):
+    def parse(self, interpreter: Interpreter, raw_val: t.Any, format: t.Optional[str]):
+        def is_series_of_dicts(s: pd.Series):
+            return s.sample(min(len(s),100)).apply(lambda n: type(n) is dict).all()
+        val: pd.DataFrame
+        if isinstance(raw_val, pd.Series) and is_series_of_dicts(raw_val):
+            val = pd.DataFrame(raw_val.tolist(), index=raw_val.index)
+        elif isinstance(raw_val, list):
+            val = pd.DataFrame(raw_val)
+        elif isinstance(raw_val, dict):
+            val = pd.Series(raw_val).to_frame().T
+        elif isinstance(raw_val, pd.DataFrame):
+            val = raw_val
         assert isinstance(val, pd.DataFrame)
-        for column in val.columns:
-            if not self.env.has(column):
-                # TODO: Warn about unknown column
-                continue
-            edge = self.env.get(column)
-            assert isinstance(edge, Edge)
-            edge.allows(interpreter, val)
-        for condition in self.conditions:
-            assert interpreter.visit(condition)
-        self.frame = self._merge_frame(val)
+
+        # Edge assertions should only be testing the actual values
+        # and not the structure of the data frame
+        frame = pd.concat([
+            self.parse_edge(interpreter, edge, val[edge])
+            for edge in self.list_edges()
+            if edge in val.columns
+        ], axis=1)
+        
+        # After the frame has been parsed, we can group by the index
+        for col in self.index:
+            assert col in frame.columns, f"Index column '{col}' not found in frame."
+            frame = frame.explode(column=col)
+        grouped = frame.set_index(self.index)
+
+        # Update our frame if it contains more than just index columns
+        if not grouped.empty:
+            self.frame = normalize_frame(pd.concat([self.frame, grouped]))
+
+            for condition in self.conditions:
+                assert interpreter.visit(condition)
+
+        # Return the index columns
+        return pd.Series(
+            t.cast(t.List, frame[self.index].itertuples(index=False, name=None)),
+            index=frame.index
+        )
+
+    @t.overload
+    def select(self, keys: t.List[t.Any]) -> pd.DataFrame: ...
+
+    @t.overload
+    def select(self, keys: pd.Series) -> pd.DataFrame: ...
+
+    def select(self, keys) -> pd.DataFrame:
+        if isinstance(keys, pd.Series):
+            return self.frame.loc[keys[keys.isin(self.frame.index)]].reindex(keys)
+        if isinstance(keys, list):
+            if isinstance(self.frame.index, pd.MultiIndex):
+                if tuple(keys) in self.frame.index:
+                    return t.cast(pd.Series, self.frame.loc[tuple(keys)]).to_frame().T
+            elif len(keys) == 1 and keys[0] in self.frame.index:
+                return t.cast(pd.Series, self.frame.loc[keys[0]]).to_frame().T
+        return self.frame.query('0 == 1')
     
     def contains(self, val: t.Any):
         if len(self.index) != 1:
             raise NotImplementedError()
-        selection = self._select([val])
+        selection = self.select([val,])
         return not selection.empty
     
     def call(self, interpreter: Interpreter, arguments):
-        selection = self._select(arguments)
+        selection = self.select(arguments)
         assert len(selection) == 1, f"Expected exactly one row, got {len(selection)}"
-        return selection.iloc[0]
+        return selection
 
     def arity(self):
         return len(self.index)
@@ -234,19 +283,17 @@ class Edge(Callable):
         self.block = block
         self.cardinality = cardinality
     
-    def allows(self, interpreter: Interpreter, val: t.Any):
-        assert isinstance(val, pd.DataFrame)
-        previous = interpreter.env
-        interpreter.env = Environment(self.closure)
-        interpreter.env.define('this', val)
-        assert self.arity() == 1
-        actual_value = val[self.name]
-        expected_value = self.call(interpreter, [val])
+    def parse(self, interpreter: Interpreter, val: pd.Series, format: t.Optional[str]):
+        assert isinstance(val, pd.Series)
+        assert self.arity() ==  0
+        if val.empty:
+            return val
+        expected_value = self.call(interpreter, [])
         if isinstance(expected_value, Type):
-            for index, val in actual_value.iteritems():
-                assert expected_value.allows(interpreter, val)
+            return expected_value.parse(interpreter, val, None)
         else:
-            assert (actual_value == expected_value).all()
+            assert (val == expected_value).all()
+            return val
     
     def call(self, interpreter: Interpreter, arguments):
         env = Environment(self.closure)
@@ -398,9 +445,9 @@ def get_child_by_index(node: Ast, index: int) -> lark.Tree:
 
 class Interpreter(lark.visitors.Interpreter):
     env: Environment
-    data: t.Dict[str, pd.DataFrame]
+    data: t.Dict[str, t.Any]
 
-    def __init__(self, env: Environment, data: t.Dict[str, pd.DataFrame]):
+    def __init__(self, env: Environment, data: t.Dict[str, t.Any]):
         self.env = env
         self.data = data
     
@@ -455,33 +502,39 @@ class Interpreter(lark.visitors.Interpreter):
 
     def model_def(self, model_def: lark.Tree):
         name = get_token(model_def, 'TYPE')
-        format = find_token(model_def, 'FORMAT')
         indexes = self.visit_all(find_children(model_def, 'index'))
         block = get_child_by_index(model_def, -1)
         assert len(indexes) == 1
         assert name in self.data
         model = Model(name, indexes[0], Environment(self.env))
-        model.env.define('this', model)
         self.env.define(name, model)
-        self.visit_with_env(block, model.env)
-        data = self.data[name]
-        model.allows(self, data)
 
-    def edge_def(self, edge_def: lark.Tree):
+        for stmt in iter_children(block):
+            if stmt.data == 'edge_def':
+                edge = self._edge_def(stmt)
+                model.define_edge(edge)
+            else:
+                raise NotImplementedError()
+        
+        data = self.data[name]
+        model.parse(self, data, None)
+    
+    def _edge_def(self, edge_def: lark.Tree):
         name = get_token(edge_def, 'EDGE')
         indexes = self.visit_all(find_children(edge_def, 'index'))
         params = indexes[0] if len(indexes) > 0 else []
         cardinality = Cardinality(find_token(edge_def, 'CARDINALITY') or '!')
         exp = get_child_by_index(edge_def, -1)
-
-        if self.env.has('this'):
-            params = ['this', *params]
         
         if exp.data != 'block':
             exp = lark.Tree('block', [lark.Tree('return_stmt', [exp])])
         
         edge = Edge(name, Environment(self.env), params, exp, cardinality)
-        self.env.define(name, edge)
+        return edge
+
+    def edge_def(self, edge_def: lark.Tree):
+        edge = self._edge_def(edge_def)
+        self.env.define(edge.name, edge)
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
@@ -508,14 +561,24 @@ if __name__ == '__main__':
     env.define('Number', Number())
     env.define('String', String())
     env.define('Boolean', Boolean())
+    # interpreter = Interpreter(env, data={
+    #     'User': pd.DataFrame([
+    #         {'id': 1}
+    #     ])
+    # })
     interpreter = Interpreter(env, data={
-        'User': pd.DataFrame([
-            {'id': 1}
-        ])
+        'User': [
+            {'id': 1, 'name': 'alice', 'friends': [
+                {'id': 2, 'name': 'bob'},
+                {'id': 3, 'name': 'charlie'},
+            ]},
+        ]
     })
     interpreter.visit(definitions_parser.parse('''
     User(id) {
         id: Number
+        name: String
+        friends*: User
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
