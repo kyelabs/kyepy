@@ -54,6 +54,9 @@ class Type(Callable):
     
     def get_edge(self, name: str):
         raise NotImplementedError()
+
+    def has_edge(self, name: str) -> bool:
+        return name in self.list_edges()
     
     def list_edges(self) -> t.Set[str]:
         raise NotImplementedError()
@@ -155,16 +158,12 @@ class Model(Type):
         if name not in self.edges:
             raise RuntimeError(f"Edge '{name}' not found in model '{self.name}'")
         return self.edges[name]
+    
+    def has_edge(self, name: str) -> bool:
+        return name in self.edges
 
     def list_edges(self):
         return set(self.edges.keys())
-
-    def parse_edge(self, interpreter: Interpreter, edge_name: str, val: pd.Series) -> pd.Series:
-        val = val.explode().dropna().infer_objects()
-        val = self.edges[edge_name].parse(interpreter, val, None)
-        val = val.groupby(val.index).unique()
-        val.name = edge_name
-        return val
     
     def parse(self, interpreter: Interpreter, raw_val: t.Any, format: t.Optional[str]):
         def is_series_of_dicts(s: pd.Series):
@@ -179,16 +178,11 @@ class Model(Type):
         elif isinstance(raw_val, pd.DataFrame):
             val = raw_val
         assert isinstance(val, pd.DataFrame)
-        # Temporarily replace the index, so that we can make sure
-        # we are grouping by a unique index
-        old_idx = val.index
-        val = val.reset_index(drop=True)
-        assert val.index.is_unique, "Index is not unique."
 
         # Edge assertions should only be testing the actual values
         # and not the structure of the data frame
         frame = pd.concat([
-            self.parse_edge(interpreter, edge, val[edge])
+            self.edges[edge].parse(interpreter, val[edge], None)
             for edge in self.list_edges()
             if edge in val.columns
         ], axis=1)
@@ -204,12 +198,12 @@ class Model(Type):
             self.frame = normalize_frame(pd.concat([self.frame, grouped]))
 
             for condition in self.conditions:
-                assert interpreter.visit(condition)
+                assert interpreter.visit_with_env(condition, self.env)
 
         # Return the index columns
         return pd.Series(
             t.cast(t.List, frame[self.index].itertuples(index=False, name=None)),
-            index=old_idx
+            index=frame.index
         )
 
     @t.overload
@@ -246,27 +240,32 @@ class Model(Type):
 # class SubModel(Type):
 #     parent: Type
 #     conditions: t.List[lark.Tree]
-#     edges: t.Dict[str, pd.Series]
+#     edges: t.Dict[str, Edge]
 
-#     def __init__(self, parent: Type, condition: lark.Tree):
+#     def __init__(self, parent: Type, conditions: t.List[lark.Tree]):
 #         self.parent = parent
-#         self.condition = condition
+#         self.conditions = conditions
+#         self.env = Environment(parent.env if isinstance(parent, Model) else None)
     
-#     def define(self, name: str, edge: pd.Series):
-#         self.edges[name] = edge
+#     def define_edge(self, edge: Edge):
+#         assert not self.has_edge(edge.name)
+#         assert isinstance(edge, Edge)
+#         self.edges[edge.name] = edge
+#         self.env.define(edge.name, edge)
     
 #     def get_edge(self, name: str):
 #         if name in self.edges:
 #             return self.edges[name]
 #         return self.parent.get_edge(name)
+
+#     def has_edge(self, name: str) -> bool:
+#         return name in self.edges or self.parent.has_edge(name)
     
 #     def list_edges(self) -> t.Set[str]:
 #         return set(self.edges.keys()) | self.parent.list_edges()
 
-#     def has(self, interpreter: Interpreter, val: t.Any):
-#         if not self.parent.has(interpreter, val):
-#             return False
-#         env = Environment(interpreter.env)
+#     def parse(self, interpreter: Interpreter, raw_val: t.Any, format: t.Optional[str]):
+#         val = self.parent.parse(interpreter, raw_val, format)
 #         for edge in self.list_edges():
 #             env.define(edge, self.get_edge(edge))
 #         return interpreter.visit_with_env(self.condition, env)
@@ -288,17 +287,28 @@ class Edge(Callable):
         self.block = block
         self.cardinality = cardinality
     
-    def parse(self, interpreter: Interpreter, val: pd.Series, format: t.Optional[str]):
+    def parse(self, interpreter: Interpreter, val: pd.Series, format: t.Optional[str]) -> pd.Series:
+        val = val.explode().dropna().infer_objects()
+        
+        # Temporarily replace the index, so that we can make sure
+        # they are grouping by a unique index per row
+        idx = val.index
+        val = val.reset_index(drop=True)
+        
         assert isinstance(val, pd.Series)
         assert self.arity() ==  0
         if val.empty:
             return val
         expected_value = self.call(interpreter, [])
         if isinstance(expected_value, Type):
-            return expected_value.parse(interpreter, val, None)
+            val = expected_value.parse(interpreter, val, None)
         else:
             assert (val == expected_value).all()
-            return val
+        
+        val.index = idx
+        val = val.groupby(val.index).unique()
+        val.name = self.name
+        return val
     
     def call(self, interpreter: Interpreter, arguments):
         env = Environment(self.closure)
@@ -594,7 +604,7 @@ if __name__ == '__main__':
     result = interpreter.visit(expressions_parser.parse('''
     User
     '''))
-    print(result)
+    print(result.frame)
     print('hi')
 
     # expressions_parser = get_parser('exp')
