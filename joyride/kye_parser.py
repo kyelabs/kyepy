@@ -179,6 +179,11 @@ class Model(Type):
         elif isinstance(raw_val, pd.DataFrame):
             val = raw_val
         assert isinstance(val, pd.DataFrame)
+        # Temporarily replace the index, so that we can make sure
+        # we are grouping by a unique index
+        old_idx = val.index
+        val = val.reset_index(drop=True)
+        assert val.index.is_unique, "Index is not unique."
 
         # Edge assertions should only be testing the actual values
         # and not the structure of the data frame
@@ -204,7 +209,7 @@ class Model(Type):
         # Return the index columns
         return pd.Series(
             t.cast(t.List, frame[self.index].itertuples(index=False, name=None)),
-            index=frame.index
+            index=old_idx
         )
 
     @t.overload
@@ -569,7 +574,12 @@ if __name__ == '__main__':
     interpreter = Interpreter(env, data={
         'User': [
             {'id': 1, 'name': 'alice', 'friends': [
-                {'id': 2, 'name': 'bob'},
+                {'id': 2, 'name': 'bob', 
+                 'friends': [
+                    {'id': 1, 'name': 'alice'},
+                    {'id': 3, 'name': 'charlie'},
+                 ]
+                },
                 {'id': 3, 'name': 'charlie'},
             ]},
         ]
@@ -582,7 +592,7 @@ if __name__ == '__main__':
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
-    User(1)
+    User
     '''))
     print(result)
     print('hi')
