@@ -8,10 +8,26 @@ import pandas as pd
 class Environment:
     values: t.Dict[str, t.Any]
     enclosing: t.Optional[Environment]
+    children: t.Dict[str, Environment]
 
     def __init__(self, enclosing: t.Optional[Environment]=None):
         self.values = {}
         self.enclosing = enclosing
+        self.children = {}
+    
+    def spawn(self, name: str) -> Environment:
+        if name in self.children:
+            raise RuntimeError(f'Environment "{name}" already defined.')
+        child = Environment(self)
+        self.children[name] = child
+        return child
+
+    def get_env(self, name: str) -> Environment:
+        if name in self.children:
+            return self.children[name]
+        if self.enclosing is not None:
+            return self.enclosing.get_env(name)
+        raise RuntimeError(f'Environment "{name}" not found.')
     
     def get_owner(self, name: str) -> t.Optional[Environment]:
         if name in self.values:
@@ -576,7 +592,7 @@ class Interpreter(lark.visitors.Interpreter):
         assert val.index.names == index
         assert val.index.is_unique
         self.env.define(name, val)
-        model_env = Environment(self.env)
+        model_env = self.env.spawn(name)
         model_env.define('this', val)
         self.visit_with_env(block, model_env)
 
@@ -594,24 +610,40 @@ class Interpreter(lark.visitors.Interpreter):
 
         df = self.env.get('this')
         assert isinstance(df, pd.DataFrame)
-        df = df.reset_index()
-        val = pd.Series(index=df.index, dtype='object', name=name)
-        if name in df.columns:
+
+        # If edge is part of the index, bring it into it's own column
+        # while still keeping the original dataframe index
+        if name in df.index.names:
+            val = pd.Series(df.index.get_level_values(name), index=df.index)
+
+        # Edge not defined, no need to check it
+        elif name not in df.columns:
+            val = pd.Series(
+                dtype='object',
+                name=name,
+                # Copy an empty version of the index
+                index=df.index.drop(df.index)
+            )
+            self.env.define(name, val)
+            return
+        else:
             val = df[name]
         
-        if cardinality == Cardinality.ONE or cardinality == Cardinality.MORE:
+        if cardinality in (Cardinality.ONE, Cardinality.MORE):
             assert not val.isna().any()
         
         val = val.explode().dropna().infer_objects()
 
-        if cardinality == Cardinality.ONE or cardinality == Cardinality.MAYBE:
+        if cardinality in (Cardinality.ONE, Cardinality.MAYBE):
             assert val.index.is_unique
 
         if isinstance(expected_value, Type):
             expected_value.test(self, val)
-        elif not val.empty:
-            assert (val == expected_value).all()
+        elif isinstance(expected_value, pd.DataFrame):
+            assert len(expected_value.index.names) == 1
+            assert val.isin(expected_value.index).all()
         else:
+            assert (val == expected_value).all()
             val = expected_value
 
         self.env.define(name, val)
@@ -665,7 +697,7 @@ if __name__ == '__main__':
     interpreter = Interpreter(env, data={
         'User': pd.DataFrame([
             {'id': 1, 'name': 'alice'},
-            {'id': 2, 'name': 'bob'},
+            {'id': 2, 'name': 'bob', 'friends': [1, 3]},
             {'id': 3, 'name': 'charlie'},
         ]).set_index('id'),
     })
