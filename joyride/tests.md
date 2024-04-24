@@ -7,3 +7,4 @@
   - save edge as the const and not the series
 - If edge is part of the index, bring it out into it's own column
 - Make sure edge values retain their dataframe's index so that they can be joined and compared later
+- Use the callee's environment within a filter, but add the current 'this' to it
