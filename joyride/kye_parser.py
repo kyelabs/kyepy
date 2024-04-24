@@ -593,6 +593,7 @@ class Interpreter(lark.visitors.Interpreter):
         assert val.index.is_unique
         self.env.define(name, val)
         model_env = self.env.spawn(name)
+        val.attrs = {'model': str(name)}
         model_env.define('this', val)
         self.visit_with_env(block, model_env)
 
@@ -672,6 +673,24 @@ class Interpreter(lark.visitors.Interpreter):
 
         raise NotImplementedError()
 
+    def filter_exp(self, filter_exp: lark.Tree):
+        callee = self.visit(get_child_by_index(filter_exp, 0))
+        assert isinstance(callee, pd.DataFrame)
+        assert 'model' in callee.attrs
+
+        # Use the callee's environment, but add the current 'this' to it
+        env = Environment(self.env.get_env(callee.attrs['model']))
+        this = env.get('this') if env.has('this') else None
+        env.define('this', this)
+        
+        for condition_exp in list(iter_children(filter_exp))[1:]:
+            cond = self.visit_with_env(condition_exp, env)
+            assert isinstance(cond, pd.Series)
+            assert cond.isin([True, False]).all()
+            cond = cond.groupby(cond.index).any().reindex(callee.index, fill_value=False)
+            callee = callee[cond]
+        return callee
+
     def assert_stmt(self, assert_stmt: lark.Tree):
         exp = get_child_by_index(assert_stmt, 0)
         val = self.visit(exp)
@@ -705,12 +724,12 @@ if __name__ == '__main__':
     User(id) {
         id: Number
         name: String
-        friends*: User
+        friends*: User[name != "bob"]
         assert id < 4
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
-    User
+    User[name != "bob"]
     '''))
     print(result)
     print('hi')
