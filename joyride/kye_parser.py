@@ -690,6 +690,17 @@ class Interpreter(lark.visitors.Interpreter):
             cond = cond.groupby(cond.index).any().reindex(callee.index, fill_value=False)
             callee = callee[cond]
         return callee
+    
+    def dot_exp(self, dot_exp: lark.Tree):
+        callee = self.visit(get_child_by_index(dot_exp, 0))
+        edge = get_token(dot_exp, 'EDGE')
+        if isinstance(callee, pd.DataFrame):
+            assert 'model' in callee.attrs
+            model_env = self.env.get_env(callee.attrs['model'])
+            return model_env.get(edge)
+        if isinstance(callee, Type):
+            return callee.get_edge(edge)
+        raise NotImplementedError()
 
     def assert_stmt(self, assert_stmt: lark.Tree):
         exp = get_child_by_index(assert_stmt, 0)
@@ -724,12 +735,12 @@ if __name__ == '__main__':
     User(id) {
         id: Number
         name: String
-        friends*: User[name != "bob"]
+        friends*: User
         assert id < 4
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
-    User[name != "bob"]
+    User
     '''))
     print(result)
     print('hi')
