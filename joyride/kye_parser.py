@@ -51,6 +51,9 @@ class Type(Callable):
     
     def parse(self, interpreter: Interpreter, val: t.Any, format: t.Optional[str]) -> t.Any:
         raise NotImplementedError()
+
+    def test(self, interpreter: Interpreter, val: t.Any):
+        raise NotImplementedError()
     
     def get_edge(self, name: str):
         raise NotImplementedError()
@@ -76,6 +79,12 @@ class Number(Abstract):
             return val
         return float(val)
     
+    def test(self, interpreter: Interpreter, val: t.Any):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_numeric_dtype(val)
+        else:
+            assert isinstance(val, (int, float))
+    
     def list_edges(self) -> t.Set[str]:
         return set()
 
@@ -93,6 +102,12 @@ class String(Abstract):
             assert val.empty or pd.api.types.is_string_dtype(val)
             return val
         return str(val)
+    
+    def test(self, interpreter: Interpreter, val: t.Any):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_string_dtype(val)
+        else:
+            assert isinstance(val, str)
 
     def list_edges(self) -> t.List[str]:
         return ['length']
@@ -111,6 +126,12 @@ class Boolean(Abstract):
             assert val.empty or pd.api.types.is_bool_dtype(val)
             return val
         return bool(val)
+    
+    def test(self, interpreter: Interpreter, val: t.Any):
+        if isinstance(val, pd.Series):
+            assert val.empty or pd.api.types.is_bool_dtype(val)
+        else:
+            assert isinstance(val, bool)
     
     def list_edges(self) -> t.Set[str]:
         return set()
@@ -205,6 +226,18 @@ class Model(Type):
             t.cast(t.List, frame[self.index].itertuples(index=False, name=None)),
             index=frame.index
         )
+
+    def test(self, interpreter: Interpreter, val: t.Any):
+        assert isinstance(val, pd.DataFrame)
+        assert val.index.names == self.index
+        assert val.index.is_unique
+
+        for edge in self.list_edges():
+            if edge in val:
+                self.edges[edge].test(interpreter, val[edge])
+        
+        for condition in self.conditions:
+            assert interpreter.visit_with_env(condition, self.env)
 
     @t.overload
     def select(self, keys: t.List[t.Any]) -> pd.DataFrame: ...
@@ -310,10 +343,26 @@ class Edge(Callable):
         val.name = self.name
         return val
     
+    def test(self, interpreter: Interpreter, val: pd.Series):
+        assert isinstance(val, pd.Series)
+        assert val.name == self.name
+        assert val.index.is_unique
+        assert self.arity() == 0
+        if val.empty:
+            return
+        expected_value = self.call(interpreter, [])
+        if isinstance(expected_value, Type):
+            expected_value.test(interpreter, val)
+        else:
+            assert (val == expected_value).all()
+    
     def call(self, interpreter: Interpreter, arguments):
-        env = Environment(self.closure)
-        for name, val in zip(self.params, arguments):
-            env.define(name, val)
+        if len(self.params):
+            env = Environment(self.closure)
+            for name, val in zip(self.params, arguments):
+                env.define(name, val)
+        else:
+            env = self.closure
         result = interpreter.visit_with_env(self.block, env)
         assert type(result) is list
         return result[-1]
@@ -521,35 +570,51 @@ class Interpreter(lark.visitors.Interpreter):
         block = get_child_by_index(model_def, -1)
         assert len(indexes) == 1
         assert name in self.data
-        model = Model(name, indexes[0], Environment(self.env))
-        self.env.define(name, model)
+        val = self.data[name]
+        index = indexes[0]
+        assert isinstance(val, pd.DataFrame)
+        assert val.index.names == index
+        assert val.index.is_unique
+        self.env.define(name, val)
+        model_env = Environment(self.env)
+        model_env.define('this', val)
+        self.visit_with_env(block, model_env)
 
-        for stmt in iter_children(block):
-            if stmt.data == 'edge_def':
-                edge = self._edge_def(stmt)
-                model.define_edge(edge)
-            else:
-                raise NotImplementedError()
-        
-        data = self.data[name]
-        model.parse(self, data, None)
-    
-    def _edge_def(self, edge_def: lark.Tree):
+    def edge_def(self, edge_def: lark.Tree):
         name = get_token(edge_def, 'EDGE')
         indexes = self.visit_all(find_children(edge_def, 'index'))
         params = indexes[0] if len(indexes) > 0 else []
         cardinality = Cardinality(find_token(edge_def, 'CARDINALITY') or '!')
         exp = get_child_by_index(edge_def, -1)
-        
-        if exp.data != 'block':
-            exp = lark.Tree('block', [lark.Tree('return_stmt', [exp])])
-        
-        edge = Edge(name, Environment(self.env), params, exp, cardinality)
-        return edge
 
-    def edge_def(self, edge_def: lark.Tree):
-        edge = self._edge_def(edge_def)
-        self.env.define(edge.name, edge)
+        if len(params) > 0:
+            raise NotImplementedError()
+
+        expected_value = self.visit(exp)
+
+        df = self.env.get('this')
+        assert isinstance(df, pd.DataFrame)
+        df = df.reset_index()
+        val = pd.Series(index=df.index, dtype='object', name=name)
+        if name in df.columns:
+            val = df[name]
+        
+        if cardinality == Cardinality.ONE or cardinality == Cardinality.MORE:
+            assert not val.isna().any()
+        
+        val = val.explode().dropna().infer_objects()
+
+        if cardinality == Cardinality.ONE or cardinality == Cardinality.MAYBE:
+            assert val.index.is_unique
+
+        if isinstance(expected_value, Type):
+            expected_value.test(self, val)
+        elif not val.empty:
+            assert (val == expected_value).all()
+        else:
+            val = expected_value
+
+        self.env.define(name, val)
     
     @lark.v_args(inline=True)
     def edge_identifier(self, name):
@@ -562,12 +627,28 @@ class Interpreter(lark.visitors.Interpreter):
         return self.env.get(name)
 
     def call_exp(self, call_exp: lark.Tree):
-        edge = self.visit(get_child_by_index(call_exp, 0))
-        assert isinstance(edge, Callable)
+        callee = self.visit(get_child_by_index(call_exp, 0))
         arguments = self.visit_all(list(iter_children(call_exp))[1:])
-        assert len(arguments) == edge.arity()
-        return edge.call(self, arguments)
 
+        if isinstance(callee, (pd.Series, pd.DataFrame)):
+            assert len(arguments) == len(callee.index.names)
+            assert tuple(arguments) in callee.index
+            return callee.loc[tuple(arguments)]
+    
+        if isinstance(callee, Type):
+            return callee.call(self, arguments)
+
+        raise NotImplementedError()
+
+    def assert_stmt(self, assert_stmt: lark.Tree):
+        exp = get_child_by_index(assert_stmt, 0)
+        val = self.visit(exp)
+        if isinstance(val, pd.Series):
+            assert val.empty or val.all()
+            return
+        if isinstance(val, pd.DataFrame):
+            raise NotImplementedError()
+        assert val
 
 if __name__ == '__main__':
     definitions_parser = get_parser('statements')
@@ -582,29 +663,24 @@ if __name__ == '__main__':
     #     ])
     # })
     interpreter = Interpreter(env, data={
-        'User': [
-            {'id': 1, 'name': 'alice', 'friends': [
-                {'id': 2, 'name': 'bob', 
-                 'friends': [
-                    {'id': 1, 'name': 'alice'},
-                    {'id': 3, 'name': 'charlie'},
-                 ]
-                },
-                {'id': 3, 'name': 'charlie'},
-            ]},
-        ]
+        'User': pd.DataFrame([
+            {'id': 1, 'name': 'alice'},
+            {'id': 2, 'name': 'bob'},
+            {'id': 3, 'name': 'charlie'},
+        ]).set_index('id'),
     })
     interpreter.visit(definitions_parser.parse('''
     User(id) {
         id: Number
         name: String
         friends*: User
+        assert id < 4
     }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
     User
     '''))
-    print(result.frame)
+    print(result)
     print('hi')
 
     # expressions_parser = get_parser('exp')
