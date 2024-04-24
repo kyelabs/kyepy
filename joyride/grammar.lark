@@ -62,7 +62,7 @@ UNARY_OP: "!" | "~"
          | "(" exp ")"
          | atom_exp "[" _comma_delimited{ exp } "]" -> filter_exp
          | atom_exp "(" _comma_delimited{ exp } ")" -> call_exp
-         | atom_exp "." atom_exp                    -> dot_exp
+         | atom_exp "." EDGE                        -> dot_exp
 
 identifier: TYPE FORMAT_STRING? -> type_identifier
           | EDGE                -> edge_identifier
