@@ -596,6 +596,21 @@ class Interpreter(lark.visitors.Interpreter):
         val.attrs = {'model': str(name)}
         model_env.define('this', val)
         self.visit_with_env(block, model_env)
+    
+    def type_def(self, type_def: lark.Tree):
+        name = get_token(type_def, 'TYPE')
+        parent = self.visit(get_child_by_index(type_def, 0))
+        block = get_child_by_index(type_def, 1)
+
+        assert isinstance(parent, pd.DataFrame)
+        assert 'model' in parent.attrs
+        parent_env = self.env.get_env(parent.attrs['model'])
+
+        model_env = Environment(parent_env)
+        self.env.define(name, parent)
+        model_env.define('this', parent)
+        if block is not None:
+            self.visit_with_env(block, model_env)
 
     def edge_def(self, edge_def: lark.Tree):
         name = get_token(edge_def, 'EDGE')
@@ -738,9 +753,12 @@ if __name__ == '__main__':
         friends*: User
         assert id < 4
     }
+    Alice: User[id == 1] {
+        # assert name == "alice"
+    }
     '''))
     result = interpreter.visit(expressions_parser.parse('''
-    User
+    Alice
     '''))
     print(result)
     print('hi')

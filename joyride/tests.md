@@ -8,3 +8,4 @@
 - If edge is part of the index, bring it out into it's own column
 - Make sure edge values retain their dataframe's index so that they can be joined and compared later
 - Use the callee's environment within a filter, but add the current 'this' to it
+- Edges identifiers should be relative to the current type context (and any filters applied to the context)
