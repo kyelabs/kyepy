@@ -87,7 +87,7 @@ class Interpreter(ast.Visitor):
     
     def visit_type_identifier(self, type: ast.TypeIdentifier):
         if type.name.lexeme not in self.types:
-            raise KyeRuntimeError(type.name, 'Type not found.')
+            raise KyeRuntimeError(type.name, 'Type not defined.')
         return self.types[type.name.lexeme]
     
     def visit_edge_identifier(self, edge: ast.EdgeIdentifier):
