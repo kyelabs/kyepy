@@ -15,7 +15,7 @@ statements: _line_delimited{ statement }
           | "null" exp     -> null_stmt
           | "return" exp   -> return_stmt
 
-model_def: TYPE index+ block
+model_def: TYPE index* block
 type_def: TYPE ":" exp block?
 
 edge_def: EDGE index* CARDINALITY? (":" exp | block)
@@ -71,7 +71,7 @@ UNARY_OP: "!" | "~"
 identifier: TYPE FORMAT? -> type_identifier
           | EDGE         -> edge_identifier
 
-literal: SIGNED_NUMBER
+literal: NUMBER
        | STRING
        | BOOLEAN
 
@@ -79,17 +79,14 @@ TYPE: /[A-Z]+[a-z][a-zA-Z0-9]*/
 EDGE: /[a-z_]+[a-z_A-Z0-9]*/
 
 DIGIT: "0".."9"
-
 INT: DIGIT+
 SIGNED_INT: ["+"|"-"] INT
 DECIMAL: INT "." INT
 
 _EXP: ("e"|"E") SIGNED_INT
 FLOAT: INT _EXP | DECIMAL _EXP?
-SIGNED_FLOAT: ["+"|"-"] FLOAT
 
-NUMBER: FLOAT | INT
-SIGNED_NUMBER: ["+"|"-"] NUMBER
+NUMBER: ["+"|"-"] (FLOAT | INT)
 
 BOOLEAN: "TRUE" | "FALSE"
 
