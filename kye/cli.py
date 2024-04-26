@@ -85,7 +85,7 @@ def run_file(file_path, tables):
     return interpreter
 
 
-if __name__ == '__main__':
+def main():
     tables = {
         'User': pd.DataFrame([
             {'id': 1, 'name': 'Alice'},
