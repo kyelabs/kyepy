@@ -1,6 +1,6 @@
 from __future__ import annotations
 import typing as t
-import joyride.expressions as ast
+import kye.expressions as ast
 import pandas as pd
 
 class Callable:

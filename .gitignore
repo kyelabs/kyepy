@@ -11,3 +11,7 @@ main.py
 notes/
 examples/
 .vscode/
+tests/
+test.py
+
+sandbox.kye

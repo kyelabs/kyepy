@@ -7,9 +7,9 @@ import os
 
 import pandas as pd
 
-from joyride.parser import Parser
-from joyride.interpreter import Interpreter
-from joyride.errors import ErrorReporter, KyeRuntimeError
+from kye.parser import Parser
+from kye.interpreter import Interpreter
+from kye.errors import ErrorReporter, KyeRuntimeError
 
 def eval_definitions(source: str, interpreter: Interpreter) -> ErrorReporter:
     reporter = ErrorReporter(source)

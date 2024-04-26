@@ -1,4 +1,0 @@
-User(id) {
-  id: Number
-  name: String
-}
