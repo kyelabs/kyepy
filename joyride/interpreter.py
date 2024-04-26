@@ -3,13 +3,15 @@ import typing as t
 import joyride.expressions as ast
 import joyride.types as types
 import pandas as pd
+from joyride.errors import ErrorReporter, KyeRuntimeError
 
 class Interpreter(ast.Visitor):
     types: t.Dict[str, types.Type]
     this: t.Optional[types.Type]
     tables: t.Dict[str, pd.DataFrame]
+    reporter: ErrorReporter
     
-    def __init__(self, tables: t.Dict[str, pd.DataFrame]):
+    def __init__(self, tables: t.Dict[str, pd.DataFrame], reporter: ErrorReporter):
         self.types = {
             'Number': types.Number(),
             'String': types.String(),
@@ -17,31 +19,45 @@ class Interpreter(ast.Visitor):
         }
         self.this = None
         self.tables = tables
+        self.reporter = reporter
     
     def visit_model(self, model_ast: ast.Model):
         if len(model_ast.indexes) == 0:
-            raise ValueError('Model must have at least one index.')
+            raise KyeRuntimeError(model_ast.name, 'Models without indexes are not yet supported.')
         if len(model_ast.indexes) > 1:
-            raise NotImplementedError('Models with multiple indexes are not supported.')
+            raise KyeRuntimeError(model_ast.name, 'Models with multiple indexes are not yet supported.')
 
         model_name = model_ast.name.lexeme
         indexes = [index.lexeme for index in model_ast.indexes[0].names]
-        assert model_name in self.tables, f'Undefined Table {model_name}'
+        if len(indexes) == 0:
+            raise KyeRuntimeError(model_ast.name, 'Model must have at least one index.')
+
+        if model_name not in self.tables:
+            raise KyeRuntimeError(model_ast.name, 'Table not found for model.')
+
         data = self.tables[model_name]
         model = types.Model(model_name, indexes, data)
         self.types[model_name] = model
         self.this = model
         self.visit(model_ast.body)
         self.this = None
+
+        for idx_ast in model_ast.indexes[0].names:
+            if idx_ast.lexeme not in model.edges:
+                raise KyeRuntimeError(idx_ast, 'Index edge not defined in model.')
     
     def visit_edge(self, edge_ast: ast.Edge):
-        if len(edge_ast.indexes) >= 1:
-            raise NotImplementedError('Edges with indexes are not supported.')
         
         edge_name = edge_ast.name.lexeme
-        # indexes = [index.lexeme for index in edge_ast.indexes[0].names]
-        indexes = []
+
+        if len(edge_ast.params) > 0:
+            raise KyeRuntimeError(edge_ast.name, 'Edges with parameters are not yet supported.')
+        params = []
+
         assert isinstance(self.this, types.Model), 'No type to define edge on.'
+
+        if edge_name in self.this.edges:
+            raise KyeRuntimeError(edge_ast.name, 'Edge already defined in model.')
 
         type = self.visit(edge_ast.body)
         if not isinstance(type, types.Type):
@@ -59,7 +75,7 @@ class Interpreter(ast.Visitor):
         edge = types.Edge(
             name=edge_name,
             model=self.this,
-            params=indexes,
+            params=params,
             cardinality=ast.Cardinality(edge_ast.cardinality.lexeme),
             type=type
         )
@@ -70,12 +86,13 @@ class Interpreter(ast.Visitor):
         edge.bind(val)
     
     def visit_type_identifier(self, type: ast.TypeIdentifier):
-        assert type.name.lexeme in self.types, f'Type {type.name.lexeme} not found.'
+        if type.name.lexeme not in self.types:
+            raise KyeRuntimeError(type.name, 'Type not found.')
         return self.types[type.name.lexeme]
     
     def visit_edge_identifier(self, edge: ast.EdgeIdentifier):
         if self.this is None:
-            raise ValueError('No type to resolve edge from.')
+            raise KyeRuntimeError(edge.name, 'Edge used outside of model.')
         return self.this.edges[edge.name.lexeme]
     
     def visit_literal(self, literal: ast.Literal):
