@@ -129,7 +129,7 @@ class Type(Stmt):
 @dataclass
 class Edge(Stmt):
     name: Token
-    indexes: t.List[Index]
+    params: t.List[Index]
     cardinality: Token
     body: Expr
 

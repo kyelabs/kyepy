@@ -3,6 +3,7 @@ import typing as t
 from pathlib import Path
 from enum import Enum
 import lark
+from joyride.errors import ErrorReporter
 import joyride.expressions as ast
 
 Ast = t.Union[ast.Node, ast.Token]
@@ -43,27 +44,24 @@ def get_token(nodes: t.List[Ast], type: ast.TokenType) -> ast.Token:
         raise ValueError(f'Token {type} not found.')
     return token
 
-def parse_token(token_type: ast.TokenType):
-    def parse_token_wrapper(self, token: lark.Token):
-        return ast.Token(token_type, str(token), token.pos_in_stream)
-    return parse_token_wrapper
+def parse_token(token: lark.Token):
+    token_type = None
+    if token.type in ('NUMBER', 'STRING', 'BOOLEAN', 'FORMAT', 'EDGE', 'TYPE'):
+        token_type = ast.TokenType(token.type)
+    else:
+        token_type = ast.TokenType(token)
+    return ast.Token(token_type, str(token), token.pos_in_stream)
 
 class Transformer(lark.Transformer):
-    def __init__(self):
+    def __init__(self, reporter: ErrorReporter):
         self.__visit_tokens__ = True
+        self.reporter = reporter
 
     def __default_token__(self, token: lark.Token):
-        return ast.Token(ast.TokenType(token), str(token), token.pos_in_stream)
+        return parse_token(token)
     
     def __default__(self, data: t.Any, children: t.List[t.Any], meta: t.Dict[str, t.Any]):
         raise NotImplementedError(f'No handler for {data}({children})')
-
-    SIGNED_NUMBER = parse_token(ast.TokenType.NUMBER)
-    STRING = parse_token(ast.TokenType.STRING)
-    BOOLEAN = parse_token(ast.TokenType.BOOLEAN)
-    FORMAT = parse_token(ast.TokenType.FORMAT)
-    EDGE = parse_token(ast.TokenType.EDGE)
-    TYPE = parse_token(ast.TokenType.TYPE)
 
     @lark.v_args(inline=True)
     def _binary(self, value1, operator, value2):
@@ -107,7 +105,6 @@ class Transformer(lark.Transformer):
         name = get_token(children, ast.TokenType.TYPE)
         indexes = find_children(children, ast.Index)
         block = get_child(children, ast.Block)
-        assert len(indexes) == 1
         return ast.Model(name, indexes, block)
     
     def type_def(self, children: t.List[Ast]):
@@ -177,23 +174,47 @@ class Transformer(lark.Transformer):
 
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').read_text()
 
-def get_parser(start):
-    return lark.Lark(
-        GRAMMAR,
-        parser='lalr',
-        propagate_positions=True,
-        start=start,
-    )
+class Parser:
+    def __init__(self, reporter: ErrorReporter):
+        self.reporter = reporter
+        self.transformer = Transformer(reporter)
+        self.definitions_parser = self.get_parser('statements')
+        self.expressions_parser = self.get_parser('exp')
 
-definitions_parser = get_parser('statements')
-expressions_parser = get_parser('exp')
+    def get_parser(self, start):
+        return lark.Lark(
+            GRAMMAR,
+            parser='lalr',
+            propagate_positions=True,
+            start=start,
+        )
+    
+    def on_error(self, e: lark.exceptions.UnexpectedInput) -> bool:
+        if isinstance(e, lark.exceptions.UnexpectedCharacters):
+            self.reporter.unexpected_character_error(e.pos_in_stream)
+        if isinstance(e, lark.exceptions.UnexpectedToken):
+            token = t.cast(lark.Token, e.__dict__['token'])
+            if token.type == '$END':
+                self.reporter.unterminated_token_error("Unexpected end of file.")
+            else:
+                token = parse_token(token)
+                self.reporter.parser_error(token, "Unexpected token")
+        if isinstance(e, lark.exceptions.UnexpectedEOF):
+            self.reporter.unterminated_token_error("Unexpected end of file.")
+        return False
+    
+    def parse_definitions(self, source: str) -> ast.Script:
+        try:
+            tree = self.definitions_parser.parse(source, on_error=self.on_error)
+        except lark.exceptions.UnexpectedInput as e:
+            return ast.Script([])
+        return self.transformer.transform(tree)
 
-def parse_definitions(source: str) -> ast.Script:
-    tree = definitions_parser.parse(source)
-    return Transformer().transform(tree)
+    def parse_expression(self, source: str) -> ast.Expr:
+        try:
+            tree = self.expressions_parser.parse(source, on_error=self.on_error)
+        except lark.exceptions.UnexpectedInput as e:
+            return ast.Literal(None)
+        return self.transformer.transform(tree)
 
-def parse_expression(source: str) -> ast.Expr:
-    tree = expressions_parser.parse(source)
-    return Transformer().transform(tree)
-
-__all__ = ['parse_definitions', 'parse_expression']
+__all__ = ['Parser']
