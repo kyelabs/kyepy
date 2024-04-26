@@ -1,4 +1,2 @@
-pydantic
-duckdb
 lark
 lark[interegular]
