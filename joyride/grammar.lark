@@ -24,8 +24,6 @@ if_stmt: "if" exp block ( "else" block )?
 
 op_stmt: "operation" OPERATION+ (exp (":" exp)?)?
 
-FORMAT: "<" TYPE ">"
-
 index: "(" _comma_delimited{ EDGE } ")"
 
 block: "{" _line_delimited{ statement } "}"
@@ -36,11 +34,17 @@ CARDINALITY: "*" | "?" | "+" | "!"
 
 ?exp: is_exp
 
-?is_exp: _binary_exp{is_exp, or_exp, "is"}
+?is_exp: _binary_exp{is_exp, or_exp, IS_OP}
+IS_OP: "is"
 
-?or_exp: _binary_exp{or_exp, xor_exp, "|"}
-?xor_exp: _binary_exp{xor_exp, and_exp, "^"}
-?and_exp: _binary_exp{and_exp, comp_exp, "&"}
+?or_exp: _binary_exp{or_exp, xor_exp, OR_OP}
+OR_OP: "|"
+
+?xor_exp: _binary_exp{xor_exp, and_exp, XOR_OP}
+XOR_OP: "^"
+
+?and_exp: _binary_exp{and_exp, comp_exp, AND_OP}
+AND_OP: "&"
 
 ?comp_exp: _binary_exp{comp_exp, mult_exp, COMPARISON_OP}
 COMPARISON_OP: "!=" | "==" | ">=" | "<=" | ">" | "<"
@@ -64,8 +68,8 @@ UNARY_OP: "!" | "~"
          | atom_exp "(" _comma_delimited{ exp } ")" -> call_exp
          | atom_exp "." EDGE                        -> dot_exp
 
-identifier: TYPE FORMAT_STRING? -> type_identifier
-          | EDGE                -> edge_identifier
+identifier: TYPE FORMAT? -> type_identifier
+          | EDGE         -> edge_identifier
 
 literal: SIGNED_NUMBER
        | STRING
@@ -89,7 +93,7 @@ SIGNED_NUMBER: ["+"|"-"] NUMBER
 
 BOOLEAN: "TRUE" | "FALSE"
 
-FORMAT_STRING: "<" /.*?/ ">"
+FORMAT: "<" /.*?/ ">"
 
 %ignore WS
 %ignore COMMENT
