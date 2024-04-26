@@ -1,9 +1,9 @@
 from __future__ import annotations
 import typing as t
-import joyride.expressions as ast
-import joyride.types as types
+import kye.expressions as ast
+import kye.types as types
 import pandas as pd
-from joyride.errors import ErrorReporter, KyeRuntimeError
+from kye.errors import ErrorReporter, KyeRuntimeError
 
 class Interpreter(ast.Visitor):
     types: t.Dict[str, types.Type]

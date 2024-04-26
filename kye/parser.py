@@ -3,8 +3,8 @@ import typing as t
 from pathlib import Path
 from enum import Enum
 import lark
-from joyride.errors import ErrorReporter
-import joyride.expressions as ast
+from kye.errors import ErrorReporter
+import kye.expressions as ast
 
 Ast = t.Union[ast.Node, ast.Token]
 
