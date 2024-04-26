@@ -18,8 +18,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-  "pydantic",
-  "duckdb",
   "lark",
   "lark[interegular]",
 ]
@@ -28,6 +26,9 @@ dependencies = [
 Documentation = "https://github.com/kyelabs/kyepy#readme"
 Issues = "https://github.com/kyelabs/kyepy/issues"
 Source = "https://github.com/kyelabs/kyepy"
+
+[project.scripts]
+kye = "kye.cli:main"
 
 [tool.hatch.version]
 path = "kye/__about__.py"
