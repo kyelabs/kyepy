@@ -14,7 +14,7 @@ class Interpreter(ast.Visitor):
     tables: Engine
     reporter: ErrorReporter
     
-    def __init__(self, tables: Engine, reporter: ErrorReporter):
+    def __init__(self, tables: Engine,):
         self.types = {
             'Number': types.Number(),
             'String': types.String(),
@@ -22,7 +22,6 @@ class Interpreter(ast.Visitor):
         }
         self.this = None
         self.tables = tables
-        self.reporter = reporter
     
     def visit_model(self, model_ast: ast.Model):
         if len(model_ast.indexes) == 0:
