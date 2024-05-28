@@ -4,6 +4,7 @@ __pycache__
 .conda
 *.ipynb
 *.csv
+*.jsonl
 .coverage
 dist/
 
