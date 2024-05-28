@@ -136,7 +136,6 @@ class Edge(Callable):
     model: Model
     params: t.List[str]
     cardinality: ast.Cardinality
-    data: pd.Series
     type: Type
     bound: t.Optional[pd.Series]
 

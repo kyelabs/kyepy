@@ -5,12 +5,12 @@ import readline
 import atexit
 import os
 
-import pandas as pd
+from kye.kye import Kye
 
-from kye.parser import Parser
-from kye.interpreter import Interpreter
-from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.engine import Engine
+if t.TYPE_CHECKING:
+    from kye.parser import Parser
+    from kye.interpreter import Interpreter
+    from kye.errors import ErrorReporter, KyeRuntimeError
 
 def eval_definitions(source: str, interpreter: Interpreter) -> ErrorReporter:
     reporter = ErrorReporter(source)
@@ -56,7 +56,7 @@ def setup_readline():
         pass
     atexit.register(readline.write_history_file, histfile)
 
-def run_prompt(interpreter):
+def run_prompt(kye):
     setup_readline()
     print("Kye REPL\n")
     while True:
@@ -64,8 +64,11 @@ def run_prompt(interpreter):
             user_input = input('> ')
             if user_input.lower() == "exit":
                 break
-            reporter = eval_expression(user_input, interpreter)
-            reporter.report()
+            val = kye.eval_expression(user_input)
+            if kye.reporter.had_error:
+                kye.reporter.report()
+            else:
+                print(val)
         except EOFError:
             print()
             break
@@ -73,28 +76,26 @@ def run_prompt(interpreter):
             print()
             continue
 
-def run_file(file_path, tables):
+def run_file(file_path, kye: Kye):
     with open(file_path, "r") as file:
         source = file.read()
-    interpreter = Interpreter(tables, ErrorReporter(source))
-    reporter = eval_definitions(source, interpreter)
-    reporter.report()
-    if reporter.had_runtime_error:
+    kye.eval_definitions(source)
+    kye.reporter.report()
+    if kye.reporter.had_runtime_error:
         sys.exit(70)
-    if reporter.had_error:
+    if kye.reporter.had_error:
         sys.exit(65)
-    return interpreter
 
 
 def main():
-    tables = Engine()
+    kye = Kye()
     
     if len(sys.argv) > 2:
         if sys.argv[1] == 'debug':
-            interpreter = run_file(sys.argv[2], tables)
-            run_prompt(interpreter)
+            run_file(sys.argv[2], kye)
+            run_prompt(kye)
     elif len(sys.argv) == 2:
-        run_file(sys.argv[1], tables)
+        run_file(sys.argv[1], kye)
     else:
         print("Usage: kye (debug) [script]")
     
