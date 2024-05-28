@@ -5,13 +5,16 @@ import kye.types as types
 import pandas as pd
 from kye.errors import ErrorReporter, KyeRuntimeError
 
+if t.TYPE_CHECKING:
+    from kye.engine import Engine
+
 class Interpreter(ast.Visitor):
     types: t.Dict[str, types.Type]
     this: t.Optional[types.Type]
-    tables: t.Dict[str, pd.DataFrame]
+    tables: Engine
     reporter: ErrorReporter
     
-    def __init__(self, tables: t.Dict[str, pd.DataFrame], reporter: ErrorReporter):
+    def __init__(self, tables: Engine, reporter: ErrorReporter):
         self.types = {
             'Number': types.Number(),
             'String': types.String(),
@@ -32,10 +35,10 @@ class Interpreter(ast.Visitor):
         if len(indexes) == 0:
             raise KyeRuntimeError(model_ast.name, 'Model must have at least one index.')
 
-        if model_name not in self.tables:
+        if not self.tables.has_table(model_name):
             raise KyeRuntimeError(model_ast.name, 'Table not found for model.')
 
-        data = self.tables[model_name]
+        data = self.tables.get_table(model_name)
         model = types.Model(model_name, indexes, data)
         self.types[model_name] = model
         self.this = model
@@ -141,3 +144,6 @@ class Interpreter(ast.Visitor):
         assert isinstance(object, types.Model), 'Can only access edges on models.'
         assert edge_name in object.edges, f'Edge {edge_name} not found on {object.name}.'
         return object.edges[edge_name]
+    
+    def visit_filter(self, filter: ast.Filter):
+        raise NotImplementedError('Filter expressions are not yet supported.')

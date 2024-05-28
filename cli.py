@@ -10,6 +10,7 @@ import pandas as pd
 from kye.parser import Parser
 from kye.interpreter import Interpreter
 from kye.errors import ErrorReporter, KyeRuntimeError
+from kye.engine import Engine
 
 def eval_definitions(source: str, interpreter: Interpreter) -> ErrorReporter:
     reporter = ErrorReporter(source)
@@ -86,12 +87,7 @@ def run_file(file_path, tables):
 
 
 def main():
-    tables = {
-        'User': pd.DataFrame([
-            {'id': 1, 'name': 'Alice'},
-            {'id': 2, 'name': 'Bob'},
-        ])
-    }
+    tables = Engine()
     
     if len(sys.argv) > 2:
         if sys.argv[1] == 'debug':
@@ -99,6 +95,10 @@ def main():
             run_prompt(interpreter)
     elif len(sys.argv) == 2:
         run_file(sys.argv[1], tables)
+    else:
+        print("Usage: kye (debug) [script]")
     
-    print("Usage: kye (debug) [script]")
     sys.exit(64)
+
+if __name__ == "__main__":
+    main()
