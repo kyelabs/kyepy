@@ -11,9 +11,13 @@ statements: _line_delimited{ statement }
           | edge_def
           | if_stmt
           | op_stmt
-          | "assert" exp   -> assert_stmt
-          | "null" exp     -> null_stmt
-          | "return" exp   -> return_stmt
+          | ASSERT exp   -> assert_stmt
+          | NULL exp     -> null_stmt
+          | RETURN exp   -> return_stmt
+
+ASSERT: "assert"
+NULL: "null"
+RETURN: "return"
 
 model_def: TYPE index* block
 type_def: TYPE ":" exp block?
