@@ -57,6 +57,8 @@ def setup_readline():
     atexit.register(readline.write_history_file, histfile)
 
 def run_prompt(kye):
+    import ibis
+    ibis.options.interactive = True
     setup_readline()
     print("Kye REPL\n")
     while True:
