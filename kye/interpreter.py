@@ -208,3 +208,11 @@ class Interpreter(ast.Visitor):
         for cond in conditions:
             condition = condition & cond
         return type.filter(condition)
+    
+    def visit_assert(self, assert_ast: ast.Assert):
+        assert self.this is not None, 'Assertion used outside of model.'
+        assert isinstance(self.this, Model), 'Assertion used outside of model.'
+        value = self.visit(assert_ast.value)
+        invalid_count = self.this.filter(~value).table.count().execute()
+        if invalid_count > 0:
+            raise KyeRuntimeError(assert_ast.keyword, 'Assertion failed.')
