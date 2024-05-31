@@ -28,7 +28,7 @@ class Type:
     def get(self, name: str):
         raise NotImplementedError()
     
-    def filter(self, arguments):
+    def filter(self, condition):
         raise NotImplementedError()
     
     def __str__(self):
@@ -70,6 +70,9 @@ class Model(Type):
             self.table[key] == val
             for key, val in zip(index, arguments)
         ]))
+    
+    def filter(self, condition) -> Model:
+        return self._filter(self.table.filter(condition))
     
     def __str__(self):
         return self.table.mutate(**{
@@ -198,4 +201,10 @@ class Interpreter(ast.Visitor):
         return type.get(edge_name)
     
     def visit_filter(self, filter: ast.Filter):
-        raise NotImplementedError('Filter expressions are not yet supported.')
+        type = self.visit(filter.object)
+        assert isinstance(type, Type), 'Can only filter on tables.'
+        conditions = [self.visit_with_this(argument, type) for argument in filter.conditions]
+        condition = conditions.pop(0)
+        for cond in conditions:
+            condition = condition & cond
+        return type.filter(condition)
