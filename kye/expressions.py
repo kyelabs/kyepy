@@ -27,6 +27,14 @@ class Cardinality(enum.Enum):
     MANY = '*'
     MAYBE = '?'
     MORE = '+'
+    
+    @property
+    def allows_null(self):
+        return self in (Cardinality.MAYBE, Cardinality.MANY)
+    
+    @property
+    def allows_many(self):
+        return self in (Cardinality.MORE, Cardinality.MANY)
 
 class TokenType(enum.Enum):
     # Single-character tokens.
@@ -123,14 +131,13 @@ class Model(Stmt):
 @dataclass
 class Type(Stmt):
     name: Token
-    parent: Expr
-    body: Block
+    value: Expr
 
 @dataclass
 class Edge(Stmt):
     name: Token
     params: t.List[Index]
-    cardinality: Token
+    cardinality: Cardinality
     body: Expr
 
 @dataclass
@@ -181,6 +188,11 @@ class Get(Expr):
 class Filter(Expr):
     object: Expr
     conditions: t.List[Expr]
+
+@dataclass
+class Select(Expr):
+    object: Expr
+    body: Block
 
 @dataclass
 class This(Expr):

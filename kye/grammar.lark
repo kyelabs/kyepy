@@ -20,9 +20,11 @@ NULL: "null"
 RETURN: "return"
 
 model_def: TYPE index* block
-type_def: TYPE ":" exp block?
+type_def: TYPE ":" exp
 
 edge_def: EDGE index* CARDINALITY? (":" exp | block)
+        // For select statments where you can specify an edge by just listing its name
+        | EDGE
 
 if_stmt: "if" exp block ( "else" block )?
 
@@ -70,6 +72,7 @@ UNARY_OP: "!" | "~"
          | "(" exp ")"
          | atom_exp "[" _comma_delimited{ exp } "]" -> filter_exp
          | atom_exp "(" _comma_delimited{ exp } ")" -> call_exp
+         | atom_exp block                           -> select_exp
          | atom_exp "." EDGE                        -> dot_exp
 
 identifier: TYPE FORMAT? -> type_identifier
