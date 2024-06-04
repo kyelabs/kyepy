@@ -175,6 +175,14 @@ class Interpreter(ast.Visitor):
 
         self.this.set(edge)
     
+    def visit_type(self, type_ast: ast.Type):
+        value = self.visit(type_ast.value)
+        assert isinstance(value, Model), 'Can only set alias to models.'
+        type = copy(value)
+        type.name = type_ast.name.lexeme
+        self.types[type.name] = type
+        return type
+    
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
         return self.types.get(type_ast.name.lexeme)
     
