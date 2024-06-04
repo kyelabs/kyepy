@@ -2,6 +2,7 @@ __pycache__
 .jupyter
 .ipynb_checkpoints
 .conda
+.DS_Store
 *.ipynb
 *.csv
 *.jsonl

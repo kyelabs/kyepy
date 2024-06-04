@@ -50,7 +50,8 @@ def parse_token(token: lark.Token):
         token_type = ast.TokenType(token.type)
     else:
         token_type = ast.TokenType(token)
-    return ast.Token(token_type, str(token), token.pos_in_stream)
+    assert token.start_pos is not None
+    return ast.Token(token_type, str(token), token.start_pos)
 
 class Transformer(lark.Transformer):
     def __init__(self, reporter: ErrorReporter):
@@ -109,19 +110,22 @@ class Transformer(lark.Transformer):
     
     def type_def(self, children: t.List[Ast]):
         name = get_token(children, ast.TokenType.TYPE)
-        parent = get_child(children, ast.Expr)
-        body = find_child(children, ast.Block)
-        if body is None:
-            body = ast.Block([])
-        return ast.Type(name, parent, body)
+        value = get_child(children, ast.Expr)
+        return ast.Type(name, value)
     
     def edge_def(self, children: t.List[Ast]):
         name = get_token(children, ast.TokenType.EDGE)
         indexes = find_children(children, ast.Index)
-        block = get_child(children, ast.Block, ast.Expr)
+        # TODO: make sure we are inside of a select statement
+        if len(children) == 1:
+            block = ast.EdgeIdentifier(name)
+        else:
+            block = get_child(children, ast.Block, ast.Expr)
         cardinality = find_token(children, ast.TokenType.STAR, ast.TokenType.PLUS, ast.TokenType.QUESTION, ast.TokenType.NOT)
         if cardinality is None:
-            cardinality = ast.Token(ast.TokenType.NOT, '!', -1)
+            cardinality = ast.Cardinality.ONE
+        else:
+            cardinality = ast.Cardinality(cardinality.lexeme)
         # if isinstance(block, ast.Expr):
         #     block = ast.Block([
         #         ast.Return(
@@ -165,6 +169,11 @@ class Transformer(lark.Transformer):
     def call_exp(self, children: t.List[Ast]):
         (callee, *arguments) = find_children(children, ast.Expr)
         return ast.Call(callee, arguments)
+    
+    def select_exp(self, children: t.List[Ast]):
+        object = get_child(children, ast.Expr)
+        body = get_child(children, ast.Block)
+        return ast.Select(object, body)
     
     def dot_exp(self, children: t.List[Ast]):
         object = get_child(children, ast.Expr)
