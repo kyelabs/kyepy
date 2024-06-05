@@ -1,218 +1,96 @@
 from __future__ import annotations
 import typing as t
+from copy import copy
+from dataclasses import dataclass, field
+
 import kye.expressions as ast
-import pandas as pd
 
-class Callable:
-    """ Abstract class for callables """
-    def call(self, arguments):
-        raise NotImplementedError()
+class Indexes:
+    tokens: t.Dict[str, t.List[ast.Token]]
+    sets: t.List[t.Tuple]
+    edges: t.Set[str]
+    
+    def __init__(self, indexes: t.List[ast.Index]):
+        self.ast = {}
+        self.sets = []
+        self.edges = set()
 
-    def arity(self):
-        raise NotImplementedError()
+        for index in indexes:
+            items = tuple(token.lexeme for token in index.names)
+            self.sets.append(items)
+            for token in index.names:
+                if not token.lexeme in self.ast:
+                    self.ast[token.lexeme] = []
+                self.ast[token.lexeme].append(token)
+                self.edges.add(token.lexeme)
+    
+    def __len__(self):
+        return len(self.sets)
 
-    def __str__(self):
-        return "<callable>"
 
-class Type(Callable):
+@dataclass(frozen=True)
+class Edge:
+    name: str
+    indexes: Indexes
+    allows_null: bool
+    allows_many: bool
+    input: Type
+    output: Type
+    expr: t.Optional[ast.Expr]
+
+class Type:
     name: str
     edges: t.Dict[str, Edge]
-
-    def test(self, value):
-        raise NotImplementedError()
+    filters: t.List[ast.Expr]
+    assertions: t.List[ast.Expr]
     
-    def __str__(self) -> str:
-        return self.name
+    def __init__(self, name, edges={}, filters=[], assertions=[]):
+        self.name = name
+        self.edges = edges
+        self.filters = filters
+        self.assertions = assertions
+    
+    def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):
+        child = Type(
+            name=new_name or self.name,
+            edges=copy(self.edges),
+            filters=self.filters + new_filters,
+            assertions=self.assertions + new_assertions,
+        )
+        for edge in new_edges:
+            child.define(edge)
+        return child
+    
+    def __iter__(self):
+        return iter(self.edges)
+    
+    def __contains__(self, edge_name):
+        return edge_name in self.edges
+    
+    def __getitem__(self, edge_name):
+        return self.edges[edge_name]
+    
+    def define(self, edge: Edge):
+        # TODO: Check if we are overriding an inherited edge
+        # if we are, then check that this type is a subtype of the inherited type
+        self.edges[edge.name] = edge
 
-class Abstract(Type):
-    pass
-
-class Number(Abstract):
-    name = "Number"
-    edges = {}
-
-    def test(self, val):
-        if isinstance(val, pd.Series):
-            assert val.empty or pd.api.types.is_numeric_dtype(val)
-        else:
-            assert isinstance(val, (int, float))
-
-    def arity(self):
-        return 1
-
-    def call(self, arguments):
-        return float(arguments[0])
-
-class String(Abstract):
-    name = "String"
-    edges = {}
-
-    def test(self, val):
-        if isinstance(val, pd.Series):
-            assert val.empty or pd.api.types.is_string_dtype(val)
-        else:
-            assert isinstance(val, str)
-
-    def arity(self):
-        return 1
-
-    def call(self, arguments):
-        return str(arguments[0])
-
-class Boolean(Abstract):
-    name = "Boolean"
-    edges = {}
-
-    def test(self, val):
-        if isinstance(val, pd.Series):
-            assert val.empty or pd.api.types.is_bool_dtype(val)
-        else:
-            assert isinstance(val, bool)
-
-    def arity(self):
-        return 1
-
-    def call(self, arguments):
-        return bool(arguments[0])
-
-def select(index: t.List[str], data: pd.DataFrame, keys: t.List[t.Any]) -> pd.DataFrame:
-    assert len(index) == len(keys)
-    for key, val in zip(index, keys):
-        assert key in data.columns
-        if isinstance(val, pd.Series):
-            data = data[data[key].isin(val)]
-        else:
-            data = data[data[key] == val]
-    return data
 
 class Model(Type):
-    name: str
-    index: t.List[str]
-    edges: t.Dict[str, Edge]
-    data: pd.DataFrame
-
-    def __init__(self, name: str, index: t.List[str], data: pd.DataFrame):
-        self.name = name
-        self.index = index
-        self.data = data
-        self.edges = {}
+    indexes: Indexes
     
-    def test(self, val):
-        if len(self.index) != 1:
-            raise NotImplementedError()
-        selection = select(self.index, self.data, [val,])
-        return not selection.empty
+    def __init__(self, name, indexes, edges={}, filters=[], assertions=[]):
+        super().__init__(name, edges, filters, assertions)
+        self.indexes = indexes
     
-    def arity(self):
-        return len(self.index)
-    
-    def call(self, arguments):
-        selection = select(self.index, self.data, arguments)
-        return SubModel(self, selection)
-    
-    def __str__(self):
-        return self.data.__str__()
-
-class SubModel(Model):
-    parent: Model
-    edges: t.Dict[str, Edge]
-    data: pd.DataFrame
-
-    def __init__(self, parent: Model, data: pd.DataFrame):
-        self.parent = parent
-        self.data = data
-        self.edges = {**parent.edges}
-    
-    @property
-    def name(self):
-        return self.parent.name
-    
-    @property
-    def index(self):
-        return self.parent.index
-
-class Edge(Callable):
-    name: str
-    model: Model
-    params: t.List[str]
-    cardinality: ast.Cardinality
-    type: Type
-    bound: t.Optional[pd.Series]
-
-    def __init__(self, name: str, model: Model, params: t.List[str], cardinality: ast.Cardinality, type: Type):
-        self.name = name
-        self.model = model
-        self.params = params
-        self.cardinality = cardinality
-        self.type = type
-        self.bound = None
-    
-    @property
-    def edges(self):
-        return self.type.edges
-    
-    def arity(self):
-        return 1 + len(self.params)
-    
-    def call(self, arguments):
-        assert len(arguments) == self.arity(), f"Expected {self.arity()} arguments, got {len(arguments)}"
-
-        assert isinstance(arguments[0], Model)
-        df = arguments[0].data
-        
-        if self.name not in df:
-            return pd.Series(
-                dtype='object',
-                name=self.name,
-                # Copy an empty version of the index
-                index=df.index.drop(df.index)
-            )
-        val = df[self.name]
-        
-        if self.cardinality in (ast.Cardinality.ONE, ast.Cardinality.MORE):
-            assert not val.isna().any()
-        
-        val = val.explode().dropna().infer_objects()
-
-        if self.cardinality in (ast.Cardinality.ONE, ast.Cardinality.MAYBE):
-            assert val.index.is_unique
-        
-        return val
-    
-    def bind(self, value: pd.Series):
-        self.bound = value
-        return self
-    
-    def __str__(self):
-        if self.bound is not None:
-            return self.bound.__str__()
-        return f"{self.model.name}.{self.name}"
-
-class Const(Type):
-    val: t.Any
-    type: Type
-
-    def __init__(self, val: t.Any, type: Type):
-        self.val = val
-        self.type = type
-    
-    @property
-    def name(self):
-        return self.type.name
-    
-    @property
-    def edges(self):
-        return self.type.edges
-    
-    def test(self, value):
-        self.type.test(value)
-        if isinstance(value, pd.Series):
-            assert (value == self.val).all()
-        else:
-            assert value == self.val
-    
-    def arity(self):
-        return 0
-    
-    def call(self, arguments):
-        return self.val
+    def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):
+        child = Model(
+            name=new_name or self.name,
+            indexes=self.indexes,
+            edges=copy(self.edges),
+            filters=self.filters + new_filters,
+            assertions=self.assertions + new_assertions,
+        )
+        for edge in new_edges:
+            child.define(edge)
+        return child

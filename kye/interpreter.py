@@ -113,11 +113,9 @@ class Model(Type):
 
 class Interpreter(ast.Visitor):
     engine: Engine
-    table_index_map: t.Dict[str, Indexes]
     reporter: ErrorReporter
     this: t.Optional[Type]
     types: t.Dict[str, Type]
-    calculated_edges: t.Dict[str, ibis.Column]
     
     def __init__(self, engine: Engine):
         self.engine = engine
