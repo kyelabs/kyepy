@@ -100,8 +100,6 @@ def main():
         run_file(sys.argv[1], kye)
     else:
         print("Usage: kye (debug) [script]")
-    
-    sys.exit(64)
 
 if __name__ == "__main__":
     main()
