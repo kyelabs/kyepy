@@ -40,19 +40,22 @@ class Edge:
 
 class Type:
     name: str
+    source: str
     edges: t.Dict[str, Edge]
     filters: t.List[ast.Expr]
     assertions: t.List[ast.Expr]
     
-    def __init__(self, name, edges={}, filters=[], assertions=[]):
+    def __init__(self, name, source=None, edges=None, filters=None, assertions=None):
         self.name = name
-        self.edges = edges
-        self.filters = filters
-        self.assertions = assertions
+        self.source = source or name
+        self.edges = edges or {}
+        self.filters = filters or []
+        self.assertions = assertions or []
     
     def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):
         child = Type(
             name=new_name or self.name,
+            source=self.source,
             edges=copy(self.edges),
             filters=self.filters + new_filters,
             assertions=self.assertions + new_assertions,
@@ -79,8 +82,8 @@ class Type:
 class Model(Type):
     indexes: Indexes
     
-    def __init__(self, name, indexes, edges={}, filters=[], assertions=[]):
-        super().__init__(name, edges, filters, assertions)
+    def __init__(self, name, indexes, **kwargs):
+        super().__init__(name, **kwargs)
         self.indexes = indexes
     
     def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):

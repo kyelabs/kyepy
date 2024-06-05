@@ -18,8 +18,11 @@ class Visitor:
                 self.visit(child)
     
     def visit(self, node: Node) -> t.Any:
-        node_class = snake_case(node.__class__.__name__)
-        visit_method = getattr(self, f'visit_{node_class}', self.visit_children)
+        node_class = snake_case(node.__class__.__name__)            
+        visit_method = getattr(self, f'visit_{node_class}', None)
+        if visit_method is None:
+            print(f"WARN: visit_{node_class} not implemented on {self.__class__.__name__}")
+            return self.visit_children(node)
         return visit_method(node)
 
 class Cardinality(enum.Enum):
@@ -178,6 +181,10 @@ class EdgeIdentifier(Expr):
 class Call(Expr):
     callee: Expr
     arguments: t.List[Expr]
+
+@dataclass
+class NativeCall(Expr):
+    fn: t.Callable
 
 @dataclass
 class Get(Expr):
