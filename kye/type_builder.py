@@ -5,15 +5,17 @@ import kye.expressions as ast
 import kye.types as typ
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
+from kye.native_types import NATIVE_TYPES
 
 
-class PreProcessor(ast.Visitor):
+class TypeBuilder(ast.Visitor):
     reporter: ErrorReporter
     this: t.Optional[typ.Type]
     types: t.Dict[str, typ.Type]
     
-    def __init__(self):
-        self.types = {}
+    def __init__(self, reporter: ErrorReporter):
+        self.reporter = reporter
+        self.types = {**NATIVE_TYPES}
         self.this = None
     
     def define(self, type: typ.Type):
@@ -26,6 +28,14 @@ class PreProcessor(ast.Visitor):
         result = self.visit(node_ast)
         self.this = previous
         return result
+    
+    def visit_script(self, script_ast: ast.Script):
+        for statement in script_ast.statements:
+            self.visit(statement)
+
+    def visit_block(self, block_ast: ast.Script):
+        for statement in block_ast.statements:
+            self.visit(statement)
 
     def visit_model(self, model_ast: ast.Model):
         model = typ.Model(
@@ -71,4 +81,10 @@ class PreProcessor(ast.Visitor):
         return self.this[edge_name]
     
     def visit_literal(self, literal_ast: ast.Literal):
-        return self.types[literal_ast.value]
+        if type(literal_ast.value) is bool:
+            return self.types['Boolean']
+        if type(literal_ast.value) is float:
+            return self.types['Number']
+        if type(literal_ast.value) is str:
+            return self.types['String']
+        raise NotImplementedError(f'Literal type {type(literal_ast.value)} not implemented.')

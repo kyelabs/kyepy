@@ -2,6 +2,7 @@ import typing as t
 
 from kye.parser import Parser
 from kye.interpreter import Interpreter
+from kye.type_builder import TypeBuilder
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
 from kye.expressions import Node
@@ -29,6 +30,12 @@ class Kye:
         return self._eval_ast(tree)
     
     def _eval_ast(self, tree: Node) -> t.Any:
+        if self.reporter.had_error:
+            return
+        type_builder = TypeBuilder(self.reporter)
+        type_builder.visit(tree)
+        types = type_builder.types
+
         if self.reporter.had_error:
             return
         self.interpreter.reporter = self.reporter
