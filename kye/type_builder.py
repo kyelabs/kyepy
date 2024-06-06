@@ -10,7 +10,7 @@ from kye.native_types import NATIVE_TYPES
 class TypeBuilder(ast.Visitor):
     reporter: ErrorReporter
     this: t.Optional[typ.Type]
-    types: t.Dict[str, typ.Type]
+    types: typ.Types
     
     def __init__(self, reporter: ErrorReporter):
         self.reporter = reporter

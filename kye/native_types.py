@@ -4,7 +4,7 @@ import ibis
 import kye.types as typ
 import kye.expressions as ast
 
-NATIVE_TYPES = {}
+NATIVE_TYPES: typ.Types = {}
 
 def type():
     def type_wrapper(cls):

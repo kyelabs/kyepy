@@ -104,3 +104,5 @@ def common_ancestor(lhs: Type, rhs: Type) -> t.Optional[Type]:
         if ancestor in rhs.ancestors:
             return ancestor
     return None
+
+Types = t.Dict[str, Type]
