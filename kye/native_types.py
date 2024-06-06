@@ -8,7 +8,7 @@ NATIVE_TYPES = {}
 
 def type():
     def type_wrapper(cls):
-        this = typ.Type(name=cls.__name__)
+        this = typ.Type(name=cls.__name__, source=None)
         assert this.name not in NATIVE_TYPES, f"Type {this.name} already defined"
         NATIVE_TYPES[this.name] = this
         for name, method in cls.__dict__.items():

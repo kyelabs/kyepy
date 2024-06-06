@@ -6,7 +6,6 @@ import kye.types as typ
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
 from kye.native_types import NATIVE_TYPES
-from copy import deepcopy
 
 
 class TypeBuilder(ast.Visitor):
@@ -33,6 +32,7 @@ class TypeBuilder(ast.Visitor):
     def visit_model(self, model_ast: ast.Model):
         model = typ.Model(
             name=model_ast.name.lexeme,
+            source=model_ast.name.lexeme,
             indexes=typ.Indexes(model_ast.indexes)
         )
         self.define(model)
@@ -59,7 +59,7 @@ class TypeBuilder(ast.Visitor):
     def visit_type(self, type_ast: ast.Type):
         value = self.visit(type_ast.value)
         assert isinstance(value, typ.Type)
-        type = deepcopy(value)
+        type = value.clone()
         type.name = type_ast.name.lexeme
         self.define(type)
         return type
@@ -77,7 +77,7 @@ class TypeBuilder(ast.Visitor):
     def visit_filter(self, filter_ast: ast.Filter):
         type = self.visit(filter_ast.object)
         assert isinstance(type, typ.Type)
-        filtered_type = deepcopy(type)
+        filtered_type = type.clone()
         for condition in filter_ast.conditions:
             condition_type = self.visit_with_this(condition, filtered_type)
             # TODO: Check that condition_type is a boolean?
@@ -86,12 +86,35 @@ class TypeBuilder(ast.Visitor):
     
     def visit_literal(self, literal_ast: ast.Literal):
         if type(literal_ast.value) is bool:
-            t = deepcopy(self.types['Boolean'])
+            t = self.types['Boolean'].clone()
         elif type(literal_ast.value) is float:
-            t = deepcopy(self.types['Number'])
+            t = self.types['Number'].clone()
         elif type(literal_ast.value) is str:
-            t = deepcopy(self.types['String'])
+            t = self.types['String'].clone()
         else:
             raise NotImplementedError(f'Literal type {type(literal_ast.value)} not implemented.')
         t.is_const = True
         return t
+    
+    def visit_binary(self, binary_ast: ast.Binary):
+        left: typ.Type = self.visit(binary_ast.left)
+        right: typ.Type = self.visit(binary_ast.right)
+        op = binary_ast.operator.type
+        if op.is_mathematical:
+            common_ancestor = left.common_ancestor(right)
+            if common_ancestor is None:
+                raise KyeRuntimeError(binary_ast.operator, 'Type mismatch')
+            out = common_ancestor
+        elif op.is_comparison:
+            out = self.types['Boolean']
+        elif op is ast.TokenType.AND:
+            raise NotImplementedError('Type intersection not implemented')
+        elif op is ast.TokenType.OR:
+            raise NotImplementedError('Type union not implemented')
+        else:
+            raise NotImplementedError(f'Unknown operator {op}')
+        
+        out = out.clone()
+        if left.is_const and right.is_const:
+            out.is_const = True
+        return out
