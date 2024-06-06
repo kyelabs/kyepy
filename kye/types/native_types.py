@@ -1,8 +1,8 @@
 from __future__ import annotations
 import ibis
 
-import kye.types as typ
-import kye.expressions as ast
+import kye.types.types as typ
+import kye.parser.expressions as ast
 
 NATIVE_TYPES: typ.Types = {}
 

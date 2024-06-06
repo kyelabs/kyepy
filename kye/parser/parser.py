@@ -1,10 +1,9 @@
 from __future__ import annotations
 import typing as t
 from pathlib import Path
-from enum import Enum
 import lark
 from kye.errors import ErrorReporter
-import kye.expressions as ast
+import kye.parser.expressions as ast
 
 Ast = t.Union[ast.Node, ast.Token]
 

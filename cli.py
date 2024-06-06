@@ -8,7 +8,7 @@ import os
 from kye.kye import Kye
 
 if t.TYPE_CHECKING:
-    from kye.parser import Parser
+    from kye.parser.parser import Parser
     from kye.interpreter import Interpreter
     from kye.errors import ErrorReporter, KyeRuntimeError
 

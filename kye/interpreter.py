@@ -1,6 +1,6 @@
 from __future__ import annotations
 import typing as t
-import kye.expressions as ast
+import kye.parser.expressions as ast
 import ibis
 from copy import copy
 from dataclasses import dataclass
