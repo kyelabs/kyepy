@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from copy import deepcopy
 from functools import cached_property
 
-import kye.parser.expressions as ast
+import kye.parse.expressions as ast
 
 class Indexes:
     tokens: t.Dict[str, t.List[ast.Token]]

@@ -1,11 +1,11 @@
 import typing as t
 
-from kye.parser.parser import Parser
+from kye.parse.parser import Parser
+from kye.parse.expressions import Node
 from kye.interpreter import Interpreter
-from kye.types.type_builder import TypeBuilder
+from kye.type.type_builder import TypeBuilder
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
-from kye.parser.expressions import Node
 
 class Kye:
     engine: Engine
