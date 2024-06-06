@@ -6,6 +6,7 @@ import kye.types as typ
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
 from kye.native_types import NATIVE_TYPES
+from copy import deepcopy
 
 
 class TypeBuilder(ast.Visitor):
@@ -28,14 +29,6 @@ class TypeBuilder(ast.Visitor):
         result = self.visit(node_ast)
         self.this = previous
         return result
-    
-    def visit_script(self, script_ast: ast.Script):
-        for statement in script_ast.statements:
-            self.visit(statement)
-
-    def visit_block(self, block_ast: ast.Script):
-        for statement in block_ast.statements:
-            self.visit(statement)
 
     def visit_model(self, model_ast: ast.Model):
         model = typ.Model(
@@ -66,7 +59,8 @@ class TypeBuilder(ast.Visitor):
     def visit_type(self, type_ast: ast.Type):
         value = self.visit(type_ast.value)
         assert isinstance(value, typ.Type)
-        type = value.create_child(new_name=type_ast.name.lexeme)
+        type = deepcopy(value)
+        type.name = type_ast.name.lexeme
         self.define(type)
         return type
     
@@ -80,11 +74,24 @@ class TypeBuilder(ast.Visitor):
             raise KyeRuntimeError(edge_ast.name, f'Edge {edge_name} not defined.')
         return self.this[edge_name]
     
+    def visit_filter(self, filter_ast: ast.Filter):
+        type = self.visit(filter_ast.object)
+        assert isinstance(type, typ.Type)
+        filtered_type = deepcopy(type)
+        for condition in filter_ast.conditions:
+            condition_type = self.visit_with_this(condition, filtered_type)
+            # TODO: Check that condition_type is a boolean?
+            filtered_type.filters.append(condition)
+        return filtered_type
+    
     def visit_literal(self, literal_ast: ast.Literal):
         if type(literal_ast.value) is bool:
-            return self.types['Boolean']
-        if type(literal_ast.value) is float:
-            return self.types['Number']
-        if type(literal_ast.value) is str:
-            return self.types['String']
-        raise NotImplementedError(f'Literal type {type(literal_ast.value)} not implemented.')
+            t = deepcopy(self.types['Boolean'])
+        elif type(literal_ast.value) is float:
+            t = deepcopy(self.types['Number'])
+        elif type(literal_ast.value) is str:
+            t = deepcopy(self.types['String'])
+        else:
+            raise NotImplementedError(f'Literal type {type(literal_ast.value)} not implemented.')
+        t.is_const = True
+        return t

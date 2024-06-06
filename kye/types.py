@@ -1,6 +1,5 @@
 from __future__ import annotations
 import typing as t
-from copy import copy
 from dataclasses import dataclass, field
 
 import kye.expressions as ast
@@ -44,6 +43,7 @@ class Type:
     edges: t.Dict[str, Edge]
     filters: t.List[ast.Expr]
     assertions: t.List[ast.Expr]
+    is_const: bool = False
     
     def __init__(self, name, source=None, edges=None, filters=None, assertions=None):
         self.name = name
@@ -51,18 +51,7 @@ class Type:
         self.edges = edges or {}
         self.filters = filters or []
         self.assertions = assertions or []
-    
-    def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):
-        child = Type(
-            name=new_name or self.name,
-            source=self.source,
-            edges=copy(self.edges),
-            filters=self.filters + new_filters,
-            assertions=self.assertions + new_assertions,
-        )
-        for edge in new_edges:
-            child.define(edge)
-        return child
+        self.is_const = False
     
     def __iter__(self):
         return iter(self.edges)
@@ -73,11 +62,11 @@ class Type:
     def __getitem__(self, edge_name):
         return self.edges[edge_name]
     
-    def define(self, edge: Edge):
+    def define(self, edge: Edge) -> t.Self:
         # TODO: Check if we are overriding an inherited edge
         # if we are, then check that this type is a subtype of the inherited type
         self.edges[edge.name] = edge
-
+        return self
 
 class Model(Type):
     indexes: Indexes
@@ -85,15 +74,3 @@ class Model(Type):
     def __init__(self, name, indexes, **kwargs):
         super().__init__(name, **kwargs)
         self.indexes = indexes
-    
-    def create_child(self, new_name=None, new_edges={}, new_filters=[], new_assertions=[]):
-        child = Model(
-            name=new_name or self.name,
-            indexes=self.indexes,
-            edges=copy(self.edges),
-            filters=self.filters + new_filters,
-            assertions=self.assertions + new_assertions,
-        )
-        for edge in new_edges:
-            child.define(edge)
-        return child

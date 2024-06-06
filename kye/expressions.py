@@ -8,6 +8,16 @@ def snake_case(s):
   return re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
 
 class Visitor:
+    # Script & Block are pretty boring, so we'll add default
+    # implementations for them here.
+    def visit_script(self, script_ast: Script):
+        for statement in script_ast.statements:
+            self.visit(statement)
+
+    def visit_block(self, block_ast: Block):
+        for statement in block_ast.statements:
+            self.visit(statement)
+
     def visit_children(self, node: Node):
         for child in node.__dict__.values():
             if isinstance(child, list):
