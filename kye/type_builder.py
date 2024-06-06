@@ -4,7 +4,6 @@ import typing as t
 import kye.expressions as ast
 import kye.types as typ
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.engine import Engine
 from kye.native_types import NATIVE_TYPES
 
 
@@ -41,7 +40,9 @@ class TypeBuilder(ast.Visitor):
     def visit_edge(self, edge_ast: ast.Edge):
         assert self.this is not None
         
-        value=self.visit(edge_ast.body)
+        value: typ.Type = self.visit(edge_ast.expr)
+        value = value.clone()
+        value.source = self.this.source
         
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
@@ -51,13 +52,13 @@ class TypeBuilder(ast.Visitor):
             input=self.this,
             output=value,
             # TODO: only set expr if the type is not calculated
-            expr=edge_ast.body,
+            expr=edge_ast.expr,
         )
         
         self.this.define(edge)
     
     def visit_type(self, type_ast: ast.Type):
-        value = self.visit(type_ast.value)
+        value = self.visit(type_ast.expr)
         assert isinstance(value, typ.Type)
         type = value.clone()
         type.name = type_ast.name.lexeme
@@ -72,7 +73,7 @@ class TypeBuilder(ast.Visitor):
         edge_name = edge_ast.name.lexeme
         if edge_name not in self.this:
             raise KyeRuntimeError(edge_ast.name, f'Edge {edge_name} not defined.')
-        return self.this[edge_name]
+        return self.this[edge_name].output
     
     def visit_filter(self, filter_ast: ast.Filter):
         type = self.visit(filter_ast.object)
@@ -99,9 +100,14 @@ class TypeBuilder(ast.Visitor):
     def visit_binary(self, binary_ast: ast.Binary):
         left: typ.Type = self.visit(binary_ast.left)
         right: typ.Type = self.visit(binary_ast.right)
+        assert typ.has_compatible_source(left, right)
+        
         op = binary_ast.operator.type
         if op.is_mathematical:
-            common_ancestor = left.common_ancestor(right)
+            # TODO: Instead of just returning a single ancestor, 
+            # return a list of common ancestors, and the find the
+            # first one that implements the operator
+            common_ancestor = typ.common_ancestor(left, right)
             if common_ancestor is None:
                 raise KyeRuntimeError(binary_ast.operator, 'Type mismatch')
             out = common_ancestor
@@ -115,6 +121,12 @@ class TypeBuilder(ast.Visitor):
             raise NotImplementedError(f'Unknown operator {op}')
         
         out = out.clone()
-        if left.is_const and right.is_const:
-            out.is_const = True
+        out.is_const = left.is_const and right.is_const
+        out.source = left.source or right.source
         return out
+
+    def visit_assert(self, assert_ast: ast.Assert):
+        type: typ.Type = self.visit(assert_ast.expr)
+        assert self.this is not None
+        assert typ.has_compatible_source(type, self.this)
+        self.this.assertions.append(assert_ast.expr)

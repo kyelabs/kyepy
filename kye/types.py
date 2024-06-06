@@ -61,9 +61,6 @@ class Type:
         child = deepcopy(self)
         child.parent = self
         return child
-    
-    def is_compatible(self, other: Type) -> bool:
-        return self.source == other.source
 
     @cached_property
     def ancestors(self) -> t.List[Type]:
@@ -73,12 +70,6 @@ class Type:
             ancestors.append(current)
             current = current.parent
         return ancestors
-    
-    def common_ancestor(self, other: Type) -> t.Optional[Type]:
-        for ancestor in self.ancestors:
-            if ancestor in other.ancestors:
-                return ancestor
-        return None
     
     def __iter__(self):
         return iter(self.edges)
@@ -101,3 +92,15 @@ class Model(Type):
     def __init__(self, name, source, indexes):
         super().__init__(name, source)
         self.indexes = indexes
+
+
+def has_compatible_source(lhs: Type, rhs: Type) -> bool:
+    return lhs.source is None\
+        or rhs.source is None\
+        or lhs.source == rhs.source
+
+def common_ancestor(lhs: Type, rhs: Type) -> t.Optional[Type]:
+    for ancestor in lhs.ancestors:
+        if ancestor in rhs.ancestors:
+            return ancestor
+    return None

@@ -152,24 +152,24 @@ class Model(Stmt):
 @dataclass
 class Type(Stmt):
     name: Token
-    value: Expr
+    expr: Expr
 
 @dataclass
 class Edge(Stmt):
     name: Token
     params: t.List[Index]
     cardinality: Cardinality
-    body: Expr
+    expr: Expr
 
 @dataclass
 class Assert(Stmt):
     keyword: Token
-    value: Expr
+    expr: Expr
 
 @dataclass
 class Return(Stmt):
     keyword: Token
-    value: Expr
+    expr: Expr
 
 @dataclass
 class Binary(Expr):
@@ -197,7 +197,7 @@ class EdgeIdentifier(Expr):
 
 @dataclass
 class Call(Expr):
-    callee: Expr
+    object: Expr
     arguments: t.List[Expr]
 
 @dataclass
