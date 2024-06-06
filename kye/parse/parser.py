@@ -2,8 +2,9 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 import lark
+
 from kye.errors import ErrorReporter
-import kye.parser.expressions as ast
+import kye.parse.expressions as ast
 
 Ast = t.Union[ast.Node, ast.Token]
 

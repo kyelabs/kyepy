@@ -1,11 +1,11 @@
 from __future__ import annotations
 import typing as t
-import kye.parser.expressions as ast
-import ibis
 from copy import copy
 from dataclasses import dataclass
+import ibis
 
 from kye.errors import ErrorReporter, KyeRuntimeError
+import kye.parse.expressions as ast
 
 if t.TYPE_CHECKING:
     from kye.engine import Engine
