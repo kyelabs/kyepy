@@ -165,7 +165,7 @@ class Interpreter(ast.Visitor):
             indexes=params,
             allows_null=edge_ast.cardinality.allows_null,
             allows_many=edge_ast.cardinality.allows_many,
-            expr=edge_ast.body
+            expr=edge_ast.expr
         )
 
         assert self.this is not None
@@ -174,7 +174,7 @@ class Interpreter(ast.Visitor):
         self.this.set(edge)
     
     def visit_type(self, type_ast: ast.Type):
-        value = self.visit(type_ast.value)
+        value = self.visit(type_ast.expr)
         assert isinstance(value, Model), 'Can only set alias to models.'
         type = copy(value)
         type.name = type_ast.name.lexeme
@@ -226,7 +226,7 @@ class Interpreter(ast.Visitor):
         raise ValueError(f'Unknown operator {binary_ast.operator.type}')
     
     def visit_call(self, call_ast: ast.Call):
-        type = self.visit(call_ast.callee)
+        type = self.visit(call_ast.object)
         assert isinstance(type, Type), 'Can only call types.'
         arguments = [self.visit(argument) for argument in call_ast.arguments]
         if type is None and len(arguments) == 0:
@@ -262,7 +262,7 @@ class Interpreter(ast.Visitor):
     def visit_assert(self, assert_ast: ast.Assert):
         assert self.this is not None, 'Assertion used outside of model.'
         assert isinstance(self.this, Model), 'Assertion used outside of model.'
-        value = self.visit(assert_ast.value)
+        value = self.visit(assert_ast.expr)
         invalid_count = self.this.filter(~value).table.count().execute()
         if invalid_count > 0:
             raise KyeRuntimeError(assert_ast.keyword, 'Assertion failed.')
