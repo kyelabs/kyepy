@@ -92,6 +92,14 @@ class TokenType(enum.Enum):
     SUPER = "super"
     THIS = "this"
     ASSERT = "assert"
+    
+    @property
+    def is_mathematical(self):
+        return self in (TokenType.MINUS, TokenType.PLUS, TokenType.SLASH, TokenType.STAR)
+    
+    @property
+    def is_comparison(self):
+        return self in (TokenType.EQ, TokenType.NE, TokenType.GT, TokenType.GE, TokenType.LT, TokenType.LE)
 
 
 class Token:

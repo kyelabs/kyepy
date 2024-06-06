@@ -1,6 +1,8 @@
 from __future__ import annotations
 import typing as t
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from copy import deepcopy
+from functools import cached_property
 
 import kye.expressions as ast
 
@@ -39,19 +41,44 @@ class Edge:
 
 class Type:
     name: str
-    source: str
+    source: t.Optional[str]
+    parent: t.Optional[Type]
     edges: t.Dict[str, Edge]
     filters: t.List[ast.Expr]
     assertions: t.List[ast.Expr]
     is_const: bool = False
     
-    def __init__(self, name, source=None, edges=None, filters=None, assertions=None):
+    def __init__(self, name: str, source: t.Optional[str]):
         self.name = name
-        self.source = source or name
-        self.edges = edges or {}
-        self.filters = filters or []
-        self.assertions = assertions or []
+        self.source = source
+        self.parent = None
+        self.edges = {}
+        self.filters = []
+        self.assertions = []
         self.is_const = False
+        
+    def clone(self) -> t.Self:
+        child = deepcopy(self)
+        child.parent = self
+        return child
+    
+    def is_compatible(self, other: Type) -> bool:
+        return self.source == other.source
+
+    @cached_property
+    def ancestors(self) -> t.List[Type]:
+        ancestors = []
+        current = self
+        while current is not None:
+            ancestors.append(current)
+            current = current.parent
+        return ancestors
+    
+    def common_ancestor(self, other: Type) -> t.Optional[Type]:
+        for ancestor in self.ancestors:
+            if ancestor in other.ancestors:
+                return ancestor
+        return None
     
     def __iter__(self):
         return iter(self.edges)
@@ -71,6 +98,6 @@ class Type:
 class Model(Type):
     indexes: Indexes
     
-    def __init__(self, name, indexes, **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, name, source, indexes):
+        super().__init__(name, source)
         self.indexes = indexes
