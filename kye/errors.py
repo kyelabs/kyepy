@@ -2,7 +2,7 @@ from __future__ import annotations
 import typing as t
 
 if t.TYPE_CHECKING:
-    from kye.expressions import Token
+    from kye.parser.expressions import Token
 
 class KyeRuntimeError(RuntimeError):
     token: Token

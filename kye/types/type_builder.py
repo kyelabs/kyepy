@@ -1,10 +1,10 @@
 from __future__ import annotations
 import typing as t
 
-import kye.expressions as ast
-import kye.types as typ
+import kye.parser.expressions as ast
+import kye.types.types as typ
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.native_types import NATIVE_TYPES
+from kye.types.native_types import NATIVE_TYPES
 
 
 class TypeBuilder(ast.Visitor):
