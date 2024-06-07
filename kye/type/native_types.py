@@ -54,5 +54,3 @@ class String(NativeType):
     @edge(output='Number')
     def length(self, this):
         return len(this)
-
-print('hi')
