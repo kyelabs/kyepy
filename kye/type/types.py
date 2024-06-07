@@ -40,12 +40,14 @@ class Edge:
     input: Type
     output: Type
     expr: t.Optional[ast.Expr]
+    order: int = -1
 
 class Type:
     name: str
     source: t.Optional[str]
     parent: t.Optional[Type]
     edges: t.Dict[str, Edge]
+    edge_order: t.List[str]
     filters: t.List[ast.Expr]
     assertions: t.List[ast.Expr]
     is_const: bool = False
@@ -55,6 +57,7 @@ class Type:
         self.source = source
         self.parent = None
         self.edges = {}
+        self.edge_order = []
         self.filters = []
         self.assertions = []
         self.is_const = False
@@ -85,7 +88,12 @@ class Type:
     def define(self, edge: Edge) -> t.Self:
         # TODO: Check if we are overriding an inherited edge
         # if we are, then check that this type is a subtype of the inherited type
+        self.edge_order.append(edge.name)
         self.edges[edge.name] = edge
+        return self
+    
+    def hide_all_edges(self) -> t.Self:
+        self.edge_order = []
         return self
 
 class Model(Type):

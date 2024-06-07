@@ -74,16 +74,6 @@ class TypeBuilder(ast.Visitor):
             raise KyeRuntimeError(edge_ast.name, f'Edge {edge_name} not defined.')
         return self.this[edge_name].output
     
-    def visit_filter(self, filter_ast: ast.Filter):
-        type = self.visit(filter_ast.object)
-        assert isinstance(type, typ.Type)
-        filtered_type = type.clone()
-        for condition in filter_ast.conditions:
-            condition_type = self.visit_with_this(condition, filtered_type)
-            # TODO: Check that condition_type is a boolean?
-            filtered_type.filters.append(condition)
-        return filtered_type
-    
     def visit_literal(self, literal_ast: ast.Literal):
         if type(literal_ast.value) is bool:
             t = self.types['Boolean'].clone()
@@ -129,3 +119,18 @@ class TypeBuilder(ast.Visitor):
         assert self.this is not None
         assert typ.has_compatible_source(type, self.this)
         self.this.assertions.append(assert_ast.expr)
+
+    def visit_filter(self, filter_ast: ast.Filter):
+        type: typ.Type = self.visit(filter_ast.object)
+        type = type.clone()
+        for condition in filter_ast.conditions:
+            condition_type = self.visit_with_this(condition, type)
+            # TODO: Check that condition_type is a boolean?
+            type.filters.append(condition)
+        return type
+
+    def visit_select(self, select_ast: ast.Select):
+        type: typ.Type = self.visit(select_ast.object)
+        type = type.clone().hide_all_edges()
+        self.visit_with_this(select_ast.body, type)
+        return type
