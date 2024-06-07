@@ -13,7 +13,7 @@ class Engine:
     def has_table(self, table_name: str):
         return table_name.lower() in self.files
     
-    def get_table(self, table_name):
+    def get_table(self, table_name: str):
         files = self.files[table_name.lower()]
         if len(files) == 0:
             raise FileNotFoundError(f"Table {table_name} not found.")

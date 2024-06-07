@@ -9,12 +9,12 @@ import kye.parse.expressions as ast
 class Indexes:
     tokens: t.Dict[str, t.List[ast.Token]]
     sets: t.List[t.Tuple]
-    edges: t.Set[str]
+    edges: t.List[str]
     
     def __init__(self, indexes: t.List[ast.Index]):
         self.ast = {}
         self.sets = []
-        self.edges = set()
+        edges = set()
 
         for index in indexes:
             items = tuple(token.lexeme for token in index.names)
@@ -23,7 +23,9 @@ class Indexes:
                 if not token.lexeme in self.ast:
                     self.ast[token.lexeme] = []
                 self.ast[token.lexeme].append(token)
-                self.edges.add(token.lexeme)
+                edges.add(token.lexeme)
+        
+        self.edges = sorted(edges)
     
     def __len__(self):
         return len(self.sets)
@@ -87,9 +89,11 @@ class Type:
         return self
 
 class Model(Type):
+    source: str
     indexes: Indexes
     
     def __init__(self, name, source, indexes):
+        assert source is not None, "Model source must not be None"
         super().__init__(name, source)
         self.indexes = indexes
 

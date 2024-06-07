@@ -12,8 +12,7 @@ class TypeBuilder(ast.Visitor):
     this: t.Optional[typ.Type]
     types: typ.Types
     
-    def __init__(self, reporter: ErrorReporter):
-        self.reporter = reporter
+    def __init__(self):
         self.types = {**NATIVE_TYPES}
         self.this = None
     
