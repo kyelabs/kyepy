@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 import ibis
 import ibis.expr.datatypes as dtype
+import ibis.expr.types as ir
 
 from kye.errors import ErrorReporter, KyeRuntimeError
 import kye.type.types as typ
@@ -91,7 +92,7 @@ class Loader:
             assert edge in table.columns, f"Index column '{edge}' not found in table"
             col = table[edge]
             assert isinstance(col, ibis.Column), f"Column '{edge}' must be an ibis column"
-            index_edge = self.load_index_edge(source[edge], col)
+            index_edge = self.load_edge(source[edge], col)
             index_edges.append(index_edge)
         
         edges = {}
@@ -101,13 +102,21 @@ class Loader:
                 assert isinstance(col, ibis.Column), f"Column '{column}' must be an ibis column"
                 edges[column] = self.load_edge(source[column], col)
     
-    def load_index_edge(self, edge: Edge, column: ibis.Column) -> ibis.Column:
-        self.matches_dtype(edge.type, column)
+    def load_edge(self, edge: Edge, column: ibis.Value) -> ibis.Value:
+        if isinstance(column, ir.ArrayValue):
+            column = column.unnest()
+        assert not column.type().is_nested(), "Unhandled nesting"
+        self.matches_dtype(edge.type, column.type())
         return column
     
-    def load_edge(self, edge: Edge, column: ibis.Column) -> ibis.Column:
-        self.matches_dtype(edge.type, column)
-        return column
-    
-    def matches_dtype(self, type: DataType, value: ibis.Column):
-        pass
+    def matches_dtype(self, type: DataType, dtype: dtype.DataType):
+        if type.name == 'String':
+            assert dtype.is_string(), "Expected string"
+        elif type.name == 'Number':
+            assert dtype.is_numeric(), "Expected numeric"
+        elif type.name == 'Integer':
+            assert dtype.is_integer(), "Expected integer"
+        elif type.name == 'Boolean':
+            assert dtype.is_boolean(), "Expected boolean"
+        else:
+            raise Exception(f"Unknown type {type.name}")
