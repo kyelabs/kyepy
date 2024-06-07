@@ -40,7 +40,6 @@ class Edge:
     input: Type
     output: Type
     expr: t.Optional[ast.Expr]
-    order: int = -1
 
 class Type:
     name: str
@@ -95,6 +94,9 @@ class Type:
     def hide_all_edges(self) -> t.Self:
         self.edge_order = []
         return self
+
+    def __repr__(self):
+        return f"Type({self.name!r})"
 
 class Model(Type):
     source: str
