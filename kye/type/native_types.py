@@ -6,10 +6,24 @@ import kye.parse.expressions as ast
 
 NATIVE_TYPES: typ.Types = {}
 
-def type():
-    def type_wrapper(cls):
-        this = typ.Type(name=cls.__name__, source=None)
-        assert this.name not in NATIVE_TYPES, f"Type {this.name} already defined"
+def edge(output, allows_null=False, allows_many=False):
+    def edge_wrapper(fn):
+        fn.__edge__ = {
+            'allows_null': allows_null,
+            'allows_many': allows_many,
+            'output': output,
+        }
+        return fn
+    return edge_wrapper
+
+class NativeType:
+    def __init_subclass__(cls) -> None:
+        parent = cls.__mro__[1].__name__
+        if parent == 'NativeType':
+            this = typ.Type(name=cls.__name__, source=None)
+        else:
+            this = NATIVE_TYPES[parent].clone()
+            this.name = cls.__name__
         NATIVE_TYPES[this.name] = this
         for name, method in cls.__dict__.items():
             if hasattr(method, '__edge__'):
@@ -23,33 +37,22 @@ def type():
                     output=NATIVE_TYPES[edge_attr['output']],
                     expr=ast.NativeCall(method),
                 ))
-        return cls
-    return type_wrapper
-        
 
-def edge(output, allows_null=False, allows_many=False):
-    def edge_wrapper(fn):
-        fn.__edge__ = {
-            'allows_null': allows_null,
-            'allows_many': allows_many,
-            'output': output,
-        }
-        return fn
-    return edge_wrapper
-
-@type()
-class Boolean:
+class Boolean(NativeType):
     pass
 
-@type()
-class Number:
+class Number(NativeType):
     pass
 
-@type()
-class String:
+class Integer(Number):
+    pass
+
+class String(NativeType):
     def __assert__(self, this: ibis.Value):
         assert isinstance(this, str), f"Expected string, got {this!r}"
     
     @edge(output='Number')
     def length(self, this):
         return len(this)
+
+print('hi')
