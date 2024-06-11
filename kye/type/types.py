@@ -27,6 +27,9 @@ class Indexes:
         
         self.edges = sorted(edges)
     
+    def __contains__(self, key: str):
+        return key in self.edges
+    
     def __len__(self):
         return len(self.sets)
 
@@ -78,7 +81,7 @@ class Type:
     def __iter__(self):
         return iter(self.edges)
     
-    def __contains__(self, edge_name):
+    def __contains__(self, edge_name: str):
         return edge_name in self.edges
     
     def __getitem__(self, edge_name):

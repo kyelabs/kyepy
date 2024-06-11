@@ -6,190 +6,109 @@ import ibis
 
 from kye.errors import ErrorReporter, KyeRuntimeError
 import kye.parse.expressions as ast
-
-if t.TYPE_CHECKING:
-    from kye.engine import Engine
-
-    Indexes = t.List[t.List[str]]
-
-
-def flatten_indexes(indexes: Indexes) -> t.List[str]:
-    return list({index for index_list in indexes for index in index_list})
-
-class Type:
-    """ Abstract class for types """
-    name: str
-
-    def call(self, arguments):
-        raise NotImplementedError()
-
-    def has(self, name: str):
-        raise NotImplementedError()
-
-    def get(self, name: str):
-        raise NotImplementedError()
-    
-    def filter(self, condition):
-        raise NotImplementedError()
-    
-    def __str__(self):
-        return "<type>"
-
-@dataclass
-class Edge:
-    name: str
-    indexes: Indexes
-    allows_null: bool
-    allows_many: bool
-    expr: t.Optional[ast.Expr]
-    order: int = -1
-
-Edges = t.Dict[str, Edge]
-
-class Model(Type):
-    name: str
-    indexes: Indexes
-    table: ibis.Table
-    edges: Edges
-
-    def __init__(self, interpreter: Interpreter, name: str, indexes: Indexes, edges: Edges, table: ibis.Table):
-        self.interpreter = interpreter
-        self.name = name
-        self.indexes = indexes
-        self.edges = edges
-        self.table = table
-    
-    def __copy__(self) -> Model:
-        return Model(self.interpreter, self.name, self.indexes, {
-            edge.name: copy(edge)
-            for edge in self.edges.values()
-        }, self.table)
-    
-    def _filter(self, table) -> Model:
-        copied = copy(self)
-        copied.table = table
-        return copied
-    
-    def set(self, edge: Edge):
-        edge.order = len(self.edges)
-        self.edges[edge.name] = edge
-    
-    def has(self, name: str):
-        return name in self.edges
-    
-    def get(self, name: str):
-        edge = self.edges[name]
-        if name in self.table.columns:
-            return self.table[name]
-        elif edge.expr is not None:
-            col = self.interpreter.visit_with_this(edge.expr, self)
-            col = col.name(name)
-            return col
-        return None
-    
-    def call(self, arguments) -> Model:
-        assert len(self.indexes) == 1, 'Only one index supported.'
-        index = self.indexes[0]
-        assert len(arguments) == len(index), 'Expected one argument for each index.'
-        return self._filter(self.table.filter([
-            self.table[key] == val
-            for key, val in zip(index, arguments)
-        ]))
-    
-    def filter(self, condition) -> Model:
-        return self._filter(self.table.filter(condition))
-    
-    def hide_all_edges(self) -> t.Self:
-        for edge in self.edges.values():
-            edge.order = -1
-        return self
-    
-    def __str__(self):
-        return self.table.select(*[
-            t.cast(ibis.Value, self.get(edge.name))
-            for edge in sorted(self.edges.values(), key=lambda edge: edge.order)
-            if edge.order >= 0
-        ]).__str__()
+import kye.type.types as typ
+from kye.load.loader import Loader
 
 class Interpreter(ast.Visitor):
-    engine: Engine
+    loader: Loader
     reporter: ErrorReporter
-    this: t.Optional[Type]
-    types: t.Dict[str, Type]
+    this: t.Optional[typ.Type]
+    types: typ.Types
+    tables: t.Dict[str, ibis.Table]
     
-    def __init__(self, engine: Engine):
-        self.engine = engine
-        self.types = {}
+    def __init__(self, types: typ.Types, loader: Loader):
+        self.loader = loader
+        self.types = types
+        self.tables = {}
         self.this = None
     
-    def visit_with_this(self, node_ast: ast.Node, this: Type):
+    def visit_with_this(self, node_ast: ast.Node, this: typ.Type):
         previous = self.this
         self.this = this
         result = self.visit(node_ast)
         self.this = previous
         return result
         
-    def visit_model(self, model_ast: ast.Model):
-        if len(model_ast.indexes) == 0:
-            raise KyeRuntimeError(model_ast.name, 'Models without indexes are not yet supported.')
-        if len(model_ast.indexes) > 1:
-            raise KyeRuntimeError(model_ast.name, 'Models with multiple indexes are not yet supported.')
+    def load_model(self, model_name: str):
+        previous_this = self.this
+        assert model_name in self.types, f'Model {model_name} not found.'
+        self.this = self.types[model_name]
+        assert isinstance(self.this, typ.Model)
+        
+        if len(self.this.indexes) == 0:
+            raise Exception('Models without indexes are not yet supported.')
+        if len(self.this.indexes) > 1:
+            raise Exception('Models with multiple indexes are not yet supported.')
         # TODO: Type check all indexes have a corresponding edge defined
-
-        model_name = model_ast.name.lexeme
-        indexes: Indexes = []
-        for index_ast in model_ast.indexes:
-            indexes.append([index.lexeme for index in index_ast.names])
-        if len(indexes) == 0:
-            raise KyeRuntimeError(model_ast.name, 'Model must have at least one index.')
-
-        if not self.engine.has_table(model_name):
-            raise KyeRuntimeError(model_ast.name, 'Table not found for model.')
-
-        table = self.engine.get_table(model_name)
-        model = Model(self, model_name, indexes, {}, table)
-        self.types[model_name] = model
-
-        self.visit_with_this(model_ast.body, model)
-    
-    def visit_edge(self, edge_ast: ast.Edge):
         
-        edge_name = edge_ast.name.lexeme
-
-        if len(edge_ast.params) > 0:
-            raise KyeRuntimeError(edge_ast.name, 'Edges with parameters are not yet supported.')
-        params = []
+        table = self.loader.load(self.this.source)
+        self.tables[model_name] = table
         
-        edge = Edge(
-            name=edge_name,
-            indexes=params,
-            allows_null=edge_ast.cardinality.allows_null,
-            allows_many=edge_ast.cardinality.allows_many,
-            expr=edge_ast.expr
-        )
-
-        assert self.this is not None
-        assert isinstance(self.this, Model)
-
-        self.this.set(edge)
+        for col in self.this.edge_order:
+            edge = self.this[col]
+            if edge.name not in table.columns and edge.expr is not None:
+                val = self.visit_with_this(edge.expr, self.this)
+                table = table.mutate(**{edge.name: val})
+                self.tables[model_name] = table
+        
+        conditions = [
+            self.visit_with_this(condition, self.this)
+            for condition in self.this.filters + self.this.assertions
+        ]
+        # TODO: report errors for failed assertions
+        before_count = table.count().as_scalar().execute()
+        filtered_table = table.filter(conditions)
+        after_count = filtered_table.count().as_scalar().execute()
+        if before_count != after_count:
+            print(f'Lost rows after filtering: {before_count} -> {after_count}')
+        
+        self.tables[model_name] = filtered_table.select(*(self.this.indexes.edges + [
+            col for col in self.this.edge_order
+            if col in filtered_table.columns and col not in self.this.indexes
+        ]))
+        
+        self.this = previous_this
+            
     
-    def visit_type(self, type_ast: ast.Type):
-        value = self.visit(type_ast.expr)
-        assert isinstance(value, Model), 'Can only set alias to models.'
-        type = copy(value)
-        type.name = type_ast.name.lexeme
-        self.types[type.name] = type
-        return type
+    # def load_edge(self, edge: typ.Edge, table: ibis.Table) -> t.Optional[ibis.Value]:
+    #     assert self.this is not None
+        
+    #     if len(edge.indexes) > 0:
+    #         raise Exception('Edges with parameters are not yet supported.')
+        
+    #     if edge.name in table.columns:
+    #         return table[edge.name] # type: ignore
+        
+    #     if edge.expr is not None:
+    #         return self.visit_with_this(edge.expr, self.this)
+
+    #     return None
+    
+    # def visit_type(self, type_ast: ast.Type):
+    #     value = self.visit(type_ast.expr)
+    #     assert isinstance(value, Model), 'Can only set alias to models.'
+    #     type = copy(value)
+    #     type.name = type_ast.name.lexeme
+    #     self.types[type.name] = type
+    #     return type
     
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
-        return self.types.get(type_ast.name.lexeme)
+        type = self.types.get(type_ast.name.lexeme)
+        if isinstance(type, typ.Model):
+            if type.name not in self.tables:
+                self.load_model(type.name)
+            return self.tables[type.name]
     
     def visit_edge_identifier(self, edge_ast: ast.EdgeIdentifier):
+        edge_name = edge_ast.name.lexeme
         if self.this is None:
             raise KyeRuntimeError(edge_ast.name, 'Edge used outside of model.')
-        if not self.this.has(edge_ast.name.lexeme):
+        table = self.tables[self.this.name]
+
+        if edge_name not in table.columns:
             raise KyeRuntimeError(edge_ast.name, f'Edge {edge_ast.name.lexeme} not defined.')
-        return self.this.get(edge_ast.name.lexeme)
+        
+        return table[edge_name]
     
     def visit_literal(self, literal_ast: ast.Literal):
         return literal_ast.value
@@ -225,44 +144,45 @@ class Interpreter(ast.Visitor):
             return left or right
         raise ValueError(f'Unknown operator {binary_ast.operator.type}')
     
-    def visit_call(self, call_ast: ast.Call):
-        type = self.visit(call_ast.object)
-        assert isinstance(type, Type), 'Can only call types.'
-        arguments = [self.visit(argument) for argument in call_ast.arguments]
-        if type is None and len(arguments) == 0:
-            return arguments[0]
-        return type.call(arguments)
+    
+    # def visit_call(self, call_ast: ast.Call):
+    #     type = self.visit(call_ast.object)
+    #     assert isinstance(type, Type), 'Can only call types.'
+    #     arguments = [self.visit(argument) for argument in call_ast.arguments]
+    #     if type is None and len(arguments) == 0:
+    #         return arguments[0]
+    #     return type.call(arguments)
 
-    def visit_get(self, get_ast: ast.Get):
-        type = self.visit(get_ast.object)
-        edge_name = get_ast.name.lexeme
-        assert isinstance(type, Type), 'Can only access edges on tables.'
-        if not type.has(get_ast.name.lexeme):
-            raise KyeRuntimeError(get_ast.name, f'Edge {get_ast.name.lexeme} not defined.')
-        return type.get(edge_name)
+    # def visit_get(self, get_ast: ast.Get):
+    #     type = self.visit(get_ast.object)
+    #     edge_name = get_ast.name.lexeme
+    #     assert isinstance(type, Type), 'Can only access edges on tables.'
+    #     if not type.has(get_ast.name.lexeme):
+    #         raise KyeRuntimeError(get_ast.name, f'Edge {get_ast.name.lexeme} not defined.')
+    #     return type.get(edge_name)
     
-    def visit_filter(self, filter_ast: ast.Filter):
-        type = self.visit(filter_ast.object)
-        assert isinstance(type, Type), 'Can only filter on tables.'
-        conditions = [self.visit_with_this(argument, type) for argument in filter_ast.conditions]
-        condition = conditions.pop(0)
-        for cond in conditions:
-            condition = condition & cond
-        return type.filter(condition)
+    # def visit_filter(self, filter_ast: ast.Filter):
+    #     type = self.visit(filter_ast.object)
+    #     assert isinstance(type, Type), 'Can only filter on tables.'
+    #     conditions = [self.visit_with_this(argument, type) for argument in filter_ast.conditions]
+    #     condition = conditions.pop(0)
+    #     for cond in conditions:
+    #         condition = condition & cond
+    #     return type.filter(condition)
     
-    def visit_select(self, select_ast: ast.Select):
-        type = self.visit(select_ast.object)
-        assert isinstance(type, Model), 'Can only select on models.'
-        model = copy(type).hide_all_edges()
+    # def visit_select(self, select_ast: ast.Select):
+    #     type = self.visit(select_ast.object)
+    #     assert isinstance(type, Model), 'Can only select on models.'
+    #     model = copy(type).hide_all_edges()
         
-        self.visit_with_this(select_ast.body, model)
+    #     self.visit_with_this(select_ast.body, model)
 
-        return model
+    #     return model
     
-    def visit_assert(self, assert_ast: ast.Assert):
-        assert self.this is not None, 'Assertion used outside of model.'
-        assert isinstance(self.this, Model), 'Assertion used outside of model.'
-        value = self.visit(assert_ast.expr)
-        invalid_count = self.this.filter(~value).table.count().execute()
-        if invalid_count > 0:
-            raise KyeRuntimeError(assert_ast.keyword, 'Assertion failed.')
+    # def visit_assert(self, assert_ast: ast.Assert):
+    #     assert self.this is not None, 'Assertion used outside of model.'
+    #     assert isinstance(self.this, Model), 'Assertion used outside of model.'
+    #     value = self.visit(assert_ast.expr)
+    #     invalid_count = self.this.filter(~value).table.count().execute()
+    #     if invalid_count > 0:
+    #         raise KyeRuntimeError(assert_ast.keyword, 'Assertion failed.')

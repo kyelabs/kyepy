@@ -12,7 +12,8 @@ class TypeBuilder(ast.Visitor):
     this: t.Optional[typ.Type]
     types: typ.Types
     
-    def __init__(self):
+    def __init__(self, reporter: ErrorReporter):
+        self.reporter = reporter
         self.types = {**NATIVE_TYPES}
         self.this = None
     
@@ -35,6 +36,8 @@ class TypeBuilder(ast.Visitor):
         )
         self.define(model)
         self.visit_with_this(model_ast.body, model)
+        for index in model.indexes.edges:
+            assert index in model, f'Index {index} not defined in model {model.name}'
     
     def visit_edge(self, edge_ast: ast.Edge):
         assert self.this is not None

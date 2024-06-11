@@ -3,6 +3,7 @@ import typing as t
 from dataclasses import dataclass
 from functools import cached_property
 import ibis
+from ibis import _
 import ibis.expr.datatypes as dtype
 import ibis.expr.types as ir
 
@@ -14,7 +15,7 @@ from kye.engine import Engine
 class DataType:
     name: str
 
-@dataclass(frozen=True)
+@dataclass
 class Edge:
     name: str
     allows_null: bool
@@ -41,10 +42,6 @@ class Source:
         self.index = index
         self.edges = {}
     
-    @cached_property
-    def non_index_edges(self):
-        return [edge for edge in self.edges if edge not in self.index]
-    
     def define(self, edge: Edge):
         existing = self.edges.get(edge.name)
         if existing:
@@ -60,12 +57,12 @@ class Loader:
     sources: t.Dict[str, Source]
     tables: t.Dict[str, ibis.Table]
     
-    def __init__(self, engine: Engine):
+    def __init__(self, types: typ.Types, engine: Engine, reporter: ErrorReporter):
+        self.reporter = reporter
         self.engine = engine
         self.sources = {}
         self.tables = {}
     
-    def load(self, types: typ.Types):
         for model in types.values():
             if not isinstance(model, typ.Model):
                 continue
@@ -82,34 +79,59 @@ class Loader:
                     allows_many=edge.allows_many,
                     type=DataType(edge.output.name),
                 ))
-        for source in self.sources.values():
-            self.load_source(source)
     
-    def load_source(self, source: Source):
-        index_edges = []
-        table = self.engine.get_table(source.name)
-        for edge in source.index:
-            assert edge in table.columns, f"Index column '{edge}' not found in table"
-            col = table[edge]
-            assert isinstance(col, ibis.Column), f"Column '{edge}' must be an ibis column"
-            index_edge = self.load_edge(source[edge], col)
-            index_edges.append(index_edge)
+    def load(self, source_name: str) -> ibis.Table:
+        if source_name in self.tables:
+            return self.tables[source_name]
         
-        edges = {}
-        for column in table.columns:
-            if column in source.non_index_edges:
-                col = table[column]
-                assert isinstance(col, ibis.Column), f"Column '{column}' must be an ibis column"
-                edges[column] = self.load_edge(source[column], col)
+        assert source_name in self.sources, f"Source '{source_name}' not found"
+        source = self.sources[source_name]
+        table = self.engine.get_table(source.name)
+
+        for col_name in source.index:
+            assert col_name in table.columns, f"Index column '{col_name}' not found in table"
+            col = table[col_name]
+            assert isinstance(col, ibis.Column), f"Column '{col_name}' must be an ibis column"
+            self.matches_dtype(source[col_name], col.type())
     
-    def load_edge(self, edge: Edge, column: ibis.Value) -> ibis.Value:
-        if isinstance(column, ir.ArrayValue):
-            column = column.unnest()
-        assert not column.type().is_nested(), "Unhandled nesting"
-        self.matches_dtype(edge.type, column.type())
-        return column
+        for col_name in table.columns:
+            if col_name not in source.edges:
+                print(f"Warning: Table '{source.name}' had extra column '{col_name}'")
+                continue
+            if col_name not in source.index:
+                col = table[col_name]
+                assert isinstance(col, ibis.Column), f"Column '{col_name}' must be an ibis column"
+                self.matches_dtype(source[col_name], col.type())
+
+        t = table.select(source.index)
+        is_index_unique = (t.count() == t.nunique()).as_scalar().execute()
+        assert is_index_unique, f"Index columns {source.index} must be unique"
+        
+        # if not is_index_unique:
+        #     non_plural_columns = [
+        #         edge for edge in columns
+        #         if not source[edge].allows_many
+        #     ]
+        #     t = table.aggregate(
+        #         by=source.index, # type:ignore 
+        #         **{
+        #             edge: _[edge].nunique() # type: ignore
+        #             for edge in non_plural_columns
+        #         }
+        #     )
+        #     table = table.select(source.index + non_plural_columns).distinct(on=source.index)
+        #     print('hi')
+        self.tables[source_name] = table
+        
+        return table
     
-    def matches_dtype(self, type: DataType, dtype: dtype.DataType):
+    
+    def matches_dtype(self, edge: Edge, dtype: dtype.DataType):
+        type = edge.type
+        if edge.allows_many:
+            assert dtype.is_array(), "Expected array"
+            dtype = dtype.value_type # type: ignore
+        assert not dtype.is_nested(), "Unexpected nesting"
         if type.name == 'String':
             assert dtype.is_string(), "Expected string"
         elif type.name == 'Number':
