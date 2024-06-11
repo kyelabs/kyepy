@@ -16,9 +16,6 @@ class Kye:
 
     def __init__(self):
         self.engine = Engine()
-        self.type_builder = TypeBuilder()
-        self.interpreter = Interpreter(self.engine)
-        self.loader = Loader(self.engine)
     
     def parse_definitions(self, source: str) -> t.Optional[ast.Script]:
         """ Parse definitions from source code """
@@ -42,34 +39,28 @@ class Kye:
         """ Build types from the AST """
         if tree is None:
             return None
-        self.type_builder.reporter = self.reporter
-        self.type_builder.visit(tree)
+        type_builder = TypeBuilder(self.reporter)
+        type_builder.visit(tree)
         if self.reporter.had_error:
             return None
-        # Load the types
-        self.loader.reporter = self.reporter
-        self.loader.load(self.type_builder.types)
-        if self.reporter.had_error:
-            return None
-        return self.type_builder.types
-
-    def eval_tree(self, tree: t.Optional[ast.Node]) -> t.Optional[t.Any]:
-        """ Evaluate the AST """
+        return type_builder.types
+    
+    def eval_definitions(self, source: str) -> bool:
+        tree = self.parse_definitions(source)
+        types = self.build_types(tree)
+        if types is None:
+            return False
+        loader = Loader(types, self.engine, self.reporter)
+        self.interpreter = Interpreter(types, loader)
+        return not self.reporter.had_error
+    
+    def eval_expression(self, source: str) -> t.Any:
+        assert self.interpreter is not None
+        tree = self.parse_expression(source)
+        self.interpreter.reporter = self.reporter
         if tree is None:
             return None
-        self.build_types(tree)
-        self.interpreter.reporter = self.reporter
         try:
             return self.interpreter.visit(tree)
         except KyeRuntimeError as error:
             self.reporter.runtime_error(error)
-        return None
-    
-    def eval_definitions(self, source: str) -> bool:
-        tree = self.parse_definitions(source)
-        self.eval_tree(tree)
-        return not self.reporter.had_error
-    
-    def eval_expression(self, source: str) -> t.Any:
-        tree = self.parse_expression(source)        
-        return self.eval_tree(tree)

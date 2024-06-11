@@ -7,46 +7,6 @@ import os
 
 from kye.kye import Kye
 
-if t.TYPE_CHECKING:
-    from kye.parser.parser import Parser
-    from kye.interpreter import Interpreter
-    from kye.errors import ErrorReporter, KyeRuntimeError
-
-def eval_definitions(source: str, interpreter: Interpreter) -> ErrorReporter:
-    reporter = ErrorReporter(source)
-    parser = Parser(reporter)
-    tree = parser.parse_definitions(source)
-    if reporter.had_error:
-        return reporter
-
-    interpreter.reporter = reporter
-    try:
-        interpreter.visit(tree)
-    except KyeRuntimeError as error:
-        reporter.runtime_error(error)
-    if reporter.had_error:
-        return reporter
-
-    return reporter
-
-def eval_expression(source: str, interpreter: Interpreter) -> ErrorReporter:
-    reporter = ErrorReporter(source)
-    parser = Parser(reporter)
-    tree = parser.parse_expression(source)
-    if reporter.had_error:
-        return reporter
-
-    interpreter.reporter = reporter
-    try:
-        val = interpreter.visit(tree)
-        print(val)
-    except KyeRuntimeError as error:
-        reporter.runtime_error(error)
-    if reporter.had_error:
-        return reporter
-
-    return reporter
-
 def setup_readline():
     histfile = os.path.join(os.path.expanduser("~"), ".kye_history")
     try:
