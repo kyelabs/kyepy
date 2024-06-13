@@ -12,10 +12,12 @@ from kye.engine import Engine
 class Kye:
     engine: Engine
     reporter: ErrorReporter
+    type_builder: TypeBuilder
     interpreter: Interpreter
 
     def __init__(self):
         self.engine = Engine()
+        self.type_builder = TypeBuilder()
     
     def parse_definitions(self, source: str) -> t.Optional[ast.Script]:
         """ Parse definitions from source code """
@@ -39,11 +41,11 @@ class Kye:
         """ Build types from the AST """
         if tree is None:
             return None
-        type_builder = TypeBuilder(self.reporter)
-        type_builder.visit(tree)
+        self.type_builder.reporter = self.reporter
+        self.type_builder.visit(tree)
         if self.reporter.had_error:
             return None
-        return type_builder.types
+        return self.type_builder.types
     
     def eval_definitions(self, source: str) -> bool:
         tree = self.parse_definitions(source)
@@ -57,6 +59,7 @@ class Kye:
     def eval_expression(self, source: str) -> t.Any:
         assert self.interpreter is not None
         tree = self.parse_expression(source)
+        self.build_types(tree)
         self.interpreter.reporter = self.reporter
         if tree is None:
             return None
