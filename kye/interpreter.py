@@ -97,7 +97,7 @@ class Interpreter(ast.Visitor):
     #     return type
     
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
-        type = self.types.get(type_ast.name.lexeme)
+        type = self.types[type_ast]
         if isinstance(type, typ.Model):
             return self.load_model(type.name)
         raise KyeRuntimeError(type_ast.name, f'Type {type_ast.name.lexeme} not defined.')
