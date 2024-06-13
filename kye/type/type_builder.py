@@ -66,6 +66,12 @@ class TypeBuilder(ast.Visitor):
         type.name = type_ast.name.lexeme
         self.define(type)
         return type
+
+    def after_expr(self, expr_ast: ast.Expr, type: typ.Type):
+        if type is not None:
+            assert isinstance(type, typ.Type)
+            self.types[expr_ast] = type
+        return type
     
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
         return self.types.get(type_ast.name.lexeme)

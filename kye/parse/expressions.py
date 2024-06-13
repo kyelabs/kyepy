@@ -30,10 +30,23 @@ class Visitor:
     def visit(self, node: Node) -> t.Any:
         node_class = snake_case(node.__class__.__name__)            
         visit_method = getattr(self, f'visit_{node_class}', None)
+        value = None
         if visit_method is None:
             print(f"WARN: visit_{node_class} not implemented on {self.__class__.__name__}")
-            return self.visit_children(node)
-        return visit_method(node)
+            self.visit_children(node)
+        else:
+            value = visit_method(node)
+        
+        # check for after methods
+        for parent in node.__class__.__mro__:
+            if not issubclass(parent, Node):
+                break
+            parent_class = snake_case(parent.__name__)
+            after_listener = getattr(self, f'after_{parent_class}', None)
+            if after_listener is not None:
+                value = after_listener(node, value)
+        
+        return value
 
 class Cardinality(enum.Enum):
     ONE = '!'
@@ -102,15 +115,11 @@ class TokenType(enum.Enum):
         return self in (TokenType.EQ, TokenType.NE, TokenType.GT, TokenType.GE, TokenType.LT, TokenType.LE)
 
 
+@dataclass(eq=True, frozen=True)
 class Token:
     type: TokenType
     lexeme: str
     start: int
-
-    def __init__(self, token_type: TokenType, lexeme: str, pos: int):
-        self.type = token_type
-        self.lexeme = lexeme
-        self.start = pos
     
     def __str__(self):
         return self.lexeme
@@ -131,94 +140,94 @@ class Stmt(Node):
 class Expr(Node):
     pass
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Index(Node):
-    names: t.List[Token]
+    names: t.Tuple[Token, ...]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Block(Node):
-    statements: t.List[Stmt]
+    statements: t.Tuple[Stmt, ...]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Script(Node):
-    statements: t.List[Stmt]
+    statements: t.Tuple[Stmt, ...]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Model(Stmt):
     name: Token
-    indexes: t.List[Index]
+    indexes: t.Tuple[Index, ...]
     body: Block
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Type(Stmt):
     name: Token
     expr: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Edge(Stmt):
     name: Token
-    params: t.List[Index]
+    params: t.Tuple[Index, ...]
     cardinality: Cardinality
     expr: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Assert(Stmt):
     keyword: Token
     expr: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Return(Stmt):
     keyword: Token
     expr: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Binary(Expr):
     left: Expr
     operator: Token
     right: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Unary(Expr):
     operator: Token
     right: Expr
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Literal(Expr):
     value: t.Any
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class TypeIdentifier(Expr):
     name: Token
     format: t.Optional[Token]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class EdgeIdentifier(Expr):
     name: Token
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Call(Expr):
     object: Expr
-    arguments: t.List[Expr]
+    arguments: t.Tuple[Expr, ...]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class NativeCall(Expr):
     fn: t.Callable
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Get(Expr):
     object: Expr
     name: Token
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Filter(Expr):
     object: Expr
-    conditions: t.List[Expr]
+    conditions: t.Tuple[Expr, ...]
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Select(Expr):
     object: Expr
     body: Block
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class This(Expr):
     keyword: Token

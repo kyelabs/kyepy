@@ -84,13 +84,13 @@ class Transformer(lark.Transformer):
     is_exp = _binary
     
     def statements(self, children: t.List[ast.Stmt]):
-        return ast.Script(children)
+        return ast.Script(tuple(children))
 
     def block(self, children: t.List[ast.Stmt]):
-        return ast.Block(children)
+        return ast.Block(tuple(children))
     
     def index(self, children: t.List[ast.Token]):
-        return ast.Index(children)
+        return ast.Index(tuple(children))
 
     @lark.v_args(inline=True)
     def literal(self, val: ast.Token):
@@ -106,7 +106,7 @@ class Transformer(lark.Transformer):
         name = get_token(children, ast.TokenType.TYPE)
         indexes = find_children(children, ast.Index)
         block = get_child(children, ast.Block)
-        return ast.Model(name, indexes, block)
+        return ast.Model(name, tuple(indexes), block)
     
     def type_def(self, children: t.List[Ast]):
         name = get_token(children, ast.TokenType.TYPE)
@@ -135,7 +135,7 @@ class Transformer(lark.Transformer):
         #     ])
         if isinstance(block, ast.Block):
             raise NotImplementedError('Block not implemented.')
-        return ast.Edge(name, indexes, cardinality, block)
+        return ast.Edge(name, tuple(indexes), cardinality, block)
 
     def assert_stmt(self, children: t.List[Ast]):
         keyword = get_token(children, ast.TokenType.ASSERT)
@@ -163,12 +163,12 @@ class Transformer(lark.Transformer):
         (object, *arguments) = find_children(children, ast.Expr)
         return ast.Filter(
             object,
-            arguments,
+            tuple(arguments),
         )
 
     def call_exp(self, children: t.List[Ast]):
         (callee, *arguments) = find_children(children, ast.Expr)
-        return ast.Call(callee, arguments)
+        return ast.Call(callee, tuple(arguments))
     
     def select_exp(self, children: t.List[Ast]):
         object = get_child(children, ast.Expr)
@@ -216,7 +216,7 @@ class Parser:
         try:
             tree = self.definitions_parser.parse(source, on_error=self.on_error)
         except lark.exceptions.UnexpectedInput as e:
-            return ast.Script([])
+            return ast.Script(tuple())
         return self.transformer.transform(tree)
 
     def parse_expression(self, source: str) -> ast.Expr:

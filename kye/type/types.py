@@ -11,7 +11,7 @@ class Indexes:
     sets: t.List[t.Tuple]
     edges: t.List[str]
     
-    def __init__(self, indexes: t.List[ast.Index]):
+    def __init__(self, indexes: t.Iterable[ast.Index]):
         self.ast = {}
         self.sets = []
         edges = set()
@@ -122,4 +122,4 @@ def common_ancestor(lhs: Type, rhs: Type) -> t.Optional[Type]:
             return ancestor
     return None
 
-Types = t.Dict[str, Type]
+Types = t.Dict[t.Union[str, ast.Expr], Type]
