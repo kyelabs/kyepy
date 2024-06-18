@@ -5,6 +5,7 @@ import kye.type.types as typ
 from kye.parse.parser import Parser
 from kye.interpreter import Interpreter
 from kye.type.type_builder import TypeBuilder
+from kye.type.type_checker import TypeChecker
 from kye.load.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
@@ -43,6 +44,9 @@ class Kye:
             return None
         self.type_builder.reporter = self.reporter
         self.type_builder.visit(tree)
+        if self.reporter.had_error:
+            return None
+        type_checker = TypeChecker(self.reporter, self.type_builder.types)
         if self.reporter.had_error:
             return None
         return self.type_builder.types

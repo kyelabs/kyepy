@@ -77,7 +77,7 @@ class Loader:
                     name=edge.name,
                     allows_null=edge.allows_null,
                     allows_many=edge.allows_many,
-                    type=DataType(edge.output.name),
+                    type=DataType(edge.returns.name),
                 ))
     
     def load(self, source_name: str) -> ibis.Table:
