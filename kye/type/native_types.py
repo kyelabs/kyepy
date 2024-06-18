@@ -33,8 +33,8 @@ class NativeType:
                     indexes=typ.Indexes([]),
                     allows_null=edge_attr['allows_null'],
                     allows_many=edge_attr['allows_many'],
-                    input=this,
-                    output=NATIVE_TYPES[edge_attr['output']],
+                    model=this,
+                    returns=NATIVE_TYPES[edge_attr['output']],
                     expr=ast.NativeCall(method),
                 ))
 

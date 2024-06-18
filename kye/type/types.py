@@ -3,6 +3,7 @@ import typing as t
 from dataclasses import dataclass
 from copy import deepcopy
 from functools import cached_property
+import enum
 
 import kye.parse.expressions as ast
 
@@ -40,8 +41,8 @@ class Edge:
     indexes: Indexes
     allows_null: bool
     allows_many: bool
-    input: Type
-    output: Type
+    model: Type
+    returns: t.Optional[Type]
     expr: t.Optional[ast.Expr]
 
 class Type:
