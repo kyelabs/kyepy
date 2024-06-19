@@ -7,6 +7,77 @@ import enum
 
 import kye.parse.expressions as ast
 
+class Operator(enum.Enum):
+    SUB = '-'
+    ADD = '+'
+    MUL = '*'
+    DIV = '/'
+    MOD = '%'
+    INV = "~"
+
+    NOT = "!"
+    NE = "!="
+    EQ = "=="
+    GT = ">"
+    GE = ">="
+    LT = "<"
+    LE = "<="
+    
+    AND = "&"
+    OR = "|"
+    XOR = "^"
+    
+    IN = "in"
+    IS = "is"
+    
+    @property
+    def edge_name(self):
+        return '$' + self.name.lower()
+    
+    @property
+    def is_unary(self):
+        return self in (Operator.INV, Operator.NOT)
+    
+    @property
+    def is_mathematical(self):
+        return self in (Operator.SUB, Operator.ADD, Operator.MUL, Operator.DIV, Operator.MOD)
+    
+    @property
+    def is_comparison(self):
+        return self in (Operator.EQ, Operator.NE, Operator.GT, Operator.GE, Operator.LT, Operator.LE)
+
+class Expr:
+    name: str
+    args: t.Tuple[Expr, ...]
+
+    def __init__(self, name: str, args: t.Iterable[Expr]):
+        self.name = name
+        self.args = tuple(args)
+    
+    def __repr__(self):
+        return f"{self.name}({', '.join(repr(arg) for arg in self.args)})"
+
+class Const(Expr):
+    value: t.Any
+
+    def __init__(self, value: t.Any):
+        super().__init__('const', [])
+        self.value = value
+
+    def __repr__(self):
+        return repr(self.value)
+
+class Var(Expr):
+    name: str
+
+    def __init__(self, name: str):
+        super().__init__('var', [])
+        self.name = name
+
+    def __repr__(self):
+        return f"Var({self.name!r})"
+
+
 class Indexes:
     tokens: t.Dict[str, t.List[ast.Token]]
     sets: t.List[t.Tuple]
@@ -43,7 +114,7 @@ class Edge:
     allows_many: bool
     model: Type
     returns: t.Optional[Type]
-    expr: t.Optional[ast.Expr]
+    expr: Expr
 
 class Type:
     name: str
@@ -51,8 +122,8 @@ class Type:
     parent: t.Optional[Type]
     edges: t.Dict[str, Edge]
     edge_order: t.List[str]
-    filters: t.List[ast.Expr]
-    assertions: t.List[ast.Expr]
+    filters: t.List[Expr]
+    assertions: t.List[Expr]
     is_const: bool = False
     
     def __init__(self, name: str, source: t.Optional[str]):
@@ -123,4 +194,4 @@ def common_ancestor(lhs: Type, rhs: Type) -> t.Optional[Type]:
             return ancestor
     return None
 
-Types = t.Dict[t.Union[str, ast.Expr], Type]
+Types = t.Dict[str, Type]

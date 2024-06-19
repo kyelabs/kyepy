@@ -10,9 +10,8 @@ from kye.type.native_types import NATIVE_TYPES
 class TypeBuilder(ast.Visitor):
     """
     Responsible for interpreting the AST and building the types
-    - Does not type check
-    - Does not touch expressions, only organizes them 
-      within the types (edges, conditions, assertions)
+    - Does not figure out the type of expressions
+    - Converts expressions into it's own simplified representation
     """
     reporter: ErrorReporter
     this: t.Optional[typ.Type]
@@ -47,11 +46,11 @@ class TypeBuilder(ast.Visitor):
     def visit_edge(self, edge_ast: ast.Edge):
         assert self.this is not None
         
-        returns = self.visit(edge_ast.expr)
-        expr = None
-        if returns is None:
-            expr = edge_ast.expr
-            returns = None
+        expr = self.visit(edge_ast.expr)
+        returns = None
+        if isinstance(expr, typ.Type):
+            returns = expr
+            expr = typ.Var(edge_ast.name.lexeme)
         
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
@@ -77,12 +76,17 @@ class TypeBuilder(ast.Visitor):
         obj: typ.Type = self.visit(assert_ast.expr)
         assert self.this is not None
         assert typ.has_compatible_source(obj, self.this)
-        self.this.assertions.append(assert_ast.expr)
+        assertion = self.visit(assert_ast.expr)
+        assert isinstance(assertion, typ.Expr)
+        self.this.assertions.append(assertion)
 
     def visit_filter(self, filter_ast: ast.Filter):
         obj: typ.Type = self.visit(filter_ast.object)
         obj = obj.clone()
-        obj.filters += filter_ast.conditions
+        obj.filters += [
+            self.visit_with_this(cond, obj)
+            for cond in filter_ast.conditions
+        ]
         return obj
 
     def visit_select(self, select_ast: ast.Select):
@@ -94,21 +98,49 @@ class TypeBuilder(ast.Visitor):
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
         assert type_ast.name.lexeme in self.types, f'Type {type_ast.name.lexeme} not defined.'
         return self.types[type_ast.name.lexeme]
-    
+
     def visit_edge_identifier(self, edge_ast: ast.EdgeIdentifier):
-        return None
+        edge_name = edge_ast.name.lexeme
+        
+        if self.this is not None and edge_name in self.this:
+            return self.this[edge_name].expr
+
+        return typ.Var(edge_name)
     
     def visit_literal(self, literal_ast: ast.Literal):
-        return None
+        return typ.Const(literal_ast.value)
     
     def visit_binary(self, binary_ast: ast.Binary):
-        return None
-    
+        left = self.visit(binary_ast.left)
+        right = self.visit(binary_ast.right)
+        if not isinstance(left, typ.Expr) or not isinstance(right, typ.Expr):
+            raise NotImplementedError('Binary operations not yet implemented for types')
+        op = typ.Operator(binary_ast.operator.lexeme).edge_name
+        return typ.Expr(op, (left, right))
+
     def visit_unary(self, unary_ast: ast.Unary):
-        return None
-    
+        right = self.visit(unary_ast.right)
+        if not isinstance(typ.Expr, right):
+            raise NotImplementedError('Unary operations not yet implemented for types')
+        return typ.Expr(unary_ast.operator.lexeme, (right,))
+
     def visit_get(self, get_ast: ast.Get):
-        return None
-    
+        obj = self.visit(get_ast.object)
+        edge = get_ast.name.lexeme
+        if isinstance(obj, typ.Type):
+            raise NotImplementedError('Get operations not yet implemented for types')
+        return typ.Expr(edge, (obj,))
+
     def visit_call(self, call_ast: ast.Call):
-        return None
+        arguments = call_ast.arguments
+        if isinstance(call_ast.object, (ast.TypeIdentifier, ast.EdgeIdentifier)):
+            edge = call_ast.object.name.lexeme
+        elif isinstance(call_ast.object, ast.Get):
+            edge = call_ast.object.name.lexeme
+            arguments = (call_ast.object.object,) + arguments
+        else:
+            raise NotImplementedError('cannot call an expression')
+        args = [self.visit(arg) for arg in arguments]
+        if any(isinstance(arg, typ.Type) for arg in args):
+            raise NotImplementedError('Call operations not yet implemented for types')
+        return typ.Expr(edge, args)
