@@ -1,0 +1,3 @@
+- get_column: 'a'
+- nunique
+- eq_const: 1
