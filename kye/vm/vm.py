@@ -1,6 +1,8 @@
 import yaml
 from pathlib import Path
 from enum import Enum, auto
+import pandas as pd
+import numpy as np
 
 class OP(Enum):
     GET_COLUMN = auto(), 0, 'str'
@@ -66,45 +68,63 @@ def parse_command(cmd) -> tuple[OP, tuple]:
     assert op.matches_signature(args)
     return op, args
 
-
-import pandas as pd
-df = pd.DataFrame({
-    'a': [1, 2, 3],
-    'b': [4, 5, 6],
-})
-
 class Stack:
-    def __init__(self, df: pd.DataFrame):
-        self.stack = df[[]].copy()
+    def __init__(self):
+        self.stack = pd.DataFrame()
         self.stack_size = 0
     
     @property
-    def index(self):
-        return self.stack.index
+    def is_empty(self):
+        return self.stack_size == 0
+
+    def _preprocess(self, col: pd.Series) -> pd.Series:
+        if col.hasnans:
+            col = col.dropna()
+        if not col.index.is_unique:
+            # Not sure which is faster
+            # col = col.groupby(col.index).unique().explode()
+            col = col.reset_index().drop_duplicates().set_index(col.index.names).iloc[:,0]
+        return col
     
     def push(self, val: pd.Series):
-        self.stack.loc[:, self.stack_size] = val
+        val = self._preprocess(val)
+        if self.is_empty:
+            self.stack = val.rename(self.stack_size).to_frame()
+        else:
+            self.stack = pd.merge(self.stack, val.rename(self.stack_size), left_index=True, right_index=True, how='outer')
         self.stack_size += 1
     
     def pop(self) -> pd.Series:
         self.stack_size -= 1
         col = self.stack.loc[:,self.stack_size]
-        # self.stack.drop(columns=[self.stack_size], inplace=True)
+        self.stack.drop(columns=[self.stack_size], inplace=True)
         return col
+    
+    def pop_agg(self):
+        return self.pop().groupby(self.stack.index)
 
-stack = Stack(df)
+stack = Stack()
+df = pd.DataFrame({
+    'id': [1, 2,     3],
+    'a':  [1, 1,     2],
+    'b':  [4, [5,6], 7],
+}).set_index('id', drop=False)
+
+def get_column(col_name):
+    assert col_name in df
+    return df[col_name].explode().dropna().infer_objects()
 
 for cmd in commands:
     cmd, args = parse_command(cmd)
     print(cmd, args)
     if cmd == OP.GET_COLUMN:
-        stack.push(df[args[0]])
+        stack.push(get_column(args[0]))
     elif cmd == OP.LT_CONST:
         stack.push(stack.pop() < args[0])
     elif cmd == OP.EQ_CONST:
         stack.push(stack.pop() == args[0])
     elif cmd == OP.NUNIQUE:
-        stack.push(stack.pop().groupby(stack.index).nunique())
+        stack.push(stack.pop_agg().nunique())
     print(stack.stack)
     # op, args = cmd['op'], cmd['args']
     # print(op, args)
