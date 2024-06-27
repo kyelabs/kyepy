@@ -89,7 +89,7 @@ def run_command(op, args):
         return args[0] / args[1]
     elif op == OP.MOD:
         return args[0] % args[1]
-    elif op == OP.CNT:
+    elif op == OP.COUNT:
         return groupby_index(args[0]).nunique()
     else:
         raise ValueError(f'Invalid operation: {op}')
@@ -100,7 +100,7 @@ def run(commands):
     for cmd in commands:
         cmd, args = parse_command(cmd)
         print(cmd, args)
-        num_stack_args = cmd.num_stack_args - len(args)
+        num_stack_args = cmd.arity - len(args)
         assert len(stack) >= num_stack_args
         for _ in range(num_stack_args):
             args.insert(0, stack.pop())
