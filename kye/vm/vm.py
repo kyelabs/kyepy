@@ -1,77 +1,15 @@
-import yaml
-from pathlib import Path
-from enum import Enum, auto
 import pandas as pd
 import numpy as np
 
-class OP(Enum):
-    GET_COLUMN = auto(), 0, 'str'
-    LT_CONST =   auto(), 1, 'any'
-    EQ_CONST =   auto(), 1, 'any'
-    NUNIQUE =    auto(), 1
-    
-    @property
-    def code(self):
-        return self.value[0]
-    
-    @property
-    def pops(self):
-        return self.value[1]
-    
-    @property
-    def signature(self):
-        return self.value[2:]
-    
-    @property
-    def arity(self):
-        return len(self.signature)
-    
-    def matches_signature(self, args):
-        if len(args) != len(self.signature):
-            return False
-        for arg, sig_arg in zip(args, self.signature):
-            if sig_arg == 'any':
-                if not isinstance(arg, (int, float, str)):
-                    return False
-            elif sig_arg == 'num':
-                if not isinstance(arg, (int, float)):
-                    return False
-            elif sig_arg == 'str':
-                if not isinstance(arg, str):
-                    return False
-            else:
-                raise ValueError(f'Invalid signature: {sig_arg}')
-        return True
-
-BASE_DIR = Path(__file__).resolve().parent
-commands = yaml.safe_load((BASE_DIR / 'example.yaml').read_text())
-
-def parse_command(cmd) -> tuple[OP, tuple]:
-    op = None
-    args = None
-    if isinstance(cmd, str):
-        op = OP[cmd.upper()]
-        assert op.arity == 0
-        args = tuple()
-    elif isinstance(cmd, dict):
-        assert len(cmd) == 1
-        cmd, args = list(cmd.items())[0]
-        assert isinstance(cmd, str)
-        if isinstance(args, list):
-            args = tuple(args)
-        else:
-            assert isinstance(args, (str, int, float))
-            args = (args,)
-        op = OP[cmd.upper()]
-    else:
-        raise ValueError(f'Invalid command: {cmd}')
-    assert op.matches_signature(args)
-    return op, args
+from op import OP, parse_command
 
 class Stack:
     def __init__(self):
         self.stack = pd.DataFrame()
         self.stack_size = 0
+    
+    def __len__(self):
+        return self.stack_size
     
     @property
     def is_empty(self):
@@ -99,11 +37,8 @@ class Stack:
         col = self.stack.loc[:,self.stack_size]
         self.stack.drop(columns=[self.stack_size], inplace=True)
         return col
-    
-    def pop_agg(self):
-        return self.pop().groupby(self.stack.index)
 
-stack = Stack()
+
 df = pd.DataFrame({
     'id': [1, 2,     3],
     'a':  [1, 1,     2],
@@ -114,21 +49,95 @@ def get_column(col_name):
     assert col_name in df
     return df[col_name].explode().dropna().infer_objects()
 
-for cmd in commands:
-    cmd, args = parse_command(cmd)
-    print(cmd, args)
-    if cmd == OP.GET_COLUMN:
-        stack.push(get_column(args[0]))
-    elif cmd == OP.LT_CONST:
-        stack.push(stack.pop() < args[0])
-    elif cmd == OP.EQ_CONST:
-        stack.push(stack.pop() == args[0])
-    elif cmd == OP.NUNIQUE:
-        stack.push(stack.pop_agg().nunique())
-    print(stack.stack)
+def groupby_index(col):
+    return col.groupby(col.index)
+
+def run(commands):
+    stack = Stack()
+    
+    for cmd in commands:
+        cmd, const_args = parse_command(cmd)
+        assert len(stack) >= cmd.num_stack_args
+        # reverse the order of the stack arguments
+        stack_args = [stack.pop() for _ in range(cmd.num_stack_args)][::-1]
+        print(cmd, const_args)
+        if cmd == OP.LOAD_COL:
+            stack.push(get_column(const_args[0]))
+        elif cmd == OP.IS_NULL:
+            stack.push(stack_args[0].isnull())
+        elif cmd == OP.NOT_NULL:
+            stack.push(stack_args[0].notnull())
+        elif cmd == OP.NOT:
+            stack.push(~stack_args[0])
+        elif cmd == OP.NEG:
+            stack.push(-stack_args[0])
+        elif cmd == OP.NE:
+            stack.push(stack_args[0] != stack_args[1])
+        elif cmd == OP.EQ:
+            stack.push(stack_args[0] == stack_args[1])
+        elif cmd == OP.OR:
+            stack.push(stack_args[0] | stack_args[1])
+        elif cmd == OP.AND:
+            stack.push(stack_args[0] & stack_args[1])
+        elif cmd == OP.LT:
+            stack.push(stack_args[0] < stack_args[1])
+        elif cmd == OP.GT:
+            stack.push(stack_args[0] > stack_args[1])
+        elif cmd == OP.LTE:
+            stack.push(stack_args[0] <= stack_args[1])
+        elif cmd == OP.GTE:
+            stack.push(stack_args[0] >= stack_args[1])
+        elif cmd == OP.ADD:
+            stack.push(stack_args[0] + stack_args[1])
+        elif cmd == OP.SUB:
+            stack.push(stack_args[0] - stack_args[1])
+        elif cmd == OP.MUL:
+            stack.push(stack_args[0] * stack_args[1])
+        elif cmd == OP.DIV:
+            stack.push(stack_args[0] / stack_args[1])
+        elif cmd == OP.MOD:
+            stack.push(stack_args[0] % stack_args[1])
+        elif cmd == OP.EQ_CONST:
+            stack.push(stack_args[0] == const_args[0])
+        elif cmd == OP.NE_CONST:
+            stack.push(stack_args[0] != const_args[0])
+        elif cmd == OP.LT_CONST:
+            stack.push(stack_args[0] < const_args[0])
+        elif cmd == OP.GT_CONST:
+            stack.push(stack_args[0] > const_args[0])
+        elif cmd == OP.LTE_CONST:
+            stack.push(stack_args[0] <= const_args[0])
+        elif cmd == OP.GTE_CONST:
+            stack.push(stack_args[0] >= const_args[0])
+        elif cmd == OP.ADD_CONST:
+            stack.push(stack_args[0] + const_args[0])
+        elif cmd == OP.SUB_CONST:
+            stack.push(stack_args[0] - const_args[0])
+        elif cmd == OP.MUL_CONST:
+            stack.push(stack_args[0] * const_args[0])
+        elif cmd == OP.DIV_CONST:
+            stack.push(stack_args[0] / const_args[0])
+        elif cmd == OP.MOD_CONST:
+            stack.push(stack_args[0] % const_args[0])
+        elif cmd == OP.NUNIQUE:
+            stack.push(groupby_index(stack_args[0]).nunique())
+        print(stack.stack)
     # op, args = cmd['op'], cmd['args']
     # print(op, args)
     # op, args = OP(op), args
     # print(op, args)
     # assert isinstance(op, OP)
     # assert isinstance(args, op.value[1])
+
+
+if __name__ == '__main__':
+    from pathlib import Path
+    import yaml
+    BASE_DIR = Path(__file__).resolve().parent
+    run(yaml.safe_load('''
+
+    - load_col: a
+    - nunique
+    - eq_const: 1
+
+    '''))
