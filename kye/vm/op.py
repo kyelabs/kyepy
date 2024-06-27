@@ -1,7 +1,7 @@
 from enum import Enum, auto
 
 class OP(Enum):
-    COL =   auto(), 0, 'str' # Load column
+    COL =        auto(), 1, 'str' # Load column
 
     # Unary
     IS_NULL =    auto(), 1
@@ -25,28 +25,22 @@ class OP(Enum):
     MOD =        auto(), 2, 'num'
 
     # Aggregates
-    CNT =    auto(), 1
+    COUNT =      auto(), 1
     
     @property
     def code(self):
         return self.value[0]
     
     @property
-    def num_stack_args(self):
+    def arity(self):
         return self.value[1]
     
     @property
     def signature(self):
         return self.value[2:]
     
-    @property
-    def arity(self):
-        return len(self.signature)
-    
     def matches_signature(self, args):
-        if len(args) == 0 and self.num_stack_args != 0:
-            return True
-        if len(args) != len(self.signature):
+        if len(args) > len(self.signature):
             return False
         for arg, sig_arg in zip(args, self.signature):
             if sig_arg == 'any':
