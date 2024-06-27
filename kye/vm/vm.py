@@ -36,7 +36,7 @@ class Stack:
         self.stack_size -= 1
         col = self.stack.loc[:,self.stack_size]
         self.stack.drop(columns=[self.stack_size], inplace=True)
-        return col
+        return self._preprocess(col)
 
 
 df = pd.DataFrame({
@@ -52,82 +52,61 @@ def get_column(col_name):
 def groupby_index(col):
     return col.groupby(col.index)
 
+def run_command(op, args):
+    if op == OP.COL:
+        return get_column(args[0])
+    elif op == OP.IS_NULL:
+        return args[0].isnull()
+    elif op == OP.NOT_NULL:
+        return args[0].notnull()
+    elif op == OP.NOT:
+        return ~args[0]
+    elif op == OP.NEG:
+        return -args[0]
+    elif op == OP.NE:
+        return args[0] != args[1]
+    elif op == OP.EQ:
+        return args[0] == args[1]
+    elif op == OP.OR:
+        return args[0] | args[1]
+    elif op == OP.AND:
+        return args[0] & args[1]
+    elif op == OP.LT:
+        return args[0] < args[1]
+    elif op == OP.GT:
+        return args[0] > args[1]
+    elif op == OP.LTE:
+        return args[0] <= args[1]
+    elif op == OP.GTE:
+        return args[0] >= args[1]
+    elif op == OP.ADD:
+        return args[0] + args[1]
+    elif op == OP.SUB:
+        return args[0] - args[1]
+    elif op == OP.MUL:
+        return args[0] * args[1]
+    elif op == OP.DIV:
+        return args[0] / args[1]
+    elif op == OP.MOD:
+        return args[0] % args[1]
+    elif op == OP.CNT:
+        return groupby_index(args[0]).nunique()
+    else:
+        raise ValueError(f'Invalid operation: {op}')
+
 def run(commands):
     stack = Stack()
     
     for cmd in commands:
-        cmd, const_args = parse_command(cmd)
-        assert len(stack) >= cmd.num_stack_args
-        # reverse the order of the stack arguments
-        stack_args = [stack.pop() for _ in range(cmd.num_stack_args)][::-1]
-        print(cmd, const_args)
-        if cmd == OP.LOAD_COL:
-            stack.push(get_column(const_args[0]))
-        elif cmd == OP.IS_NULL:
-            stack.push(stack_args[0].isnull())
-        elif cmd == OP.NOT_NULL:
-            stack.push(stack_args[0].notnull())
-        elif cmd == OP.NOT:
-            stack.push(~stack_args[0])
-        elif cmd == OP.NEG:
-            stack.push(-stack_args[0])
-        elif cmd == OP.NE:
-            stack.push(stack_args[0] != stack_args[1])
-        elif cmd == OP.EQ:
-            stack.push(stack_args[0] == stack_args[1])
-        elif cmd == OP.OR:
-            stack.push(stack_args[0] | stack_args[1])
-        elif cmd == OP.AND:
-            stack.push(stack_args[0] & stack_args[1])
-        elif cmd == OP.LT:
-            stack.push(stack_args[0] < stack_args[1])
-        elif cmd == OP.GT:
-            stack.push(stack_args[0] > stack_args[1])
-        elif cmd == OP.LTE:
-            stack.push(stack_args[0] <= stack_args[1])
-        elif cmd == OP.GTE:
-            stack.push(stack_args[0] >= stack_args[1])
-        elif cmd == OP.ADD:
-            stack.push(stack_args[0] + stack_args[1])
-        elif cmd == OP.SUB:
-            stack.push(stack_args[0] - stack_args[1])
-        elif cmd == OP.MUL:
-            stack.push(stack_args[0] * stack_args[1])
-        elif cmd == OP.DIV:
-            stack.push(stack_args[0] / stack_args[1])
-        elif cmd == OP.MOD:
-            stack.push(stack_args[0] % stack_args[1])
-        elif cmd == OP.EQ_CONST:
-            stack.push(stack_args[0] == const_args[0])
-        elif cmd == OP.NE_CONST:
-            stack.push(stack_args[0] != const_args[0])
-        elif cmd == OP.LT_CONST:
-            stack.push(stack_args[0] < const_args[0])
-        elif cmd == OP.GT_CONST:
-            stack.push(stack_args[0] > const_args[0])
-        elif cmd == OP.LTE_CONST:
-            stack.push(stack_args[0] <= const_args[0])
-        elif cmd == OP.GTE_CONST:
-            stack.push(stack_args[0] >= const_args[0])
-        elif cmd == OP.ADD_CONST:
-            stack.push(stack_args[0] + const_args[0])
-        elif cmd == OP.SUB_CONST:
-            stack.push(stack_args[0] - const_args[0])
-        elif cmd == OP.MUL_CONST:
-            stack.push(stack_args[0] * const_args[0])
-        elif cmd == OP.DIV_CONST:
-            stack.push(stack_args[0] / const_args[0])
-        elif cmd == OP.MOD_CONST:
-            stack.push(stack_args[0] % const_args[0])
-        elif cmd == OP.NUNIQUE:
-            stack.push(groupby_index(stack_args[0]).nunique())
+        cmd, args = parse_command(cmd)
+        print(cmd, args)
+        num_stack_args = cmd.num_stack_args - len(args)
+        assert len(stack) >= num_stack_args
+        for _ in range(num_stack_args):
+            args.insert(0, stack.pop())
+        result = run_command(cmd, args)
+        stack.push(result)
         print(stack.stack)
-    # op, args = cmd['op'], cmd['args']
-    # print(op, args)
-    # op, args = OP(op), args
-    # print(op, args)
-    # assert isinstance(op, OP)
-    # assert isinstance(args, op.value[1])
 
 
 if __name__ == '__main__':
@@ -135,9 +114,7 @@ if __name__ == '__main__':
     import yaml
     BASE_DIR = Path(__file__).resolve().parent
     run(yaml.safe_load('''
-
-    - load_col: a
-    - nunique
-    - eq_const: 1
-
+        - col: a
+        - col: b
+        - add: True
     '''))
