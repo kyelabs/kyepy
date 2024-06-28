@@ -3,11 +3,15 @@ from enum import Enum, auto
 class OP(Enum):
     COL =        auto(), 1, 'str' # Load column
 
+    # Type conversion
+    STR =        auto(), 1 # Convert to string
+
     # Unary
-    IS_NULL =    auto(), 1
-    NOT_NULL =   auto(), 1
+    NA =    auto(), 1
+    DEF =   auto(), 1
     NOT =        auto(), 1 # boolean not
     NEG =        auto(), 1 # arithmetic negation
+    LEN =        auto(), 1 # length of string
 
     # Binary
     NE =         auto(), 2, 'any'
@@ -23,6 +27,7 @@ class OP(Enum):
     MUL =        auto(), 2, 'num'
     DIV =        auto(), 2, 'num'
     MOD =        auto(), 2, 'num'
+    CONCAT =     auto(), 2, 'str'
 
     # Aggregates
     COUNT =      auto(), 1

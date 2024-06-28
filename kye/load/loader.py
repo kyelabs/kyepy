@@ -10,42 +10,36 @@ import ibis.expr.types as ir
 from kye.errors import ErrorReporter, KyeRuntimeError
 import kye.type.types as typ
 from kye.engine import Engine
+from kye.vm.op import OP, parse_command
 
-@dataclass(frozen=True)
-class DataType:
-    name: str
+Expr = t.List[tuple[OP, list]]
 
 @dataclass
 class Edge:
     name: str
-    allows_null: bool
-    allows_many: bool
-    type: DataType
-    
-    def combine(self, other: Edge):
-        assert self.name == other.name, "Edges must have the same name"
-        assert self.type == other.type, "Edges must have the same type"
-        return Edge(
-            name=self.name,
-            allows_null=self.allows_null or other.allows_null,
-            allows_many=self.allows_many or other.allows_many,
-            type=self.type,
-        )
+    null: bool
+    many: bool
+    type: str
+    expr: t.Optional[Expr] = None
+
+@dataclass
+class Assertion:
+    msg: str
+    expr: Expr
 
 class Source:
     name: str
     index: t.List[str]
     edges: t.Dict[str, Edge]
+    assertions: t.List[Assertion]
     
-    def __init__(self, name: str, index: t.List[str]):
+    def __init__(self, name: str, index: t.List[str], assertions: t.List[Assertion]):
         self.name = name
         self.index = index
+        self.assertions = assertions
         self.edges = {}
     
     def define(self, edge: Edge):
-        existing = self.edges.get(edge.name)
-        if existing:
-            edge = existing.combine(edge)
         self.edges[edge.name] = edge
     
     def __getitem__(self, key: str) -> Edge:
@@ -57,27 +51,45 @@ class Loader:
     sources: t.Dict[str, Source]
     tables: t.Dict[str, ibis.Table]
     
-    def __init__(self, types: typ.Types, engine: Engine, reporter: ErrorReporter):
+    def __init__(self, compiled: t.Dict, engine: Engine, reporter: ErrorReporter):
         self.reporter = reporter
         self.engine = engine
         self.sources = {}
         self.tables = {}
-    
-        for model in types.values():
-            if not isinstance(model, typ.Model):
-                continue
-            if model.source not in self.sources:
-                self.sources[model.source] = Source(
-                    model.source,
-                    model.indexes.edges
-                )
-            source = self.sources[model.source]
-            for edge in model.edges.values():
+
+        for model_name, model in compiled['models'].items():
+            index_edges = set()
+            for index in model['indexes']:
+                for edge in index:
+                    index_edges.add(edge)
+            source = Source(
+                name=model_name,
+                index=list(index_edges),
+                assertions=[
+                    Assertion(
+                        msg=assertion['msg'],
+                        expr=[
+                            parse_command(cmd)
+                            for cmd in assertion['expr']
+                        ],
+                    )
+                    for assertion in model.get('assertions', [])
+                ],
+            )
+            self.sources[model_name] = source
+            for edge_name, edge in model['edges'].items():
+                expr = None
+                if 'expr' in edge:
+                    expr = [
+                        parse_command(cmd)
+                        for cmd in edge['expr']
+                    ]
                 source.define(Edge(
-                    name=edge.name,
-                    allows_null=edge.allows_null,
-                    allows_many=edge.allows_many,
-                    type=DataType(edge.returns.name),
+                    name=edge_name,
+                    null=edge.get('null', False),
+                    many=edge.get('many', False),
+                    type=edge['type'],
+                    expr=expr,
                 ))
     
     def load(self, source_name: str) -> ibis.Table:
@@ -125,20 +137,21 @@ class Loader:
         
         return table
     
+    def get_source(self, source: str):
+        return self.sources[source]
     
     def matches_dtype(self, edge: Edge, dtype: dtype.DataType):
-        type = edge.type
-        if edge.allows_many:
+        if edge.many:
             assert dtype.is_array(), "Expected array"
             dtype = dtype.value_type # type: ignore
         assert not dtype.is_nested(), "Unexpected nesting"
-        if type.name == 'String':
+        if edge.type == 'String':
             assert dtype.is_string(), "Expected string"
-        elif type.name == 'Number':
+        elif edge.type == 'Number':
             assert dtype.is_numeric(), "Expected numeric"
-        elif type.name == 'Integer':
+        elif edge.type == 'Integer':
             assert dtype.is_integer(), "Expected integer"
-        elif type.name == 'Boolean':
+        elif edge.type == 'Boolean':
             assert dtype.is_boolean(), "Expected boolean"
         else:
-            raise Exception(f"Unknown type {type.name}")
+            raise Exception(f"Unknown type {edge.type}")
