@@ -1,11 +1,12 @@
 from __future__ import annotations
 import typing as t
 import sys
+from argparse import ArgumentParser, FileType
 # import readline
 # import atexit
 # import os
 
-from kye.kye import Kye, Config
+from kye.kye import Kye
 
 # def setup_readline():
 #     histfile = os.path.join(os.path.expanduser("~"), ".kye_history")
@@ -36,10 +37,10 @@ from kye.kye import Kye, Config
 #             print()
 #             continue
 
-def run_file(file_path, kye: Kye):
+def compile_script(file_path, kye: Kye):
     with open(file_path, "r") as file:
         source = file.read()
-    kye.eval_definitions(source)
+    kye.compile(source)
     kye.reporter.report()
     if kye.reporter.had_runtime_error:
         sys.exit(70)
@@ -47,22 +48,29 @@ def run_file(file_path, kye: Kye):
         sys.exit(65)
 
 
+parser = ArgumentParser(description="Kye programming language")
+parser.add_argument("script", nargs='?',
+                    help="Script to run")
+parser.add_argument('-d','--data', dest='data_file',
+                    help="Data file to load")
+parser.add_argument('-m','--model', dest='model_name',
+                    help="Model to load")
+parser.add_argument('-c','--compiled', dest='compiled_out',
+                    help="Output compiled file")
+
+
 def main():
-    kye = Kye(Config(
-        kye_file="sandbox.kye",
-        # data_file='data/User.jsonl',
-        # model_name='User',
-        compiled_out='.compiled.kye.yaml'
-    ))
+    args = parser.parse_args()
+    kye = Kye()
+    compile_script(args.script, kye)
     
-    # if len(sys.argv) > 2:
-    #     if sys.argv[1] == 'debug':
-    #         run_file(sys.argv[2], kye)
-    #         run_prompt(kye)
-    if len(sys.argv) == 2:
-        run_file(sys.argv[1], kye)
-    else:
-        print("Usage: kye (debug) [script]")
+    if args.compiled_out is not None:
+        kye.write_compiled(args.compiled_out)
+    
+    if args.model_name is not None:
+        assert args.data_file is not None
+        kye.read(args.model_name, args.data_file)
+        kye.validate(args.model_name)
 
 if __name__ == "__main__":
     main()
