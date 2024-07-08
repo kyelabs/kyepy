@@ -49,23 +49,20 @@ def groupby_index(col):
     return col.groupby(col.index)
 
 class VM:
-    tables: t.Dict[str, pd.DataFrame]
     this: t.Optional[str]
     reporter: ErrorReporter
     
     def __init__(self, loader: Loader):
         self.loader = loader
-        self.tables = {}
         self.this = None
     
-    def load_table(self, table: str):
-        if table not in self.tables:
-            self.tables[table] = self.loader.load(table)
-        return self.tables[table]
-    
+    def get_table(self, table_name):
+        assert table_name in self.loader.tables
+        return self.loader.tables[table_name]
+        
     def get_column(self, col_name):
         assert self.this is not None
-        df = self.load_table(self.this)
+        df = self.get_table(self.this)
         if col_name in df:
             return df[col_name].explode().dropna().infer_objects()
         expr = self.loader.get_source(self.this)[col_name].expr
@@ -141,6 +138,6 @@ class VM:
             result = self.eval(assertion.expr)
             if not result.all():
                 print('Assertion failed:', assertion.msg)
-                print(self.load_table(table)[~result])
+                print(self.get_table(table)[~result])
         self.this = None
         return True
