@@ -4,10 +4,10 @@ import kye.parse.expressions as ast
 import kye.type.types as typ
 from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
-from kye.load.loader import Loader
+from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.engine import Engine
-from kye.compiler import compile, write_compiled
+from kye.vm.engine import Engine
+from kye.type.compiler import compile, write_compiled
 from kye.vm.vm import VM
 
 class Kye:
@@ -58,7 +58,7 @@ class Kye:
         loader = Loader(compiled, self.engine, self.reporter)
         self.vm = VM(loader)
         self.vm.reporter = self.reporter
-        self.vm.validate_all()
+        self.vm.validate('User')
         return not self.reporter.had_error
     
     # def eval_expression(self, source: str) -> t.Any:
