@@ -7,13 +7,27 @@ import kye.type.types as typ
 from kye.errors import ErrorReporter
 from kye.vm.op import OP
 
-__all__ = ['Compiled', 'Model', 'Edge', 'Assertion', 'Expr', 'write_compiled', 'compile']
+__all__ = ['Compiled', 'write_compiled', 'compile']
 
-Compiled = dict
-Model = dict
-Edge = dict
-Assertion = dict
-Expr = dict
+class Compiled(t.TypedDict):
+    models: t.Dict[str, Model]
+
+class Model(t.TypedDict):
+    indexes: t.List[t.List[str]]
+    edges: t.Dict[str, Edge]
+    assertions: t.List[Assertion]
+
+class Edge(t.TypedDict):
+    type: str
+    expr: t.NotRequired[t.List[Expr]]
+    many: t.NotRequired[bool]
+    null: t.NotRequired[bool]
+
+class Assertion(t.TypedDict):
+    msg: str
+    expr: t.List[Expr]
+
+Expr = dict[str, t.Optional[t.Union[t.Any, t.List[t.Any]]]]
 
 def write_compiled(compiled: Compiled, path_: str):
     path = Path(path_)
@@ -29,7 +43,7 @@ def write_compiled(compiled: Compiled, path_: str):
     path.write_text(text)
 
 def compile(types: typ.Types) -> Compiled:
-    compiled = {
+    compiled: Compiled = {
         'models': {}
     }
     
@@ -64,7 +78,7 @@ def compile_type( type: typ.Type):
 
 def compile_edge( edge: typ.Edge) -> Edge:
     assert edge.returns is not None
-    compiled = {
+    compiled: Edge = {
         'type': edge.returns.name,
         'expr': list(compile_expr(edge.expr))
     }
