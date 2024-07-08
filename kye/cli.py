@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing as t
 import sys
-from argparse import ArgumentParser, FileType
+from argparse import ArgumentParser
 # import readline
 # import atexit
 # import os
@@ -60,7 +60,12 @@ parser.add_argument('-c','--compiled', dest='compiled_out',
 
 
 def main():
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+    
     args = parser.parse_args()
+    
     kye = Kye()
     compile_script(args.script, kye)
     
