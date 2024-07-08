@@ -73,9 +73,9 @@ class TypeBuilder(ast.Visitor):
         return type
 
     def visit_assert(self, assert_ast: ast.Assert):
-        obj: typ.Type = self.visit(assert_ast.expr)
+        obj = self.visit(assert_ast.expr)
         assert self.this is not None
-        assert typ.has_compatible_source(obj, self.this)
+        # assert typ.has_compatible_source(obj, self.this)
         assertion = self.visit(assert_ast.expr)
         assert isinstance(assertion, typ.Expr)
         self.this.assertions.append(assertion)

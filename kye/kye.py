@@ -8,6 +8,7 @@ from kye.type.type_builder import TypeBuilder
 from kye.load.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
+from kye.compiler import Compiler
 
 class Kye:
     engine: Engine
@@ -45,8 +46,6 @@ class Kye:
         self.type_builder.visit(tree)
         if self.reporter.had_error:
             return None
-        if self.reporter.had_error:
-            return None
         return self.type_builder.types
     
     def eval_definitions(self, source: str) -> bool:
@@ -54,6 +53,8 @@ class Kye:
         types = self.build_types(tree)
         if types is None:
             return False
+        compiler = Compiler(types)
+        compiler.write('.compiled.kye.json')
         loader = Loader(types, self.engine, self.reporter)
         self.interpreter = Interpreter(types, loader)
         return not self.reporter.had_error
