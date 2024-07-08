@@ -1,10 +1,11 @@
 from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
+from pathlib import Path
+
 import pandas as pd
 
 from kye.errors import ErrorReporter
-from kye.vm.engine import Engine
 from kye.vm.op import OP, parse_command
 from kye.compiler import Compiled
 
@@ -42,14 +43,12 @@ class Source:
         return self.edges[key]
 
 class Loader:
-    engine: Engine
     reporter: ErrorReporter
     sources: t.Dict[str, Source]
     tables: t.Dict[str, pd.DataFrame]
     
-    def __init__(self, compiled: Compiled, engine: Engine, reporter: ErrorReporter):
+    def __init__(self, compiled: Compiled, reporter: ErrorReporter):
         self.reporter = reporter
-        self.engine = engine
         self.sources = {}
         self.tables = {}
 
@@ -88,13 +87,24 @@ class Loader:
                     expr=expr,
                 ))
     
-    def load(self, source_name: str) -> pd.DataFrame:
+    def read_csv(self, source_name: str, filepath: str) -> pd.DataFrame:
+        table = pd.read_csv(filepath)
+        return self.load(source_name, table)
+
+    def read_json(self, source_name: str, filepath: str) -> pd.DataFrame:
+        table = pd.read_json(filepath)
+        return self.load(source_name, table)
+
+    def read_jsonl(self, source_name: str, filepath: str) -> pd.DataFrame:
+        table = pd.read_json(filepath, lines=True)
+        return self.load(source_name, table)
+    
+    def load(self, source_name: str, table: pd.DataFrame) -> pd.DataFrame:
         if source_name in self.tables:
-            return self.tables[source_name]
-        
+            raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
+
         assert source_name in self.sources, f"Source '{source_name}' not found"
         source = self.sources[source_name]
-        table = self.engine.get_table(source.name)
 
         for col_name in source.index:
             assert col_name in table.columns, f"Index column '{col_name}' not found in table"

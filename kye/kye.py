@@ -6,18 +6,15 @@ from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.vm.engine import Engine
 from kye.compiler import compile, write_compiled
 from kye.vm.vm import VM
 
 class Kye:
-    engine: Engine
     reporter: ErrorReporter
     type_builder: TypeBuilder
     vm: VM
 
     def __init__(self):
-        self.engine = Engine()
         self.type_builder = TypeBuilder()
     
     def parse_definitions(self, source: str) -> t.Optional[ast.Script]:
@@ -55,7 +52,8 @@ class Kye:
             return False
         compiled = compile(types)
         write_compiled(compiled, '.compiled.kye.yaml')
-        loader = Loader(compiled, self.engine, self.reporter)
+        loader = Loader(compiled, self.reporter)
+        loader.read_jsonl('User', 'data/User.jsonl')
         self.vm = VM(loader)
         self.vm.reporter = self.reporter
         self.vm.validate('User')
