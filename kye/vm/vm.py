@@ -5,6 +5,7 @@ import numpy as np
 
 from kye.vm.op import OP, parse_command
 from kye.load.loader import Loader
+from kye.errors import ErrorReporter
 
 class Stack:
     def __init__(self):
@@ -50,6 +51,7 @@ def groupby_index(col):
 class VM:
     tables: t.Dict[str, pd.DataFrame]
     this: t.Optional[str]
+    reporter: ErrorReporter
     
     def __init__(self, loader: Loader):
         self.loader = loader
@@ -141,4 +143,9 @@ class VM:
                 print('Assertion failed:', assertion.msg)
                 print(self.load_table(table)[~result])
         self.this = None
+        return True
+    
+    def validate_all(self):
+        for table in self.loader.sources:
+            self.validate(table)
         return True

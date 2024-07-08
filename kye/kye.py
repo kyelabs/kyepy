@@ -3,18 +3,18 @@ import typing as t
 import kye.parse.expressions as ast
 import kye.type.types as typ
 from kye.parse.parser import Parser
-from kye.interpreter import Interpreter
 from kye.type.type_builder import TypeBuilder
 from kye.load.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.engine import Engine
 from kye.compiler import compile, write_compiled
+from kye.vm.vm import VM
 
 class Kye:
     engine: Engine
     reporter: ErrorReporter
     type_builder: TypeBuilder
-    interpreter: Interpreter
+    vm: VM
 
     def __init__(self):
         self.engine = Engine()
@@ -56,17 +56,19 @@ class Kye:
         compiled = compile(types)
         write_compiled(compiled, '.compiled.kye.yaml')
         loader = Loader(compiled, self.engine, self.reporter)
-        self.interpreter = Interpreter(types, loader)
+        self.vm = VM(loader)
+        self.vm.reporter = self.reporter
+        self.vm.validate_all()
         return not self.reporter.had_error
     
-    def eval_expression(self, source: str) -> t.Any:
-        assert self.interpreter is not None
-        tree = self.parse_expression(source)
-        self.build_types(tree)
-        self.interpreter.reporter = self.reporter
-        if tree is None:
-            return None
-        try:
-            return self.interpreter.visit(tree)
-        except KyeRuntimeError as error:
-            self.reporter.runtime_error(error)
+    # def eval_expression(self, source: str) -> t.Any:
+    #     assert self.vm is not None
+    #     tree = self.parse_expression(source)
+    #     self.build_types(tree)
+    #     self.vm.reporter = self.reporter
+    #     if tree is None:
+    #         return None
+    #     try:
+    #         return self.vm.visit(tree)
+    #     except KyeRuntimeError as error:
+    #         self.reporter.runtime_error(error)
