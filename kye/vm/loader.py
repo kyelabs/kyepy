@@ -6,6 +6,7 @@ import pandas as pd
 from kye.errors import ErrorReporter
 from kye.vm.engine import Engine
 from kye.vm.op import OP, parse_command
+from kye.compiler import Compiled
 
 Expr = t.List[tuple[OP, list]]
 
@@ -46,7 +47,7 @@ class Loader:
     sources: t.Dict[str, Source]
     tables: t.Dict[str, pd.DataFrame]
     
-    def __init__(self, compiled: t.Dict, engine: Engine, reporter: ErrorReporter):
+    def __init__(self, compiled: Compiled, engine: Engine, reporter: ErrorReporter):
         self.reporter = reporter
         self.engine = engine
         self.sources = {}

@@ -7,7 +7,7 @@ from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.vm.engine import Engine
-from kye.type.compiler import compile, write_compiled
+from kye.compiler import compile, write_compiled
 from kye.vm.vm import VM
 
 class Kye:
