@@ -9,7 +9,7 @@ from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.compiler import Compiled, compile, write_compiled
+from kye.compiler import Compiled, compile, write_compiled, read_compiled
 from kye.vm.vm import VM
 
 class Kye:
@@ -57,7 +57,16 @@ class Kye:
         types = self.build_types(tree)
         if types is None:
             return False
-        self.compiled = compile(types)
+        compiled = compile(types)
+        return self.load_compiled(compiled)
+
+    def read_compiled(self, filepath: str):
+        compiled = read_compiled(filepath)
+        return self.load_compiled(compiled)
+
+    def load_compiled(self, compiled: Compiled):
+        self.compiled = compiled
+        self.reporter = ErrorReporter('')
         self.loader = Loader(self.compiled, self.reporter)
         self.vm = VM(self.loader)
         self.vm.reporter = self.reporter

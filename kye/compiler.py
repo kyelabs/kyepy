@@ -29,8 +29,22 @@ class Assertion(t.TypedDict):
 
 Expr = dict[str, t.Optional[t.Union[t.Any, t.List[t.Any]]]]
 
-def write_compiled(compiled: Compiled, path_: str):
-    path = Path(path_)
+def read_compiled(filepath: str) -> Compiled:
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(path)
+    text = path.read_text()
+    if path.suffix in ('.yaml', '.yml'):
+        import yaml
+        return yaml.safe_load(text)
+    elif path.suffix == '.json':
+        import json
+        return json.loads(text)
+    else:
+        raise ValueError(f'Unsupported file extension: {path.suffix}')
+
+def write_compiled(compiled: Compiled, filepath: str):
+    path = Path(filepath)
     text = None
     if path.suffix in ('.yaml', '.yml'):
         import yaml
