@@ -1,6 +1,7 @@
 import typing as t
 from dataclasses import dataclass
 from pathlib import Path
+import pandas as pd
 
 import kye.parse.expressions as ast
 import kye.type.types as typ
@@ -8,24 +9,20 @@ from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
-from kye.compiler import compile, write_compiled
+from kye.compiler import Compiled, compile, write_compiled
 from kye.vm.vm import VM
-
-@dataclass
-class Config:
-    kye_file: str
-    data_file: t.Optional[str] = None
-    model_name: t.Optional[str] = None
-    compiled_out: t.Optional[str] = None
 
 class Kye:
     reporter: ErrorReporter
     type_builder: TypeBuilder
     vm: VM
+    loader: t.Optional[Loader]
+    compiled: t.Optional[Compiled]
 
-    def __init__(self, config: Config):
-        self.config = config
+    def __init__(self):
         self.type_builder = TypeBuilder()
+        self.loader = None
+        self.compiled = None
     
     def parse_definitions(self, source: str) -> t.Optional[ast.Script]:
         """ Parse definitions from source code """
@@ -55,22 +52,32 @@ class Kye:
             return None
         return self.type_builder.types
     
-    def eval_definitions(self, source: str) -> bool:
+    def compile(self, source: str) -> bool:
         tree = self.parse_definitions(source)
         types = self.build_types(tree)
         if types is None:
             return False
-        compiled = compile(types)
-        if self.config.compiled_out is not None:
-            write_compiled(compiled, self.config.compiled_out)
-        if self.config.model_name is not None:
-            loader = Loader(compiled, self.reporter)
-            assert self.config.data_file is not None
-            loader.read(self.config.model_name, self.config.data_file)
-            self.vm = VM(loader)
-            self.vm.reporter = self.reporter
-            self.vm.validate(self.config.model_name)
+        self.compiled = compile(types)
+        self.loader = Loader(self.compiled, self.reporter)
+        self.vm = VM(self.loader)
+        self.vm.reporter = self.reporter
         return not self.reporter.had_error
+    
+    def write_compiled(self, filepath: str):
+        assert self.compiled is not None
+        write_compiled(self.compiled, filepath)
+
+    def load(self, source_name: str, table: pd.DataFrame):
+        assert self.loader is not None
+        self.loader.load(source_name, table)
+    
+    def read(self, source_name: str, filepath: str):
+        assert self.loader is not None
+        self.loader.read(source_name, filepath)
+    
+    def validate(self, source_name: str):
+        assert self.vm is not None
+        self.vm.validate(source_name)
     
     # def eval_expression(self, source: str) -> t.Any:
     #     assert self.vm is not None
