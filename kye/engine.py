@@ -1,6 +1,6 @@
 from pathlib import Path
 from collections import defaultdict
-import ibis
+import pandas as pd
 
 class Engine:
     def __init__(self):
@@ -13,7 +13,7 @@ class Engine:
     def has_table(self, table_name: str):
         return table_name.lower() in self.files
     
-    def get_table(self, table_name: str):
+    def get_table(self, table_name: str) -> pd.DataFrame:
         files = self.files[table_name.lower()]
         if len(files) == 0:
             raise FileNotFoundError(f"Table {table_name} not found.")
@@ -21,8 +21,10 @@ class Engine:
             raise FileNotFoundError(f"Multiple files found for table {table_name}.")
         file = files[0]
         if file.suffix == '.csv':
-            return ibis.read_csv(file, table_name=table_name)
-        elif file.suffix == '.json' or file.suffix == '.jsonl':
-            return ibis.read_json(file, table_name=table_name)
+            return pd.read_csv(file)
+        elif file.suffix == '.json':
+            return pd.read_json(file)
+        elif file.suffix == '.jsonl':
+            return pd.read_json(file, lines=True)
         else:
             raise ValueError(f"Unknown file type {file.suffix}")

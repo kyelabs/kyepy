@@ -1,5 +1,5 @@
 from __future__ import annotations
-import ibis
+import pandas as pd
 
 import kye.type.types as typ
 import kye.parse.expressions as ast
@@ -48,7 +48,7 @@ class Integer(Number):
     pass
 
 class String(NativeType):
-    def __assert__(self, this: ibis.Value):
+    def __assert__(self, this: pd.Series):
         assert isinstance(this, str), f"Expected string, got {this!r}"
     
     @edge(output='Number')
