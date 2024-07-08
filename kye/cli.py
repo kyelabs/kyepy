@@ -67,7 +67,10 @@ def main():
     args = parser.parse_args()
     
     kye = Kye()
-    compile_script(args.script, kye)
+    if args.script.split('.')[-1] in ('json','yaml','yml'):
+        kye.read_compiled(args.script)
+    else:
+        compile_script(args.script, kye)
     
     if args.compiled_out is not None:
         kye.write_compiled(args.compiled_out)
