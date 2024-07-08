@@ -87,16 +87,16 @@ class Loader:
                     expr=expr,
                 ))
     
-    def read_csv(self, source_name: str, filepath: str) -> pd.DataFrame:
-        table = pd.read_csv(filepath)
-        return self.load(source_name, table)
-
-    def read_json(self, source_name: str, filepath: str) -> pd.DataFrame:
-        table = pd.read_json(filepath)
-        return self.load(source_name, table)
-
-    def read_jsonl(self, source_name: str, filepath: str) -> pd.DataFrame:
-        table = pd.read_json(filepath, lines=True)
+    def read(self, source_name: str, filepath: str) -> pd.DataFrame:
+        file = Path(filepath)
+        if file.suffix == '.csv':
+            table = pd.read_csv(file)
+        elif file.suffix == '.json':
+            table = pd.read_json(file)
+        elif file.suffix == '.jsonl':
+            table = pd.read_json(file, lines=True)
+        else:
+            raise ValueError(f"Unknown file type {file.suffix}")
         return self.load(source_name, table)
     
     def load(self, source_name: str, table: pd.DataFrame) -> pd.DataFrame:

@@ -1,40 +1,40 @@
 from __future__ import annotations
 import typing as t
 import sys
-import readline
-import atexit
-import os
+# import readline
+# import atexit
+# import os
 
-from kye.kye import Kye
+from kye.kye import Kye, Config
 
-def setup_readline():
-    histfile = os.path.join(os.path.expanduser("~"), ".kye_history")
-    try:
-        readline.read_history_file(histfile)
-        readline.set_history_length(1000)
-    except FileNotFoundError:
-        pass
-    atexit.register(readline.write_history_file, histfile)
+# def setup_readline():
+#     histfile = os.path.join(os.path.expanduser("~"), ".kye_history")
+#     try:
+#         readline.read_history_file(histfile)
+#         readline.set_history_length(1000)
+#     except FileNotFoundError:
+#         pass
+#     atexit.register(readline.write_history_file, histfile)
 
-def run_prompt(kye):
-    setup_readline()
-    print("Kye REPL\n")
-    while True:
-        try:
-            user_input = input('> ')
-            if user_input.lower() == "exit":
-                break
-            val = kye.eval_expression(user_input)
-            if kye.reporter.had_error:
-                kye.reporter.report()
-            else:
-                print(val)
-        except EOFError:
-            print()
-            break
-        except KeyboardInterrupt:
-            print()
-            continue
+# def run_prompt(kye):
+#     setup_readline()
+#     print("Kye REPL\n")
+#     while True:
+#         try:
+#             user_input = input('> ')
+#             if user_input.lower() == "exit":
+#                 break
+#             val = kye.eval_expression(user_input)
+#             if kye.reporter.had_error:
+#                 kye.reporter.report()
+#             else:
+#                 print(val)
+#         except EOFError:
+#             print()
+#             break
+#         except KeyboardInterrupt:
+#             print()
+#             continue
 
 def run_file(file_path, kye: Kye):
     with open(file_path, "r") as file:
@@ -48,7 +48,12 @@ def run_file(file_path, kye: Kye):
 
 
 def main():
-    kye = Kye()
+    kye = Kye(Config(
+        kye_file="sandbox.kye",
+        # data_file='data/User.jsonl',
+        # model_name='User',
+        compiled_out='.compiled.kye.yaml'
+    ))
     
     # if len(sys.argv) > 2:
     #     if sys.argv[1] == 'debug':
