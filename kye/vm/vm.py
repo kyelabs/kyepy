@@ -60,7 +60,7 @@ class VM:
     
     def load_table(self, table: str):
         if table not in self.tables:
-            self.tables[table] = self.loader.load(table).to_pandas()
+            self.tables[table] = self.loader.load(table)
         return self.tables[table]
     
     def get_column(self, col_name):

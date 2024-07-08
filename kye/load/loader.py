@@ -1,14 +1,9 @@
 from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
-from functools import cached_property
-import ibis
-from ibis import _
-import ibis.expr.datatypes as dtype
-import ibis.expr.types as ir
+import pandas as pd
 
-from kye.errors import ErrorReporter, KyeRuntimeError
-import kye.type.types as typ
+from kye.errors import ErrorReporter
 from kye.engine import Engine
 from kye.vm.op import OP, parse_command
 
@@ -49,7 +44,7 @@ class Loader:
     engine: Engine
     reporter: ErrorReporter
     sources: t.Dict[str, Source]
-    tables: t.Dict[str, ibis.Table]
+    tables: t.Dict[str, pd.DataFrame]
     
     def __init__(self, compiled: t.Dict, engine: Engine, reporter: ErrorReporter):
         self.reporter = reporter
@@ -92,7 +87,7 @@ class Loader:
                     expr=expr,
                 ))
     
-    def load(self, source_name: str) -> ibis.Table:
+    def load(self, source_name: str) -> pd.DataFrame:
         if source_name in self.tables:
             return self.tables[source_name]
         
@@ -103,8 +98,7 @@ class Loader:
         for col_name in source.index:
             assert col_name in table.columns, f"Index column '{col_name}' not found in table"
             col = table[col_name]
-            assert isinstance(col, ibis.Column), f"Column '{col_name}' must be an ibis column"
-            self.matches_dtype(source[col_name], col.type())
+            self.matches_dtype(source[col_name], col)
     
         for col_name in table.columns:
             if col_name not in source.edges:
@@ -112,12 +106,11 @@ class Loader:
                 continue
             if col_name not in source.index:
                 col = table[col_name]
-                assert isinstance(col, ibis.Column), f"Column '{col_name}' must be an ibis column"
-                self.matches_dtype(source[col_name], col.type())
+                self.matches_dtype(source[col_name], col)
 
-        t = table.select(source.index)
-        is_index_unique = (t.count() == t.nunique()).as_scalar().execute()
-        assert is_index_unique, f"Index columns {source.index} must be unique"
+        has_duplicate_index = table[table.duplicated(subset=source.index, keep=False)]
+        if not has_duplicate_index.empty:
+            raise Exception(f"Index columns {source.index} must be unique")
         
         # if not is_index_unique:
         #     non_plural_columns = [
@@ -140,18 +133,16 @@ class Loader:
     def get_source(self, source: str):
         return self.sources[source]
     
-    def matches_dtype(self, edge: Edge, dtype: dtype.DataType):
+    def matches_dtype(self, edge: Edge, col: pd.Series):
         if edge.many:
-            assert dtype.is_array(), "Expected array"
-            dtype = dtype.value_type # type: ignore
-        assert not dtype.is_nested(), "Unexpected nesting"
+            col = col.explode().dropna().infer_objects()
         if edge.type == 'String':
-            assert dtype.is_string(), "Expected string"
+            assert col.dtype == 'object', "Expected string"
         elif edge.type == 'Number':
-            assert dtype.is_numeric(), "Expected numeric"
+            assert pd.api.types.is_numeric_dtype(col.dtype), "Expected number"
         elif edge.type == 'Integer':
-            assert dtype.is_integer(), "Expected integer"
+            assert pd.api.types.is_integer_dtype(col.dtype), "Expected integer"
         elif edge.type == 'Boolean':
-            assert dtype.is_boolean(), "Expected boolean"
+            assert pd.api.types.is_bool_dtype(col.dtype), "Expected boolean"
         else:
             raise Exception(f"Unknown type {edge.type}")
