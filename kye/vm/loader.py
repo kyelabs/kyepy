@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from kye.errors import ErrorReporter
-from kye.engine import Engine
+from kye.vm.engine import Engine
 from kye.vm.op import OP, parse_command
 
 Expr = t.List[tuple[OP, list]]

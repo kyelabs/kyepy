@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 from kye.vm.op import OP, parse_command
-from kye.load.loader import Loader
+from kye.vm.loader import Loader
 from kye.errors import ErrorReporter
 
 class Stack:
@@ -143,9 +143,4 @@ class VM:
                 print('Assertion failed:', assertion.msg)
                 print(self.load_table(table)[~result])
         self.this = None
-        return True
-    
-    def validate_all(self):
-        for table in self.loader.sources:
-            self.validate(table)
         return True

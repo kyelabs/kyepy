@@ -4,7 +4,7 @@ import pandas as pd
 
 class Engine:
     def __init__(self):
-        self.base_dir = Path(__file__).resolve().parent / '../data'
+        self.base_dir = Path(__file__).resolve().parent / '../../data'
         self.files = defaultdict(list)
         for p in self.base_dir.glob('*'):
             if p.suffix in {'.csv','.json','.jsonl'}:
