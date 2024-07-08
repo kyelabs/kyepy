@@ -52,11 +52,11 @@ def run_file(file_path, kye: Kye):
 def main():
     kye = Kye()
     
-    if len(sys.argv) > 2:
-        if sys.argv[1] == 'debug':
-            run_file(sys.argv[2], kye)
-            run_prompt(kye)
-    elif len(sys.argv) == 2:
+    # if len(sys.argv) > 2:
+    #     if sys.argv[1] == 'debug':
+    #         run_file(sys.argv[2], kye)
+    #         run_prompt(kye)
+    if len(sys.argv) == 2:
         run_file(sys.argv[1], kye)
     else:
         print("Usage: kye (debug) [script]")
