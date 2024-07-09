@@ -68,6 +68,8 @@ class TokenType(enum.Enum):
     RIGHT_PAREN = ")"
     LEFT_BRACE = "{"
     RIGHT_BRACE = "}"
+    LEFT_SQUARE = "["
+    RIGHT_SQUARE = "]"
     COMMA = ","
     DOT = "."
     MINUS = "-"
@@ -101,7 +103,6 @@ class TokenType(enum.Enum):
     NULL = "null"
     IF = "if"
     ELSE = "else"
-    RETURN = "return"
     SUPER = "super"
     THIS = "this"
     ASSERT = "assert"
@@ -142,10 +143,12 @@ class Expr(Node):
 
 @dataclass(eq=True, frozen=True)
 class Index(Node):
+    paren: Token
     names: t.Tuple[Token, ...]
 
 @dataclass(eq=True, frozen=True)
 class Block(Node):
+    bracket: Token
     statements: t.Tuple[Stmt, ...]
 
 @dataclass(eq=True, frozen=True)
@@ -176,11 +179,6 @@ class Assert(Stmt):
     expr: Expr
 
 @dataclass(eq=True, frozen=True)
-class Return(Stmt):
-    keyword: Token
-    expr: Expr
-
-@dataclass(eq=True, frozen=True)
 class Binary(Expr):
     left: Expr
     operator: Token
@@ -193,6 +191,7 @@ class Unary(Expr):
 
 @dataclass(eq=True, frozen=True)
 class Literal(Expr):
+    token: Token
     value: t.Any
 
 @dataclass(eq=True, frozen=True)
@@ -207,20 +206,19 @@ class EdgeIdentifier(Expr):
 @dataclass(eq=True, frozen=True)
 class Call(Expr):
     object: Expr
+    paren: Token
     arguments: t.Tuple[Expr, ...]
-
-@dataclass(eq=True, frozen=True)
-class NativeCall(Expr):
-    fn: t.Callable
 
 @dataclass(eq=True, frozen=True)
 class Get(Expr):
     object: Expr
+    dot: Token
     name: Token
 
 @dataclass(eq=True, frozen=True)
 class Filter(Expr):
     object: Expr
+    bracket: Token
     conditions: t.Tuple[Expr, ...]
 
 @dataclass(eq=True, frozen=True)

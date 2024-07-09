@@ -7,7 +7,7 @@ import kye.type.types as typ
 from kye.errors import ErrorReporter
 from kye.vm.op import OP
 
-__all__ = ['Compiled', 'write_compiled', 'compile']
+__all__ = ['Compiled', 'write_compiled', 'read_compiled', 'compile']
 
 class Compiled(t.TypedDict):
     models: t.Dict[str, Model]

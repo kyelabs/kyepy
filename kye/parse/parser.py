@@ -67,9 +67,9 @@ class Transformer(lark.Transformer):
     @lark.v_args(inline=True)
     def _binary(self, value1, operator, value2):
         return ast.Binary(
-            value1,
-            operator,
-            value2,
+            left = value1,
+            operator = operator,
+            right = value2,
         )
     
     def _list(self, node):
@@ -83,39 +83,52 @@ class Transformer(lark.Transformer):
     or_exp = _binary
     is_exp = _binary
     
-    def statements(self, children: t.List[ast.Stmt]):
-        return ast.Script(tuple(children))
+    def statements(self, children: t.List[Ast]):
+        return ast.Script(tuple(find_children(children, ast.Stmt)))
 
-    def block(self, children: t.List[ast.Stmt]):
-        return ast.Block(tuple(children))
+    def block(self, children: t.List[Ast]):
+        return ast.Block(
+            bracket=get_token(children, ast.TokenType.LEFT_BRACE),
+            statements=tuple(find_children(children, ast.Stmt)),
+        )
     
-    def index(self, children: t.List[ast.Token]):
-        return ast.Index(tuple(children))
+    def index(self, children: t.List[Ast]):
+        return ast.Index(
+            paren=get_token(children, ast.TokenType.LEFT_PAREN),
+            names=tuple(find_tokens(children, ast.TokenType.EDGE)),
+        )
 
     @lark.v_args(inline=True)
-    def literal(self, val: ast.Token):
-        if val.type == ast.TokenType.NUMBER:
-            return ast.Literal(float(val.lexeme))
-        if val.type == ast.TokenType.BOOLEAN:
-            return ast.Literal(val.lexeme == 'TRUE')
-        if val.type == ast.TokenType.STRING:
-            return ast.Literal(val.lexeme[1:-1])
-        raise Exception(f'Unknown token type: {val.type}({val.lexeme})')
+    def literal(self, token: ast.Token):
+        value = None
+        if token.type == ast.TokenType.NUMBER:
+            value = float(token.lexeme)
+        elif token.type == ast.TokenType.BOOLEAN:
+            value = token.lexeme == 'TRUE'
+        elif token.type == ast.TokenType.STRING:
+            value = token.lexeme[1:-1]
+        else:
+            raise Exception(f'Unknown token type: {token.type}({token.lexeme})')
+        return ast.Literal(
+            token=token,
+            value=value,
+        )
     
     def model_def(self, children: t.List[Ast]):
-        name = get_token(children, ast.TokenType.TYPE)
-        indexes = find_children(children, ast.Index)
-        block = get_child(children, ast.Block)
-        return ast.Model(name, tuple(indexes), block)
+        return ast.Model(
+            name=get_token(children, ast.TokenType.TYPE),
+            indexes=tuple(find_children(children, ast.Index)),
+            body=get_child(children, ast.Block),
+        )
     
     def type_def(self, children: t.List[Ast]):
-        name = get_token(children, ast.TokenType.TYPE)
-        value = get_child(children, ast.Expr)
-        return ast.Type(name, value)
+        return ast.Type(
+            name=get_token(children, ast.TokenType.TYPE),
+            expr=get_child(children, ast.Expr),
+        )
     
     def edge_def(self, children: t.List[Ast]):
         name = get_token(children, ast.TokenType.EDGE)
-        indexes = find_children(children, ast.Index)
         # TODO: make sure we are inside of a select statement
         if len(children) == 1:
             block = ast.EdgeIdentifier(name)
@@ -126,59 +139,63 @@ class Transformer(lark.Transformer):
             cardinality = ast.Cardinality.ONE
         else:
             cardinality = ast.Cardinality(cardinality.lexeme)
-        # if isinstance(block, ast.Expr):
-        #     block = ast.Block([
-        #         ast.Return(
-        #             ast.Token(ast.TokenType.RETURN, 'return', -1),
-        #             block
-        #         )
-        #     ])
         if isinstance(block, ast.Block):
             raise NotImplementedError('Block not implemented.')
-        return ast.Edge(name, tuple(indexes), cardinality, block)
+        return ast.Edge(
+            name=name,
+            params=tuple(find_children(children, ast.Index)),
+            cardinality=cardinality,
+            expr=block
+        )
 
     def assert_stmt(self, children: t.List[Ast]):
-        keyword = get_token(children, ast.TokenType.ASSERT)
-        value = get_child(children, ast.Expr)
-        return ast.Assert(keyword, value)
-    
-    def return_stmt(self, children: t.List[Ast]):
-        keyword = get_token(children, ast.TokenType.RETURN)
-        value = get_child(children, ast.Expr)
-        return ast.Return(keyword, value)
+        return ast.Assert(
+            keyword=get_token(children, ast.TokenType.ASSERT),
+            expr=get_child(children, ast.Expr)
+        )
     
     def type_identifier(self, children: t.List[Ast]):
         return ast.TypeIdentifier(
-            get_token(children, ast.TokenType.TYPE),
-            find_token(children, ast.TokenType.FORMAT),
+            name=get_token(children, ast.TokenType.TYPE),
+            format=find_token(children, ast.TokenType.FORMAT),
         )
     
     def edge_identifier(self, children: t.List[Ast]):
         edge = get_token(children, ast.TokenType.EDGE)
         if edge.lexeme == 'this':
-            return ast.This(edge)
-        return ast.EdgeIdentifier(edge)
+            return ast.This(keyword=edge)
+        return ast.EdgeIdentifier(
+            name=edge
+        )
     
     def filter_exp(self, children: t.List[Ast]):
         (object, *arguments) = find_children(children, ast.Expr)
         return ast.Filter(
-            object,
-            tuple(arguments),
+            object=object,
+            bracket=get_token(children, ast.TokenType.LEFT_SQUARE),
+            conditions=tuple(arguments),
         )
 
     def call_exp(self, children: t.List[Ast]):
         (callee, *arguments) = find_children(children, ast.Expr)
-        return ast.Call(callee, tuple(arguments))
+        return ast.Call(
+            object=callee,
+            paren=get_token(children, ast.TokenType.LEFT_PAREN),
+            arguments=tuple(arguments),
+        )
     
     def select_exp(self, children: t.List[Ast]):
-        object = get_child(children, ast.Expr)
-        body = get_child(children, ast.Block)
-        return ast.Select(object, body)
+        return ast.Select(
+            object=get_child(children, ast.Expr),
+            body=get_child(children, ast.Block),
+        )
     
     def dot_exp(self, children: t.List[Ast]):
-        object = get_child(children, ast.Expr)
-        name = get_token(children, ast.TokenType.EDGE)
-        return ast.Get(object, name)
+        return ast.Get(
+            object=get_child(children, ast.Expr),
+            dot=get_token(children, ast.TokenType.DOT),
+            name=get_token(children, ast.TokenType.EDGE),
+        )
 
 
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').read_text()
@@ -195,6 +212,7 @@ class Parser:
             GRAMMAR,
             parser='lalr',
             propagate_positions=True,
+            keep_all_tokens=True,
             start=start,
         )
     
