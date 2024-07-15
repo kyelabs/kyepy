@@ -57,6 +57,15 @@ class Assertion:
             compiled['loc'] = str(self.loc)
         return compiled
 
+    @cached_property
+    def edges(self) -> t.List[str]:
+        edges = set()
+        for cmd in self.expr:
+            if cmd.op == OP.COL:
+                assert len(cmd.args) == 1
+                edges.update(cmd.args[0])
+        return list(edges)
+
 @dataclass(frozen=True)
 class Edge():
     name: str
@@ -175,32 +184,3 @@ class Compiled():
 
     def __contains__(self, key: str) -> bool:
         return key in self.models
-
-
-def read_compiled(filepath: str) -> Compiled:
-    path = Path(filepath)
-    if not path.exists():
-        raise FileNotFoundError(path)
-    text = path.read_text()
-    if path.suffix in ('.yaml', '.yml'):
-        import yaml
-        return Compiled.from_dict(yaml.safe_load(text))
-    elif path.suffix == '.json':
-        import json
-        return Compiled.from_dict(json.loads(text))
-    else:
-        raise ValueError(f'Unsupported file extension: {path.suffix}')
-
-
-def write_compiled(compiled: Compiled, filepath: str):
-    path = Path(filepath)
-    text = None
-    if path.suffix in ('.yaml', '.yml'):
-        import yaml
-        text = yaml.dump(compiled.to_dict(), sort_keys=False)
-    elif path.suffix == '.json':
-        import json
-        text = json.dumps(compiled.to_dict(), sort_keys=False, indent=2)
-    else:
-        raise ValueError(f'Unsupported file extension: {path.suffix}')
-    path.write_text(text)

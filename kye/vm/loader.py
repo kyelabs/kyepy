@@ -15,11 +15,11 @@ class Loader:
     reporter: ErrorReporter
     tables: t.Dict[str, pd.DataFrame]
     sources: compiled.Compiled
-    current_src: t.Optional[str]
+    dirty: t.List[t.Tuple[str, pd.DataFrame]]
     
     def __init__(self, compiled: compiled.Compiled, reporter: ErrorReporter):
         self.reporter = reporter
-        self.current_src = None
+        self.dirty = []
         self.tables = {}
         self.sources = compiled
     
@@ -40,7 +40,7 @@ class Loader:
             raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
 
         assert source_name in self.sources, f"Source '{source_name}' not found"
-        self.current_src = source_name
+        self.dirty.append((source_name, table))
         source = self.sources[source_name]
 
         for col_name in source.index:
@@ -75,7 +75,6 @@ class Loader:
         #     table = table.select(source.index + non_plural_columns).distinct(on=source.index)
         #     print('hi')
         self.tables[source_name] = table
-        self.current_src = None
         
         return table
     
@@ -83,7 +82,6 @@ class Loader:
         return self.sources[source]
     
     def matches_dtype(self, edge: compiled.Edge, col: pd.Series):
-        assert self.current_src is not None
         if edge.many:
             col = col.explode().dropna().infer_objects()
         if edge.type == 'String':
@@ -102,5 +100,4 @@ class Loader:
             raise Exception(f"Unknown type {edge.type}")
     
     def report_edge_error(self, edge: compiled.Edge, message: str):
-        assert self.current_src is not None
-        self.reporter.loading_edge_error(edge.loc, self.current_src, edge.name, message)
+        self.reporter.loading_edge_error(edge.loc, len(self.dirty), edge.name, message)

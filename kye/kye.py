@@ -10,7 +10,7 @@ from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter, KyeRuntimeError
 from kye.type.compiler import compile
-from kye.compiled import Compiled, read_compiled, write_compiled
+from kye.compiled import Compiled
 from kye.vm.vm import VM
 
 class Kye:
@@ -53,6 +53,16 @@ class Kye:
             return None
         return self.type_builder.types
     
+    def read(self, filepath: str) -> bool:
+        if filepath.split('.')[-1] in ('json','yaml','yml'):
+            return self.read_compiled(filepath)
+        return self.read_script(filepath)
+    
+    def read_script(self, filepath: str) -> bool:
+        with open(filepath, "r") as file:
+            source = file.read()
+        return self.compile(source)
+
     def compile(self, source: str) -> bool:
         tree = self.parse_definitions(source)
         types = self.build_types(tree)
@@ -61,11 +71,7 @@ class Kye:
         compiled = compile(types)
         return self.load_compiled(compiled)
 
-    def read_compiled(self, filepath: str):
-        compiled = read_compiled(filepath)
-        return self.load_compiled(compiled)
-
-    def load_compiled(self, compiled: Compiled):
+    def load_compiled(self, compiled: Compiled) -> bool:
         self.compiled = compiled
         if not hasattr(self, 'reporter'):
             self.reporter = ErrorReporter('')
@@ -73,20 +79,47 @@ class Kye:
         self.vm = VM(self.loader)
         self.vm.reporter = self.reporter
         return not self.reporter.had_error
+
+    def read_compiled(self, filepath: str) -> bool:
+        path = Path(filepath)
+        if not path.exists():
+            raise FileNotFoundError(path)
+        text = path.read_text()
+        if path.suffix in ('.yaml', '.yml'):
+            import yaml
+            raw = yaml.safe_load(text)
+        elif path.suffix == '.json':
+            import json
+            raw = json.loads(text)
+        else:
+            raise ValueError(f'Unsupported file extension: {path.suffix}')
+        compiled = Compiled.from_dict(raw)
+        return self.load_compiled(compiled)
     
     def write_compiled(self, filepath: str):
         assert self.compiled is not None
-        write_compiled(self.compiled, filepath)
+        raw = self.compiled.to_dict()
+        path = Path(filepath)
+        text = None
+        if path.suffix in ('.yaml', '.yml'):
+            import yaml
+            text = yaml.dump(raw, sort_keys=False)
+        elif path.suffix == '.json':
+            import json
+            text = json.dumps(raw, sort_keys=False, indent=2)
+        else:
+            raise ValueError(f'Unsupported file extension: {path.suffix}')
+        path.write_text(text)
 
-    def load(self, source_name: str, table: pd.DataFrame):
+    def load_df(self, source_name: str, table: pd.DataFrame):
         assert self.loader is not None
         self.loader.load(source_name, table)
     
-    def read(self, source_name: str, filepath: str):
+    def load_file(self, source_name: str, filepath: str):
         assert self.loader is not None
         self.loader.read(source_name, filepath)
     
-    def validate(self, source_name: str):
+    def validate_model(self, source_name: str):
         assert self.vm is not None
         self.vm.validate(source_name)
     

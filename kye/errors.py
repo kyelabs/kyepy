@@ -26,10 +26,6 @@ class ErrorReporter:
     def had_error(self):
         return len(self.errors) > 0
 
-    @property
-    def had_runtime_error(self):
-        return self.error_type == "runtime"
-
     def unterminated_token_error(self, message: str):
         self.errors.append((len(self.source) - 1, len(self.source), message))
         self.error_type = "unterminated"
@@ -54,14 +50,10 @@ class ErrorReporter:
         self.error_type = "parser"
         return ParserError()
 
-    def loading_edge_error(self, loc: t.Optional[str], source: str, edge: str, message):
+    def loading_edge_error(self, loc: t.Optional[str], idx: int, edge: str, message):
         start,end = list(map(int,loc.split(':'))) if loc else [0,0]
         self.errors.append((start, end, message))
         self.error_type = "loader"
-
-    def runtime_error(self, error: KyeRuntimeError):
-        self.errors.append((error.token.start, error.token.end, error.args[0]))
-        self.error_type = "runtime"
     
     def report(self):
         for start, end, message in self.errors:
