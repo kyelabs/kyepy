@@ -66,7 +66,8 @@ class Kye:
 
     def load_compiled(self, compiled: Compiled):
         self.compiled = compiled
-        self.reporter = ErrorReporter('')
+        if not hasattr(self, 'reporter'):
+            self.reporter = ErrorReporter('')
         self.loader = Loader(self.compiled, self.reporter)
         self.vm = VM(self.loader)
         self.vm.reporter = self.reporter
