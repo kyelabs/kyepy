@@ -18,48 +18,60 @@ class Edge:
     many: bool
     type: str
     expr: t.Optional[Expr] = None
+    loc: t.Optional[str] = None
 
 @dataclass
 class Assertion:
     msg: str
     expr: Expr
+    loc: t.Optional[str] = None
 
+@dataclass
 class Source:
     name: str
     index: t.List[str]
     edges: t.Dict[str, Edge]
     assertions: t.List[Assertion]
-    
-    def __init__(self, name: str, index: t.List[str], assertions: t.List[Assertion]):
-        self.name = name
-        self.index = index
-        self.assertions = assertions
-        self.edges = {}
-    
-    def define(self, edge: Edge):
-        self.edges[edge.name] = edge
+    loc: t.Optional[str] = None
     
     def __getitem__(self, key: str) -> Edge:
         return self.edges[key]
 
+def flatten_indexes(indexes: t.List[t.List[str]]) -> t.List[str]:
+    index_edges = set()
+    for index in indexes:
+        for edge in index:
+            index_edges.add(edge)
+    return list(index_edges)
+
 class Loader:
     reporter: ErrorReporter
-    sources: t.Dict[str, Source]
     tables: t.Dict[str, pd.DataFrame]
+    sources: t.Dict[str, Source]
+    current_src: t.Optional[str]
     
     def __init__(self, compiled: Compiled, reporter: ErrorReporter):
         self.reporter = reporter
-        self.sources = {}
+        self.current_src = None
         self.tables = {}
-
-        for model_name, model in compiled['models'].items():
-            index_edges = set()
-            for index in model['indexes']:
-                for edge in index:
-                    index_edges.add(edge)
-            source = Source(
+        self.sources = {
+            model_name: Source(
                 name=model_name,
-                index=list(index_edges),
+                index=flatten_indexes(model['indexes']),
+                edges={
+                    edge_name: Edge(
+                        name=edge_name,
+                        null=edge.get('null', False),
+                        many=edge.get('many', False),
+                        type=edge['type'],
+                        expr=[
+                            parse_command(cmd)
+                            for cmd in edge['expr']
+                        ] if 'expr' in edge else None,
+                        loc=edge.get('loc'),
+                    )
+                    for edge_name, edge in model['edges'].items()
+                },
                 assertions=[
                     Assertion(
                         msg=assertion['msg'],
@@ -67,25 +79,14 @@ class Loader:
                             parse_command(cmd)
                             for cmd in assertion['expr']
                         ],
+                        loc=assertion.get('loc'),
                     )
                     for assertion in model.get('assertions', [])
                 ],
+                loc=model.get('loc')
             )
-            self.sources[model_name] = source
-            for edge_name, edge in model['edges'].items():
-                expr = None
-                if 'expr' in edge:
-                    expr = [
-                        parse_command(cmd)
-                        for cmd in edge['expr']
-                    ]
-                source.define(Edge(
-                    name=edge_name,
-                    null=edge.get('null', False),
-                    many=edge.get('many', False),
-                    type=edge['type'],
-                    expr=expr,
-                ))
+            for model_name, model in compiled['models'].items()
+        }
     
     def read(self, source_name: str, filepath: str) -> pd.DataFrame:
         file = Path(filepath)
@@ -104,6 +105,7 @@ class Loader:
             raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
 
         assert source_name in self.sources, f"Source '{source_name}' not found"
+        self.current_src = source_name
         source = self.sources[source_name]
 
         for col_name in source.index:
@@ -138,6 +140,7 @@ class Loader:
         #     table = table.select(source.index + non_plural_columns).distinct(on=source.index)
         #     print('hi')
         self.tables[source_name] = table
+        self.current_src = None
         
         return table
     
@@ -145,15 +148,24 @@ class Loader:
         return self.sources[source]
     
     def matches_dtype(self, edge: Edge, col: pd.Series):
+        assert self.current_src is not None
         if edge.many:
             col = col.explode().dropna().infer_objects()
         if edge.type == 'String':
-            assert col.dtype == 'object', "Expected string"
+            if col.dtype != 'object':
+                self.report_edge_error(edge, f"Expected string")
         elif edge.type == 'Number':
-            assert pd.api.types.is_numeric_dtype(col.dtype), "Expected number"
+            if not pd.api.types.is_numeric_dtype(col.dtype):
+                self.report_edge_error(edge, f"Expected number")
         elif edge.type == 'Integer':
-            assert pd.api.types.is_integer_dtype(col.dtype), "Expected integer"
+            if not pd.api.types.is_numeric_dtype(col.dtype):
+                self.report_edge_error(edge, f"Expected integer")
         elif edge.type == 'Boolean':
-            assert pd.api.types.is_bool_dtype(col.dtype), "Expected boolean"
+            if not pd.api.types.is_bool_dtype(col.dtype):
+                self.report_edge_error(edge, f"Expected boolean")
         else:
             raise Exception(f"Unknown type {edge.type}")
+    
+    def report_edge_error(self, edge: Edge, message: str):
+        assert self.current_src is not None
+        self.reporter.loading_edge_error(edge.loc, self.current_src, edge.name, message)

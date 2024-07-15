@@ -78,6 +78,9 @@ def main():
     if args.model_name is not None:
         assert args.data_file is not None
         kye.read(args.model_name, args.data_file)
+        if kye.reporter.had_error:
+            kye.reporter.report()
+            sys.exit(65)
         kye.validate(args.model_name)
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ class Compiled(t.TypedDict):
 class Model(t.TypedDict):
     indexes: t.List[t.List[str]]
     edges: t.Dict[str, Edge]
-    assertions: t.List[Assertion]
+    assertions: t.NotRequired[t.List[Assertion]]
     loc: t.NotRequired[str]
 
 class Edge(t.TypedDict):
@@ -84,11 +84,12 @@ def compile_model(type: typ.Model) -> Model:
             edge.name: compile_edge(edge)
             for edge in type.edges.values()
         },
-        'assertions': [
+    }
+    if len(type.assertions) > 0:
+        compiled['assertions'] = [
             compile_assertion(assertion)
             for assertion in type.assertions
-        ],
-    }
+        ]
     if type.loc:
         compiled['loc'] = str(type.loc)
     return compiled

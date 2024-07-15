@@ -54,6 +54,11 @@ class ErrorReporter:
         self.error_type = "parser"
         return ParserError()
 
+    def loading_edge_error(self, loc: t.Optional[str], source: str, edge: str, message):
+        start,end = list(map(int,loc.split(':'))) if loc else [0,0]
+        self.errors.append((start, end, message))
+        self.error_type = "loader"
+
     def runtime_error(self, error: KyeRuntimeError):
         self.errors.append((error.token.start, error.token.end, error.args[0]))
         self.error_type = "runtime"
