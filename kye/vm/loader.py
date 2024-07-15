@@ -7,86 +7,21 @@ import pandas as pd
 
 from kye.errors import ErrorReporter
 from kye.vm.op import OP, parse_command
-from kye.compiler import Compiled
+import kye.compiled as compiled
 
 Expr = t.List[tuple[OP, list]]
-
-@dataclass
-class Edge:
-    name: str
-    null: bool
-    many: bool
-    type: str
-    expr: t.Optional[Expr] = None
-    loc: t.Optional[str] = None
-
-@dataclass
-class Assertion:
-    msg: str
-    expr: Expr
-    loc: t.Optional[str] = None
-
-@dataclass
-class Source:
-    name: str
-    index: t.List[str]
-    edges: t.Dict[str, Edge]
-    assertions: t.List[Assertion]
-    loc: t.Optional[str] = None
-    
-    def __getitem__(self, key: str) -> Edge:
-        return self.edges[key]
-
-def flatten_indexes(indexes: t.List[t.List[str]]) -> t.List[str]:
-    index_edges = set()
-    for index in indexes:
-        for edge in index:
-            index_edges.add(edge)
-    return list(index_edges)
 
 class Loader:
     reporter: ErrorReporter
     tables: t.Dict[str, pd.DataFrame]
-    sources: t.Dict[str, Source]
+    sources: compiled.Compiled
     current_src: t.Optional[str]
     
-    def __init__(self, compiled: Compiled, reporter: ErrorReporter):
+    def __init__(self, compiled: compiled.Compiled, reporter: ErrorReporter):
         self.reporter = reporter
         self.current_src = None
         self.tables = {}
-        self.sources = {
-            model_name: Source(
-                name=model_name,
-                index=flatten_indexes(model['indexes']),
-                edges={
-                    edge_name: Edge(
-                        name=edge_name,
-                        null=edge.get('null', False),
-                        many=edge.get('many', False),
-                        type=edge['type'],
-                        expr=[
-                            parse_command(cmd)
-                            for cmd in edge['expr']
-                        ] if 'expr' in edge else None,
-                        loc=edge.get('loc'),
-                    )
-                    for edge_name, edge in model['edges'].items()
-                },
-                assertions=[
-                    Assertion(
-                        msg=assertion['msg'],
-                        expr=[
-                            parse_command(cmd)
-                            for cmd in assertion['expr']
-                        ],
-                        loc=assertion.get('loc'),
-                    )
-                    for assertion in model.get('assertions', [])
-                ],
-                loc=model.get('loc')
-            )
-            for model_name, model in compiled['models'].items()
-        }
+        self.sources = compiled
     
     def read(self, source_name: str, filepath: str) -> pd.DataFrame:
         file = Path(filepath)
@@ -147,7 +82,7 @@ class Loader:
     def get_source(self, source: str):
         return self.sources[source]
     
-    def matches_dtype(self, edge: Edge, col: pd.Series):
+    def matches_dtype(self, edge: compiled.Edge, col: pd.Series):
         assert self.current_src is not None
         if edge.many:
             col = col.explode().dropna().infer_objects()
@@ -166,6 +101,6 @@ class Loader:
         else:
             raise Exception(f"Unknown type {edge.type}")
     
-    def report_edge_error(self, edge: Edge, message: str):
+    def report_edge_error(self, edge: compiled.Edge, message: str):
         assert self.current_src is not None
         self.reporter.loading_edge_error(edge.loc, self.current_src, edge.name, message)

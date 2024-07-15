@@ -121,12 +121,12 @@ class VM:
     def eval(self, commands):
         stack = Stack()
         
-        for cmd, args in commands:
-            num_stack_args = cmd.arity - len(args)
-            assert len(stack) >= num_stack_args
-            for _ in range(num_stack_args):
+        for cmd in commands:
+            args = cmd.args[:]
+            assert len(stack) >= cmd.num_stack_args
+            for _ in range(cmd.num_stack_args):
                 args.insert(0, stack.pop())
-            result = self.run_command(cmd, args)
+            result = self.run_command(cmd.op, args)
             stack.push(result)
         
         return stack.pop()
