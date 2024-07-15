@@ -46,6 +46,24 @@ class Operator(enum.Enum):
     def is_comparison(self):
         return self in (Operator.EQ, Operator.NE, Operator.GT, Operator.GE, Operator.LT, Operator.LE)
 
+class Location:
+    start: int
+    end: int
+
+    def __init__(self, start: int, end: int):
+        self.start = start
+        self.end = end
+        
+    @staticmethod
+    def from_token(token: ast.Token):
+        return Location(token.start, token.end)
+    
+    def __str__(self):
+        return f"{self.start}:{self.end}"
+
+    def __repr__(self):
+        return f"Location({self.start}:{self.end})"
+
 class Expr:
     name: str
     args: t.Tuple[Expr, ...]
@@ -114,7 +132,13 @@ class Edge:
     allows_many: bool
     model: Type
     returns: t.Optional[Type]
+    expr: t.Optional[Expr]
+    loc: t.Optional[Location]
+
+@dataclass(frozen=True)
+class Assertion:
     expr: Expr
+    loc: t.Optional[Location]
 
 class Type:
     name: str
@@ -123,12 +147,13 @@ class Type:
     edges: t.Dict[str, Edge]
     edge_order: t.List[str]
     filters: t.List[Expr]
-    assertions: t.List[Expr]
+    assertions: t.List[Assertion]
     is_const: bool = False
     
-    def __init__(self, name: str, source: t.Optional[str]):
+    def __init__(self, name: str, source: t.Optional[str], loc: t.Optional[Location] = None):
         self.name = name
         self.source = source
+        self.loc = loc
         self.parent = None
         self.edges = {}
         self.edge_order = []
@@ -177,9 +202,9 @@ class Model(Type):
     source: str
     indexes: Indexes
     
-    def __init__(self, name, source, indexes):
+    def __init__(self, name, source, indexes, loc=None):
         assert source is not None, "Model source must not be None"
-        super().__init__(name, source)
+        super().__init__(name, source, loc)
         self.indexes = indexes
 
 

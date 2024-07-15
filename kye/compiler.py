@@ -16,16 +16,19 @@ class Model(t.TypedDict):
     indexes: t.List[t.List[str]]
     edges: t.Dict[str, Edge]
     assertions: t.List[Assertion]
+    loc: t.NotRequired[str]
 
 class Edge(t.TypedDict):
     type: str
     expr: t.NotRequired[t.List[Expr]]
     many: t.NotRequired[bool]
     null: t.NotRequired[bool]
+    loc: t.NotRequired[str]
 
 class Assertion(t.TypedDict):
     msg: str
     expr: t.List[Expr]
+    loc: t.NotRequired[str]
 
 Expr = dict[str, t.Optional[t.Union[t.Any, t.List[t.Any]]]]
 
@@ -72,7 +75,7 @@ def compile(types: typ.Types) -> Compiled:
     
 
 def compile_model(type: typ.Model) -> Model:
-    return {
+    compiled: Model = {
         'indexes': [
             list(idx)
             for idx in type.indexes.sets
@@ -84,8 +87,11 @@ def compile_model(type: typ.Model) -> Model:
         'assertions': [
             compile_assertion(assertion)
             for assertion in type.assertions
-        ]
+        ],
     }
+    if type.loc:
+        compiled['loc'] = str(type.loc)
+    return compiled
 
 def compile_type( type: typ.Type):
     pass
@@ -94,21 +100,25 @@ def compile_edge( edge: typ.Edge) -> Edge:
     assert edge.returns is not None
     compiled: Edge = {
         'type': edge.returns.name,
-        'expr': list(compile_expr(edge.expr))
     }
-    if len(compiled['expr']) == 1 and 'col' in compiled['expr'][0]:
-        del compiled['expr']
+    if edge.expr:
+        compiled['expr'] = list(compile_expr(edge.expr))
     if edge.allows_many:
         compiled['many'] = True
     if edge.allows_null:
         compiled['null'] = True
+    if edge.loc:
+        compiled['loc'] = str(edge.loc)
     return compiled
 
-def compile_assertion( assertion: typ.Expr) -> Assertion:
-    return {
+def compile_assertion( assertion: typ.Assertion) -> Assertion:
+    compiled: Assertion = {
         'msg': '',
-        'expr': list(compile_expr(assertion))
+        'expr': list(compile_expr(assertion.expr))
     }
+    if assertion.loc:
+        compiled['loc'] = str(assertion.loc)
+    return compiled
 
 def compile_expr( expr: typ.Expr) -> t.Iterator[Expr]:
     if isinstance(expr, typ.Var):

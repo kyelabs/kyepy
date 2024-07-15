@@ -36,7 +36,8 @@ class TypeBuilder(ast.Visitor):
         model = typ.Model(
             name=model_ast.name.lexeme,
             source=model_ast.name.lexeme,
-            indexes=typ.Indexes(model_ast.indexes)
+            indexes=typ.Indexes(model_ast.indexes),
+            loc=typ.Location.from_token(model_ast.name),
         )
         self.define(model)
         self.visit_with_this(model_ast.body, model)
@@ -50,7 +51,7 @@ class TypeBuilder(ast.Visitor):
         returns = None
         if isinstance(expr, typ.Type):
             returns = expr
-            expr = typ.Var(edge_ast.name.lexeme)
+            expr = None
         
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
@@ -60,6 +61,7 @@ class TypeBuilder(ast.Visitor):
             model=self.this,
             returns=returns,
             expr=expr,
+            loc=typ.Location.from_token(edge_ast.name),
         )
         
         self.this.define(edge)
@@ -73,11 +75,14 @@ class TypeBuilder(ast.Visitor):
         return type
 
     def visit_assert(self, assert_ast: ast.Assert):
-        obj = self.visit(assert_ast.expr)
         assert self.this is not None
         # assert typ.has_compatible_source(obj, self.this)
-        assertion = self.visit(assert_ast.expr)
-        assert isinstance(assertion, typ.Expr)
+        expr = self.visit(assert_ast.expr)
+        assert isinstance(expr, typ.Expr)
+        assertion = typ.Assertion(
+            expr=expr,
+            loc=typ.Location.from_token(assert_ast.keyword),
+        )
         self.this.assertions.append(assertion)
 
     def visit_filter(self, filter_ast: ast.Filter):
@@ -102,7 +107,9 @@ class TypeBuilder(ast.Visitor):
     def visit_edge_identifier(self, edge_ast: ast.EdgeIdentifier):
         edge_name = edge_ast.name.lexeme
         
-        if self.this is not None and edge_name in self.this:
+        if self.this is not None and \
+                edge_name in self.this and \
+                self.this[edge_name].expr is not None:
             return self.this[edge_name].expr
 
         return typ.Var(edge_name)

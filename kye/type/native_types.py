@@ -35,8 +35,8 @@ class NativeType:
                     allows_many=edge_attr['allows_many'],
                     model=this,
                     returns=NATIVE_TYPES[edge_attr['output']],
-                    # expr=ast.NativeCall(method),
                     expr=None,
+                    loc=None,
                 ))
 
 class Boolean(NativeType):
