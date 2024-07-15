@@ -42,8 +42,6 @@ def compile_script(file_path, kye: Kye):
         source = file.read()
     kye.compile(source)
     kye.reporter.report()
-    if kye.reporter.had_runtime_error:
-        sys.exit(70)
     if kye.reporter.had_error:
         sys.exit(65)
 
@@ -67,21 +65,21 @@ def main():
     args = parser.parse_args()
     
     kye = Kye()
-    if args.script.split('.')[-1] in ('json','yaml','yml'):
-        kye.read_compiled(args.script)
-    else:
-        compile_script(args.script, kye)
+    success = kye.read(args.script)
+    if not success:
+        kye.reporter.report()
+        sys.exit(65)
     
     if args.compiled_out is not None:
         kye.write_compiled(args.compiled_out)
     
     if args.model_name is not None:
         assert args.data_file is not None
-        kye.read(args.model_name, args.data_file)
+        kye.load_file(args.model_name, args.data_file)
         if kye.reporter.had_error:
             kye.reporter.report()
             sys.exit(65)
-        kye.validate(args.model_name)
+        kye.validate_model(args.model_name)
 
 if __name__ == "__main__":
     main()

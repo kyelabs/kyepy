@@ -3,7 +3,7 @@ import typing as t
 import pandas as pd
 import numpy as np
 
-from kye.vm.op import OP, parse_command
+from kye.vm.op import OP
 from kye.vm.loader import Loader
 from kye.errors import ErrorReporter
 
