@@ -18,7 +18,6 @@ def compile(types: typ.Types) -> Compiled:
                 compile_type(type)
 
     return Compiled(models=models)
-    
 
 def compile_model(type: typ.Model) -> Model:
     return Model(
@@ -27,11 +26,11 @@ def compile_model(type: typ.Model) -> Model:
             list(idx) for idx in type.indexes.sets
         ],
         edges={
-            edge.name: compile_edge(edge)
+            edge.name: compile_edge(type.name, edge)
             for edge in type.edges.values()
         },
         assertions=[
-            compile_assertion(assertion)
+            compile_assertion(type.name, assertion)
             for assertion in type.assertions
         ],
         loc=str(type.loc) if type.loc else None
@@ -40,9 +39,10 @@ def compile_model(type: typ.Model) -> Model:
 def compile_type( type: typ.Type):
     pass
 
-def compile_edge( edge: typ.Edge) -> Edge:
+def compile_edge(model_name: str, edge: typ.Edge) -> Edge:
     assert edge.returns is not None
     return Edge(
+        model=model_name,
         name=edge.name,
         type=edge.returns.name,
         expr=list(compile_expr(edge.expr)) if edge.expr else None,
@@ -51,8 +51,9 @@ def compile_edge( edge: typ.Edge) -> Edge:
         loc=str(edge.loc) if edge.loc else None
     )
 
-def compile_assertion( assertion: typ.Assertion) -> Assertion:
+def compile_assertion(model_name: str, assertion: typ.Assertion) -> Assertion:
     return Assertion(
+        model=model_name,
         msg='',
         expr=list(compile_expr(assertion.expr)),
         loc=str(assertion.loc) if assertion.loc else None
