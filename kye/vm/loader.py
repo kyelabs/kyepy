@@ -15,32 +15,17 @@ class Loader:
     reporter: ErrorReporter
     tables: t.Dict[str, pd.DataFrame]
     sources: compiled.Compiled
-    dirty: t.List[t.Tuple[str, pd.DataFrame]]
     
     def __init__(self, compiled: compiled.Compiled, reporter: ErrorReporter):
         self.reporter = reporter
-        self.dirty = []
         self.tables = {}
         self.sources = compiled
-    
-    def read(self, source_name: str, filepath: str) -> pd.DataFrame:
-        file = Path(filepath)
-        if file.suffix == '.csv':
-            table = pd.read_csv(file)
-        elif file.suffix == '.json':
-            table = pd.read_json(file)
-        elif file.suffix == '.jsonl':
-            table = pd.read_json(file, lines=True)
-        else:
-            raise ValueError(f"Unknown file type {file.suffix}")
-        return self.load(source_name, table)
     
     def load(self, source_name: str, table: pd.DataFrame) -> pd.DataFrame:
         if source_name in self.tables:
             raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
 
         assert source_name in self.sources, f"Source '{source_name}' not found"
-        self.dirty.append((source_name, table))
         source = self.sources[source_name]
 
         for col_name in source.index:
@@ -100,4 +85,4 @@ class Loader:
             raise Exception(f"Unknown type {edge.type}")
     
     def report_edge_error(self, edge: compiled.Edge, message: str):
-        self.reporter.loading_edge_error(edge.loc, len(self.dirty), edge.name, message)
+        self.reporter.loading_edge_error(edge.loc, edge.name, message)

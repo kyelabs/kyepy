@@ -110,14 +110,24 @@ class Kye:
         else:
             raise ValueError(f'Unsupported file extension: {path.suffix}')
         path.write_text(text)
-
-    def load_df(self, source_name: str, table: pd.DataFrame):
-        assert self.loader is not None
-        self.loader.load(source_name, table)
     
     def load_file(self, source_name: str, filepath: str):
         assert self.loader is not None
-        self.loader.read(source_name, filepath)
+        file = Path(filepath)
+        if file.suffix == '.csv':
+            table = pd.read_csv(file)
+        elif file.suffix == '.json':
+            table = pd.read_json(file)
+        elif file.suffix == '.jsonl':
+            table = pd.read_json(file, lines=True)
+        else:
+            raise ValueError(f"Unknown file type {file.suffix}")
+        self.load_df(source_name, table)
+
+    def load_df(self, source_name: str, table: pd.DataFrame):
+        assert self.loader is not None
+        self.reporter.loading = (source_name, table)
+        self.loader.load(source_name, table)
     
     def validate_model(self, source_name: str):
         assert self.vm is not None
