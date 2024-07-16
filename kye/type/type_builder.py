@@ -37,7 +37,7 @@ class TypeBuilder(ast.Visitor):
             name=model_ast.name.lexeme,
             source=model_ast.name.lexeme,
             indexes=typ.Indexes(model_ast.indexes),
-            loc=typ.Location.from_token(model_ast.name),
+            loc=model_ast.name.loc,
         )
         self.define(model)
         self.visit_with_this(model_ast.body, model)
@@ -61,7 +61,7 @@ class TypeBuilder(ast.Visitor):
             model=self.this,
             returns=returns,
             expr=expr,
-            loc=typ.Location.from_token(edge_ast.name),
+            loc=edge_ast.name.loc,
         )
         
         self.this.define(edge)
@@ -81,7 +81,7 @@ class TypeBuilder(ast.Visitor):
         assert isinstance(expr, typ.Expr)
         assertion = typ.Assertion(
             expr=expr,
-            loc=typ.Location.from_token(assert_ast.keyword),
+            loc=assert_ast.keyword.loc,
         )
         self.this.assertions.append(assertion)
 
