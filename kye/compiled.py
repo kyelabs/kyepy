@@ -30,13 +30,15 @@ Expr = t.List[Cmd]
 
 @dataclass(frozen=True)
 class Assertion:
+    model: str
     msg: str
     expr: Expr
     loc: t.Optional[str]
     
     @staticmethod
-    def from_dict(data: dict):
+    def from_dict(model: str, data: dict):
         return Assertion(
+            model=model,
             msg=data['msg'],
             expr=[
                 Cmd.from_dict(cmd)
@@ -68,6 +70,7 @@ class Assertion:
 
 @dataclass(frozen=True)
 class Edge():
+    model: str
     name: str
     null: bool
     many: bool
@@ -76,8 +79,9 @@ class Edge():
     loc: t.Optional[str]
     
     @staticmethod
-    def from_dict(name: str, data: dict):
+    def from_dict(model: str, name: str, data: dict):
         return Edge(
+            model=model,
             name=name,
             null=data.get('null', False),
             many=data.get('many', False),
@@ -112,16 +116,16 @@ class Model():
     loc: t.Optional[str]
     
     @staticmethod
-    def from_dict(name: str, data: dict):
+    def from_dict(model_name: str, data: dict):
         return Model(
-            name=name,
+            name=model_name,
             indexes=data['indexes'],
             edges={
-                name: Edge.from_dict(name, edge)
-                for name, edge in data['edges'].items()
+                edge_name: Edge.from_dict(model_name, edge_name, edge)
+                for edge_name, edge in data['edges'].items()
             },
             assertions=[
-                Assertion.from_dict(assertion)
+                Assertion.from_dict(model_name, assertion)
                 for assertion in data.get('assertions',[])
             ],
             loc=data.get('loc')
