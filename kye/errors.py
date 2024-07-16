@@ -45,12 +45,12 @@ class ErrorReporter:
         self.errors.append((pos, pos, message, []))
     
     def unterminated_expression_error(self, token: Token, message: str):
-        self.errors.append((token.start, token.end, message, []))
+        self.errors.append((token.loc.start, token.loc.end, message, []))
         self.error_type = "unterminated"
         return ParserError()
 
     def parser_error(self, token: Token, message):
-        self.errors.append((token.start, token.end, message, []))
+        self.errors.append((token.loc.start, token.loc.end, message, []))
         self.error_type = "parser"
         return ParserError()
 

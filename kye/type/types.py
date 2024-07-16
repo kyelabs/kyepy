@@ -6,6 +6,7 @@ from functools import cached_property
 import enum
 
 import kye.parse.expressions as ast
+from kye.parse.expressions import Location
 
 class Operator(enum.Enum):
     SUB = '-'
@@ -45,24 +46,6 @@ class Operator(enum.Enum):
     @property
     def is_comparison(self):
         return self in (Operator.EQ, Operator.NE, Operator.GT, Operator.GE, Operator.LT, Operator.LE)
-
-class Location:
-    start: int
-    end: int
-
-    def __init__(self, start: int, end: int):
-        self.start = start
-        self.end = end
-        
-    @staticmethod
-    def from_token(token: ast.Token):
-        return Location(token.start, token.end)
-    
-    def __str__(self):
-        return f"{self.start}:{self.end}"
-
-    def __repr__(self):
-        return f"Location({self.start}:{self.end})"
 
 class Expr:
     name: str

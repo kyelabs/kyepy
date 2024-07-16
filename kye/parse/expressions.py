@@ -115,22 +115,31 @@ class TokenType(enum.Enum):
     def is_comparison(self):
         return self in (TokenType.EQ, TokenType.NE, TokenType.GT, TokenType.GE, TokenType.LT, TokenType.LE)
 
+@dataclass(eq=True, frozen=True, slots=True)
+class Location:
+    start: int
+    line: int
+    col: int
+    length: int
+    
+    def __str__(self):
+        return f"{self.line}:{self.col}"
+
+    @property
+    def end(self):
+        return self.start + self.length
 
 @dataclass(eq=True, frozen=True)
 class Token:
     type: TokenType
     lexeme: str
-    start: int
+    loc: Location
     
     def __str__(self):
         return self.lexeme
     
     def __repr__(self):
         return f"{self.type.name}({self.lexeme})"
-    
-    @property
-    def end(self):
-        return self.start + len(self.lexeme)
 
 class Node:
     pass

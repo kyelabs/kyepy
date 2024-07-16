@@ -50,8 +50,20 @@ def parse_token(token: lark.Token):
         token_type = ast.TokenType(token.type)
     else:
         token_type = ast.TokenType(token)
-    assert token.start_pos is not None
-    return ast.Token(token_type, str(token), token.start_pos)
+    assert token.start_pos is not None and\
+            token.end_pos is not None and\
+            token.line is not None and\
+            token.column is not None, 'propagate_positions is not enabled.'
+    return ast.Token(
+        type=token_type,
+        lexeme=str(token),
+        loc=ast.Location(
+            start=token.start_pos,
+            line=token.line,
+            col=token.column,
+            length=token.end_pos - token.start_pos,
+        )
+    )
 
 class Transformer(lark.Transformer):
     def __init__(self, reporter: ErrorReporter):
@@ -237,11 +249,11 @@ class Parser:
             return ast.Script(tuple())
         return self.transformer.transform(tree)
 
-    def parse_expression(self, source: str) -> ast.Expr:
+    def parse_expression(self, source: str) -> t.Optional[ast.Expr]:
         try:
             tree = self.expressions_parser.parse(source, on_error=self.on_error)
         except lark.exceptions.UnexpectedInput as e:
-            return ast.Literal(None)
+            return None
         return self.transformer.transform(tree)
 
 __all__ = ['Parser']
