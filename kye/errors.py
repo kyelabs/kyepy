@@ -141,14 +141,14 @@ class ErrorReporter:
         ))
         return exc.ParserError()
 
-    def column_type_error(self, edge: compiled.Edge, expected: str):
+    def column_type_error(self, edge: compiled.Edge):
         assert self.loading is not None
         assert edge.name in self.loading[1].columns
         self.errors.append(ColumnTypeError(
             model=edge.model,
             edge=edge.name,
             loc=edge.loc,
-            expected=expected,
+            expected=edge.type,
         ))
     
     def assertion_error(self, assertion: compiled.Assertion, rows: t.List[int]):
