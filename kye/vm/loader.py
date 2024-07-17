@@ -69,21 +69,17 @@ class Loader:
     def matches_dtype(self, edge: compiled.Edge, col: pd.Series):
         if edge.many:
             col = col.explode().dropna().infer_objects()
-        err_msg_prefix = f"Expected '{edge.name}' column in '{edge.model}' table to be of type "
         if edge.type == 'String':
             if col.dtype != 'object':
-                self.report_edge_error(edge, err_msg_prefix + 'String')
+                self.reporter.column_type_error(edge, 'String')
         elif edge.type == 'Number':
             if not pd.api.types.is_numeric_dtype(col.dtype):
-                self.report_edge_error(edge, err_msg_prefix + 'Number')
+                self.reporter.column_type_error(edge, 'Number')
         elif edge.type == 'Integer':
             if not pd.api.types.is_numeric_dtype(col.dtype):
-                self.report_edge_error(edge, err_msg_prefix + 'Integer')
+                self.reporter.column_type_error(edge, 'Integer')
         elif edge.type == 'Boolean':
             if not pd.api.types.is_bool_dtype(col.dtype):
-                self.report_edge_error(edge, err_msg_prefix + 'Boolean')
+                self.reporter.column_type_error(edge, 'Boolean')
         else:
             raise Exception(f"Unknown type {edge.type}")
-    
-    def report_edge_error(self, edge: compiled.Edge, message: str):
-        self.reporter.loading_edge_error(edge.loc, edge.name, message)

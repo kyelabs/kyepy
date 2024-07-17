@@ -8,7 +8,7 @@ import kye.type.types as typ
 from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
-from kye.errors import ErrorReporter, KyeRuntimeError
+from kye.errors import ErrorReporter
 from kye.type.compiler import compile
 from kye.compiled import Compiled
 from kye.vm.vm import VM

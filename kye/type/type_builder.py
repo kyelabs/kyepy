@@ -3,7 +3,7 @@ import typing as t
 
 import kye.parse.expressions as ast
 import kye.type.types as typ
-from kye.errors import ErrorReporter, KyeRuntimeError
+from kye.errors import ErrorReporter
 from kye.type.native_types import NATIVE_TYPES
 
 
