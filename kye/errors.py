@@ -79,6 +79,17 @@ class ColumnTypeError(ValidationError):
     def highlight_df(self, df: pd.DataFrame) -> pd.DataFrame:
         return df[[self.edge]]
 
+@dataclass(frozen=True, kw_only=True)
+class AssertionError(ValidationError):
+    model: str
+    edges: t.List[str]
+    rows: t.List[int]
+    
+    def get_message(self):
+        return f"Assertion failed {self.msg or ''}"
+    
+    def highlight_df(self, df: pd.DataFrame) -> pd.DataFrame | None:
+        return df.loc[self.rows, self.edges]
 
 class ErrorReporter:
     errors: t.List[Error]
@@ -138,6 +149,16 @@ class ErrorReporter:
             edge=edge.name,
             loc=edge.loc,
             expected=expected,
+        ))
+    
+    def assertion_error(self, assertion: compiled.Assertion, rows: t.List[int]):
+        assert self.loading is not None
+        self.errors.append(AssertionError(
+            model=assertion.model,
+            edges=assertion.edges,
+            loc=assertion.loc,
+            rows=rows,
+            msg=assertion.msg,
         ))
     
     def report(self):
