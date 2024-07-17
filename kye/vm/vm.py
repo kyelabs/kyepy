@@ -118,14 +118,3 @@ class VM:
             stack.push(result)
         
         return stack.pop()
-
-    # def validate(self, df: pd.DataFrame):
-    #     self.df = df
-    #     source = self.loader.get_source(df)
-    #     for assertion in source.assertions:
-    #         result = self.eval(assertion.expr)
-    #         if not result.all():
-    #             print('Assertion failed:', assertion.msg)
-    #             print(self.get_table(df)[~result])
-    #     self.df = None
-    #     return True
