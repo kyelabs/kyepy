@@ -76,8 +76,6 @@ class Kye:
         if not hasattr(self, 'reporter'):
             self.reporter = ErrorReporter('')
         self.loader = Loader(self.compiled, self.reporter)
-        self.vm = VM(self.loader)
-        self.vm.reporter = self.reporter
         return not self.reporter.had_error
 
     def read_compiled(self, filepath: str) -> bool:
@@ -129,9 +127,9 @@ class Kye:
         self.reporter.loading = (source_name, table)
         self.loader.load(source_name, table)
     
-    def validate_model(self, source_name: str):
-        assert self.vm is not None
-        self.vm.validate(source_name)
+    # def validate_model(self, source_name: str):
+    #     assert self.vm is not None
+    #     self.vm.validate(source_name)
     
     # def eval_expression(self, source: str) -> t.Any:
     #     assert self.vm is not None

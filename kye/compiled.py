@@ -65,7 +65,7 @@ class Assertion:
         for cmd in self.expr:
             if cmd.op == OP.COL:
                 assert len(cmd.args) == 1
-                edges.update(cmd.args[0])
+                edges.add(cmd.args[0])
         return list(edges)
 
 @dataclass(frozen=True)

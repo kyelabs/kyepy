@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 
 from kye.vm.op import OP
-from kye.vm.loader import Loader
-from kye.errors import ErrorReporter
+from kye.compiled import Cmd
 
 class Stack:
     def __init__(self):
@@ -49,25 +48,14 @@ def groupby_index(col):
     return col.groupby(col.index)
 
 class VM:
-    this: t.Optional[str]
-    reporter: ErrorReporter
+    df: pd.DataFrame
     
-    def __init__(self, loader: Loader):
-        self.loader = loader
-        self.this = None
-    
-    def get_table(self, table_name):
-        assert table_name in self.loader.tables
-        return self.loader.tables[table_name]
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
         
     def get_column(self, col_name):
-        assert self.this is not None
-        df = self.get_table(self.this)
-        if col_name in df:
-            return df[col_name].explode().dropna().infer_objects()
-        expr = self.loader.get_source(self.this)[col_name].expr
-        if expr is not None:
-            return self.eval(expr)
+        if col_name in self.df:
+            return self.df[col_name].explode().dropna().infer_objects()
         raise ValueError(f'Column not found: {col_name}')
 
     def run_command(self, op, args):
@@ -118,7 +106,7 @@ class VM:
         else:
             raise ValueError(f'Invalid operation: {op}')
 
-    def eval(self, commands):
+    def eval(self, commands: t.List[Cmd]):
         stack = Stack()
         
         for cmd in commands:
@@ -131,13 +119,13 @@ class VM:
         
         return stack.pop()
 
-    def validate(self, table: str):
-        self.this = table
-        source = self.loader.get_source(table)
-        for assertion in source.assertions:
-            result = self.eval(assertion.expr)
-            if not result.all():
-                print('Assertion failed:', assertion.msg)
-                print(self.get_table(table)[~result])
-        self.this = None
-        return True
+    # def validate(self, df: pd.DataFrame):
+    #     self.df = df
+    #     source = self.loader.get_source(df)
+    #     for assertion in source.assertions:
+    #         result = self.eval(assertion.expr)
+    #         if not result.all():
+    #             print('Assertion failed:', assertion.msg)
+    #             print(self.get_table(df)[~result])
+    #     self.df = None
+    #     return True

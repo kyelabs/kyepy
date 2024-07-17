@@ -79,7 +79,6 @@ def main():
         if kye.reporter.had_error:
             kye.reporter.report()
             sys.exit(65)
-        kye.validate_model(args.model_name)
 
 if __name__ == "__main__":
     main()
