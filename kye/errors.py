@@ -91,6 +91,14 @@ class AssertionError(ValidationError):
     def highlight_df(self, df: pd.DataFrame) -> pd.DataFrame | None:
         return df.loc[self.rows, self.edges]
 
+@dataclass(frozen=True, kw_only=True)
+class MissingIndexError(ValidationError):
+    model: str
+    edges: t.List[str]
+    
+    def get_message(self):
+        return f"{self.model} is missing index columns: {','.join(self.edges)}"
+
 class ErrorReporter:
     errors: t.List[Error]
     error_type: t.Optional[str]
@@ -159,6 +167,14 @@ class ErrorReporter:
             loc=assertion.loc,
             rows=rows,
             msg=assertion.msg,
+        ))
+    
+    def missing_index_column_error(self, edge: compiled.Edge):
+        assert self.loading is not None
+        self.errors.append(MissingIndexError(
+            model=edge.model,
+            edges=[edge.name],
+            loc=edge.loc,
         ))
     
     def report(self):

@@ -22,7 +22,7 @@ class Loader:
         self.tables = {}
         self.sources = compiled
     
-    def load(self, source_name: str, df: pd.DataFrame) -> pd.DataFrame:
+    def load(self, source_name: str, df: pd.DataFrame) -> t.Optional[pd.DataFrame]:
         if source_name in self.tables:
             raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
         
@@ -36,7 +36,9 @@ class Loader:
         assert source_name in self.sources, f"Source '{source_name}' not found"
         source = self.sources[source_name]
         
-        # Rename columns using titles and drop any extra columns
+        # Conform the table columns to our model edges
+        #   - rename columns that use titles
+        #   - drop any extra columns
         col_name_map = {
             edge.title or edge.name: edge.name
             for edge in source.edges.values()
@@ -55,15 +57,27 @@ class Loader:
             df.rename(columns=rename_map, inplace=True)
 
         # Check that the table has all the required columns
+        is_missing_index_column = False
         for col_name in source.index:
-            assert col_name in df.columns, f"Index column '{col_name}' not found in table"
+            if col_name not in df.columns:
+                is_missing_index_column = True
+                self.reporter.missing_index_column_error(source[col_name])
+        if is_missing_index_column:
+            return None
 
         # Check the type of each column
         drop_columns = []
         for col_name in df.columns:
             col = df[col_name]
             if not self.matches_dtype(source[col_name], col):
+                if col_name in source.index:
+                    is_missing_index_column = True
+                drop_columns.append(col_name)
                 self.reporter.column_type_error(source[col_name])
+        if is_missing_index_column:
+            return None
+        if len(drop_columns):
+            df.drop(columns=drop_columns, inplace=True)
 
         # Run the single-column assertions
         vm = VM(df)
