@@ -75,6 +75,7 @@ class Edge():
     null: bool
     many: bool
     type: str
+    title: t.Optional[str]
     expr: t.Optional[Expr]
     loc: t.Optional[str]
     
@@ -83,6 +84,7 @@ class Edge():
         return Edge(
             model=model,
             name=name,
+            title=data.get('title'),
             null=data.get('null', False),
             many=data.get('many', False),
             type=data['type'],
@@ -97,6 +99,8 @@ class Edge():
         data: dict = {
             'type': self.type,
         }
+        if self.title:
+            data['title'] = self.title
         if self.expr:
             data['expr'] = self.expr
         if self.many:

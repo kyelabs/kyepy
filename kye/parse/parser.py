@@ -141,6 +141,9 @@ class Transformer(lark.Transformer):
     
     def edge_def(self, children: t.List[Ast]):
         name = get_token(children, ast.TokenType.EDGE)
+        title = find_token(children, ast.TokenType.STRING)
+        if title is not None:
+            title = title.lexeme[1:-1]
         # TODO: make sure we are inside of a select statement
         if len(children) == 1:
             block = ast.EdgeIdentifier(name)
@@ -155,6 +158,7 @@ class Transformer(lark.Transformer):
             raise NotImplementedError('Block not implemented.')
         return ast.Edge(
             name=name,
+            title=title,
             params=tuple(find_children(children, ast.Index)),
             cardinality=cardinality,
             expr=block

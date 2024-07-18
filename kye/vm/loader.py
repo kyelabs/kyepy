@@ -35,20 +35,29 @@ class Loader:
         # Check if is a known model
         assert source_name in self.sources, f"Source '{source_name}' not found"
         source = self.sources[source_name]
+        
+        # Rename columns using titles and drop any extra columns
+        col_name_map = {
+            edge.title or edge.name: edge.name
+            for edge in source.edges.values()
+        }
+        rename_map = {}
+        drop_columns = []
+        for col_name in df.columns:
+            if col_name not in col_name_map:
+                drop_columns.append(col_name)
+            elif col_name != col_name_map[col_name]:
+                rename_map[col_name] = col_name_map[col_name]
+        if len(drop_columns):
+            print(f"Warning: Table '{source.name}' had extra columns: {','.join(drop_columns)}")
+            df.drop(columns=drop_columns, inplace=True)
+        if len(rename_map):
+            df.rename(columns=rename_map, inplace=True)
 
         # Check that the table has all the required columns
         for col_name in source.index:
             assert col_name in df.columns, f"Index column '{col_name}' not found in table"
-        
-        # Drop any extra columns
-        drop_columns = []
-        for col_name in df.columns:
-            if col_name not in source.edges:
-                drop_columns.append(col_name)
-        if len(drop_columns):
-            print(f"Warning: Table '{source.name}' had extra columns: {','.join(drop_columns)}")
-            df.drop(columns=drop_columns, inplace=True)
-    
+
         # Check the type of each column
         drop_columns = []
         for col_name in df.columns:

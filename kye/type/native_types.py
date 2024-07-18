@@ -30,6 +30,7 @@ class NativeType:
                 edge_attr = method.__edge__
                 this.define(typ.Edge(
                     name=name,
+                    title=None,
                     indexes=typ.Indexes([]),
                     allows_null=edge_attr['allows_null'],
                     allows_many=edge_attr['allows_many'],
