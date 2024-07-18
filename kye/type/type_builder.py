@@ -55,6 +55,7 @@ class TypeBuilder(ast.Visitor):
         
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
+            title=edge_ast.title,
             indexes=typ.Indexes(edge_ast.params),
             allows_null=edge_ast.cardinality.allows_null,
             allows_many=edge_ast.cardinality.allows_many,

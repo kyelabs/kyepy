@@ -20,7 +20,7 @@ NULL: "null"
 model_def: TYPE index* block
 type_def: TYPE ":" exp
 
-edge_def: EDGE index* CARDINALITY? (":" exp | block)
+edge_def: EDGE STRING? index* CARDINALITY? (":" exp | block)
         // For select statments where you can specify an edge by just listing its name
         | EDGE
 

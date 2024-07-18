@@ -178,6 +178,7 @@ class Type(Stmt):
 @dataclass(eq=True, frozen=True)
 class Edge(Stmt):
     name: Token
+    title: t.Optional[str]
     params: t.Tuple[Index, ...]
     cardinality: Cardinality
     expr: Expr

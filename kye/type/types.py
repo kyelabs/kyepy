@@ -114,6 +114,7 @@ class Edge:
     allows_null: bool
     allows_many: bool
     model: Type
+    title: t.Optional[str]
     returns: t.Optional[Type]
     expr: t.Optional[Expr]
     loc: t.Optional[Location]
