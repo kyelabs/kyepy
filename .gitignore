@@ -13,8 +13,6 @@ main.py
 notes/
 examples/
 .vscode/
-tests/
-test.py
 .*.kye.json
 .*.kye.yaml
 
