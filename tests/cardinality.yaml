@@ -1,0 +1,144 @@
+- feature: Required columns
+  schema: >
+    User(id)(name) {
+      id: Number
+      name: String
+      required: Boolean
+    }
+  tests:
+    - test: all columns defined is valid
+      valid: true
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: true
+    - test: allows missing column
+      valid: True
+      data:
+        User:
+          - id: 0
+            name: bob
+    # - test: missing value in row
+    #   valid: false
+    #   data:
+    #     User:
+    #       - id: 0
+    #         name: bob
+    #         required: true
+    #       - id: 1
+    #         name: sally
+    - test: missing index columns
+      valid: false
+      data:
+        User:
+          - required: true
+          - required: true
+    - test: missing partial index
+      valid: false
+      data:
+        User:
+          - id: 0
+            required: true
+- feature: Optional columns
+  schema: >
+    User(id) {
+      id: Number
+      optional?: Number
+      many*: Number
+    }
+  tests:
+    - test: allow null value
+      valid: true
+      data:
+        User:
+          - id: 1
+          - id: 2
+            optional: 0
+          - id: 3
+            many: 1
+- feature: Multi-Value columns
+  schema: >
+    Post(id) {
+      id: Number
+      title: String
+      authors+: String
+      tags*: String
+    }
+  tests:
+    - test: allow list values
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title: "Post 1"
+            authors: 
+              - ben
+              - bob
+            tags:
+              - funny
+              - great
+    - test: allow single value lists
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title:
+              - "Post 1"
+            authors:
+              - ben
+            tags: 
+              - funny
+    # - test: don't allow multi-value lists
+    #   valid: false
+    #   data: 
+    #     Post:
+    #       - id: 1
+    #         title:
+    #           - "Post 1"
+    #           - "Misbehaving alternative title"
+    #         authors:
+    #           - ben
+    #         tags:
+    #           - funny
+    - test: allow mix of single or missing values
+      valid: true
+      data:
+        Post:
+          - id: 1
+            title: "Post 1"
+            authors: ben
+          - id: 2
+            title: "Post 2"
+            authors:
+              - ben
+            tags: funny
+          - id: 3
+            title: "Post 3"
+            authors:
+              - ben
+              - bob
+            tags:
+              - funny
+              - wishlist
+# - feature: Extra columns
+#   schema: >
+#     User(id) {
+#       id: Number
+#     }
+#   tests:
+#     - test: dont allow extra columns
+#       valid: false
+#       data:
+#         User:
+#           - id: 1
+#             extra: true
+#           - id: 2
+#     - test: dont allow extra entirely null columns
+#       valid: false
+#       data:
+#         User:
+#           - id: 1
+#             extra: null
+#           - id: 2
+#             extra: null

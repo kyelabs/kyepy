@@ -1,0 +1,144 @@
+# - feature: Basic type checking
+#   schema: > 
+#     User(id) {
+#       id: Number
+#       admin: Boolean
+#     }
+#   tests:
+#     - test: allow good types
+#       valid: true
+#       data:
+#         User:
+#           - id: 0
+#             admin: false
+#     - test: not a Number
+#       valid: false
+#       data:
+#         User:
+#           - id: not_a_number
+#             admin: false
+#     - test: not a Boolean
+#       valid: false
+#       data:
+#         User:
+#           - id: 0
+#             admin: not_a_boolean
+# - feature: Number Formatting
+#   schema: >
+#     Numbers(id) {
+#       id: Number
+#       thousands?: Number<,>
+#       max_whole?: Number<3>
+#       integer?: Number<.0>
+#       min_whole?: Number<.-2>
+#       min_decimal?: Number<-2>
+#     }
+#   tests:
+#     - test: allow numeric types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: 123456
+#             max_whole: 123.456
+#             integer: 123
+#             min_whole: 100.000
+#             min_decimal: 000.006
+#           - id: 1
+#             thousands: -123456
+#             max_whole: -123.456
+#             integer: -123
+#             min_whole: -100.000
+#             min_decimal: -000.006
+#           - id: 2
+#             thousands: 0
+#             max_whole: 0
+#             integer: 0
+#             min_whole: 0
+#             min_decimal: 0
+#     - test: allow string types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: '123,456'
+#             max_whole: '123.456'
+#             integer: '123.0'
+#             min_whole: '100.000'
+#             min_decimal: '000.006'
+#           - id: 1
+#             thousands: '-123,456'
+#             max_whole: '-123.456'
+#             integer: '-123.0'
+#             min_whole: '-100.000'
+#             min_decimal: '-000.006'
+#           - id: 2
+#             thousands: '0'
+#             max_whole: '0'
+#             integer: '0'
+#             min_whole: '0'
+#             min_decimal: '0'
+#           - id: 3
+#             thousands: '000,000'
+#             max_whole: '0000.0000'
+#             integer: '0000.0000'
+#             min_whole: '0000.0000'
+#             min_decimal: '0000.0000'
+#     - test: allow mixed types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: 123456
+#             max_whole: 123.45678
+#             integer: 12345.0
+#             min_whole: 100.000
+#             min_decimal: 000.001
+#           - id: 1
+#             thousands: '123,456'
+#             max_whole: '123.456'
+#             integer: '123'
+#             min_whole: '100.000'
+#             min_decimal: '000.006'
+#     - test: catch bad thousands
+#       valid: false
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: '1,0000'
+#     - test: catch integer dtype when has decimal
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             integer: 1.1
+#     - test: catch past max whole numeric
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             max_whole: 4321
+#     - test: catch past max whole string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             max_whole: '4321'
+#     - test: catch non-integer string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             integer: '0.1234'
+#     # - test: catch past min whole string
+#     #   valid: false
+#     #   data:
+#     #     Numbers:
+#     #       - id: 0
+#     #         max_whole: '120'
+#     - test: catch past min decimal string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             min_decimal: '0.012'

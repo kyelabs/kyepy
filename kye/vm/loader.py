@@ -22,7 +22,7 @@ class Loader:
         self.tables = {}
         self.sources = compiled
     
-    def load(self, source_name: str, df: pd.DataFrame) -> t.Optional[pd.DataFrame]:
+    def load(self, source_name: str, df: pd.DataFrame):
         if source_name in self.tables:
             raise NotImplementedError(f"Table '{source_name}' already loaded. Multiple sources for table not yet supported.")
         
@@ -111,8 +111,6 @@ class Loader:
         #     table = table.select(source.index + non_plural_columns).distinct(on=source.index)
         #     print('hi')
         self.tables[source_name] = df
-        
-        return df
     
     def get_source(self, source: str):
         return self.sources[source]
