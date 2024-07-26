@@ -78,6 +78,18 @@ class Loader:
             return None
         if len(drop_columns):
             df.drop(columns=drop_columns, inplace=True)
+        
+        # Run cardinality assertions
+        mask = pd.Series(True, index=df.index)
+        for col_name in df.columns:
+            col = df[col_name]
+            result = self.matches_cardinality(source[col_name], col)
+            if not result.all():
+                mask &= result
+                self.reporter.cardinality_error(source[col_name], result[~result].index.tolist())
+        if not mask.all():
+            # print(f'dropping {df.shape[0] - mask.sum()} rows')
+            df = df[mask]
 
         # Run the single-column assertions
         vm = VM(df)
@@ -89,7 +101,7 @@ class Loader:
                     mask &= result
                     self.reporter.assertion_error(assertion, result[~result].index.tolist())
         if not mask.all():
-            print(f'dropping {df.shape[0] - mask.sum()} rows')
+            # print(f'dropping {df.shape[0] - mask.sum()} rows')
             df = df[mask]
 
         has_duplicate_index = df[df.duplicated(subset=source.index, keep=False)]
@@ -128,3 +140,21 @@ class Loader:
             return pd.api.types.is_bool_dtype(col.dtype)
         else:
             raise Exception(f"Unknown type {edge.type}")
+    
+    def matches_cardinality(self, edge: compiled.Edge, col: pd.Series) -> pd.Series:
+        # many
+        if edge.many and edge.null:
+            return pd.Series(True, index=col.index)
+        
+        cnt = col.explode().dropna().groupby(level=0).nunique().reindex(col.index, fill_value=0)
+        # one
+        if not edge.null and not edge.many:
+            return cnt == 1
+        # more
+        elif not edge.null:
+            return cnt > 0
+        # maybe
+        elif not edge.many:
+            return cnt <= 1
+
+        raise Exception("Should not reach here")
