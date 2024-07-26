@@ -111,6 +111,19 @@ class Edge():
             data['loc'] = str(self.loc)
         return data
 
+    @cached_property
+    def cardinality(self) -> str:
+        if self.many:
+            if self.null:
+                return 'many'
+            else:
+                return 'more'
+        else:
+            if self.null:
+                return 'maybe'
+            else:
+                return 'one'
+
 @dataclass(frozen=True)
 class Model():
     name: str

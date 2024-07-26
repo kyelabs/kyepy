@@ -80,6 +80,25 @@ class ColumnTypeError(ValidationError):
         return df[[self.edge]]
 
 @dataclass(frozen=True, kw_only=True)
+class CardinalityError(ValidationError):
+    model: str
+    edge: str
+    rows: t.List[int]
+    cardinality: str
+    
+    def get_message(self):
+        if self.cardinality == 'more':
+            return f"Expected {self.model}.{self.edge} to not be null"
+        if self.cardinality == 'maybe':
+            return f"Expected {self.model}.{self.edge} to not have more than one value"
+        if self.cardinality == 'one':
+            return f"Expected {self.model}.{self.edge} to have a single non-null value"
+        raise ValueError(f"Invalid cardinality: {self.cardinality}")
+    
+    def highlight_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df.loc[self.rows, [self.edge]]
+
+@dataclass(frozen=True, kw_only=True)
 class AssertionError(ValidationError):
     model: str
     edges: t.List[str]
@@ -157,6 +176,16 @@ class ErrorReporter:
             edge=edge.name,
             loc=edge.loc,
             expected=edge.type,
+        ))
+    
+    def cardinality_error(self, edge: compiled.Edge, rows: t.List[int]):
+        assert self.loading is not None
+        self.errors.append(CardinalityError(
+            model=edge.model,
+            edge=edge.name,
+            loc=edge.loc,
+            rows=rows,
+            cardinality=edge.cardinality,
         ))
     
     def assertion_error(self, assertion: compiled.Assertion, rows: t.List[int]):

@@ -3,7 +3,7 @@
     User(id)(name) {
       id: Number
       name: String
-      required: Boolean
+      required: Number
     }
   tests:
     - test: all columns defined is valid
@@ -12,34 +12,34 @@
         User:
           - id: 0
             name: bob
-            required: true
+            required: 1
     - test: allows missing column
       valid: True
       data:
         User:
           - id: 0
             name: bob
-    # - test: missing value in row
-    #   valid: false
-    #   data:
-    #     User:
-    #       - id: 0
-    #         name: bob
-    #         required: true
-    #       - id: 1
-    #         name: sally
+    - test: missing value in row
+      valid: false
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: 1
+          - id: 1
+            name: sally
     - test: missing index columns
       valid: false
       data:
         User:
-          - required: true
-          - required: true
+          - required: 1
+          - required: 1
     - test: missing partial index
       valid: false
       data:
         User:
           - id: 0
-            required: true
+            required: 1
 - feature: Optional columns
   schema: >
     User(id) {
