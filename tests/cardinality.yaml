@@ -89,18 +89,18 @@
               - ben
             tags: 
               - funny
-    # - test: don't allow multi-value lists
-    #   valid: false
-    #   data: 
-    #     Post:
-    #       - id: 1
-    #         title:
-    #           - "Post 1"
-    #           - "Misbehaving alternative title"
-    #         authors:
-    #           - ben
-    #         tags:
-    #           - funny
+    - test: don't allow multi-value lists
+      valid: false
+      data: 
+        Post:
+          - id: 1
+            title:
+              - "Post 1"
+              - "Misbehaving alternative title"
+            authors:
+              - ben
+            tags:
+              - funny
     - test: allow mix of single or missing values
       valid: true
       data:
