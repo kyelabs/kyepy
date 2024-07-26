@@ -3,7 +3,7 @@ import typing as t
 from pathlib import Path
 import lark
 
-from kye.errors import ErrorReporter
+from kye.errors.compilation_errors import CompilationErrorReporter
 import kye.parse.expressions as ast
 
 Ast = t.Union[ast.Node, ast.Token]
@@ -66,7 +66,7 @@ def parse_token(token: lark.Token):
     )
 
 class Transformer(lark.Transformer):
-    def __init__(self, reporter: ErrorReporter):
+    def __init__(self, reporter: CompilationErrorReporter):
         self.__visit_tokens__ = True
         self.reporter = reporter
 
@@ -217,7 +217,7 @@ class Transformer(lark.Transformer):
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').read_text()
 
 class Parser:
-    def __init__(self, reporter: ErrorReporter):
+    def __init__(self, reporter: CompilationErrorReporter):
         self.reporter = reporter
         self.transformer = Transformer(reporter)
         self.definitions_parser = self.get_parser('statements')
