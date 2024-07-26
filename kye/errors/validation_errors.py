@@ -23,7 +23,7 @@ class Error:
             return f"Expected {self.model}.{self.edges[0]} to be of type '{self.expected}'"
         if self.err == 'MultipleValues':
             return f"Expected {self.model}.{self.edges[0]} to not have more than one value"
-        if self.err == 'MissingValues':
+        if self.err == 'MissingValue':
             return f"Expected {self.model}.{self.edges[0]} to not be null"
         if self.err == 'AssertionFailed':
             return f"Assertion failed {self.expected or ''}"
@@ -66,7 +66,7 @@ class ValidationErrorReporter(ErrorReporter):
     
     def missing_values(self, edge: compiled.Edge, rows: t.List[int]):
         self.errors.append(Error(
-            err='MissingValues',
+            err='MissingValue',
             model=edge.model,
             rows=rows,
             edges=[edge.name],
@@ -94,7 +94,9 @@ class ValidationErrorReporter(ErrorReporter):
     
     @property
     def error_df(self):
-        return pd.DataFrame(map(asdict, self.errors)).explode(['rows','edges']).rename(columns={
+        if not self.had_error:
+            return pd.DataFrame(columns=['err','model','row','col','loc','expected'])
+        return pd.DataFrame(map(asdict, self.errors)).explode('rows').explode('edges').rename(columns={
             'rows': 'row',
             'edges': 'col',
         })
