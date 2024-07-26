@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from kye.errors import ErrorReporter
+from kye.errors.validation_errors import ValidationErrorReporter
 from kye.vm.op import OP, parse_command
 import kye.compiled as compiled
 from kye.vm.vm import VM
@@ -13,11 +13,11 @@ from kye.vm.vm import VM
 Expr = t.List[tuple[OP, list]]
 
 class Loader:
-    reporter: ErrorReporter
+    reporter: ValidationErrorReporter
     tables: t.Dict[str, pd.DataFrame]
     sources: compiled.Compiled
     
-    def __init__(self, compiled: compiled.Compiled, reporter: ErrorReporter):
+    def __init__(self, compiled: compiled.Compiled, reporter: ValidationErrorReporter):
         self.reporter = reporter
         self.tables = {}
         self.sources = compiled
@@ -31,6 +31,7 @@ class Loader:
             assert None not in df.index.names, "Table should have a range index or a named index"
             df.reset_index(inplace=True)
         assert df.index.is_unique, "Table index must be unique at this point"
+        df.index.name = source_name
 
         # Check if is a known model
         assert source_name in self.sources, f"Source '{source_name}' not found"
@@ -53,17 +54,46 @@ class Loader:
         if len(drop_columns):
             print(f"Warning: Table '{source.name}' had extra columns: {','.join(drop_columns)}")
             df.drop(columns=drop_columns, inplace=True)
+            if df.empty:
+                return None
         if len(rename_map):
             df.rename(columns=rename_map, inplace=True)
+        
+        self.reporter.use_source(df.copy())
 
         # Check that the table has all the required columns
         is_missing_index_column = False
         for col_name in source.index:
             if col_name not in df.columns:
                 is_missing_index_column = True
-                self.reporter.missing_index_column_error(source[col_name])
+                self.reporter.missing_index(source[col_name])
         if is_missing_index_column:
             return None
+
+        # Run cardinality assertions
+        mask = pd.Series(True, index=df.index)
+        for col_name in df.columns:
+            col = df[col_name]
+            edge = source[col_name]
+            g = col.explode().dropna().groupby(level=0)
+            if not edge.many or not edge.null:
+                cnts = g.nunique().reindex(col.index, fill_value=0)
+                if not edge.many:
+                    has_many = cnts > 1
+                    if has_many.any():
+                        mask &= ~has_many
+                        self.reporter.multiple_values(source[col_name], has_many[has_many].index.tolist())
+                if not edge.null:
+                    is_null = cnts == 0
+                    if is_null.any():
+                        mask &= ~is_null
+                        self.reporter.missing_values(source[col_name], is_null[is_null].index.tolist())
+            df[col_name] = g.agg('unique' if edge.many else 'first').reindex(col.index)
+        if not mask.all():
+            # print(f'dropping {df.shape[0] - mask.sum()} rows')
+            df = df[mask]
+            if df.empty:
+                return None
 
         # Check the type of each column
         drop_columns = []
@@ -73,23 +103,13 @@ class Loader:
                 if col_name in source.index:
                     is_missing_index_column = True
                 drop_columns.append(col_name)
-                self.reporter.column_type_error(source[col_name])
+                self.reporter.wrong_type(source[col_name])
         if is_missing_index_column:
             return None
         if len(drop_columns):
             df.drop(columns=drop_columns, inplace=True)
-        
-        # Run cardinality assertions
-        mask = pd.Series(True, index=df.index)
-        for col_name in df.columns:
-            col = df[col_name]
-            result = self.matches_cardinality(source[col_name], col)
-            if not result.all():
-                mask &= result
-                self.reporter.cardinality_error(source[col_name], result[~result].index.tolist())
-        if not mask.all():
-            # print(f'dropping {df.shape[0] - mask.sum()} rows')
-            df = df[mask]
+            if df.empty:
+                return None
 
         # Run the single-column assertions
         vm = VM(df)
@@ -99,10 +119,12 @@ class Loader:
                 result = vm.eval(assertion.expr)
                 if not result.all():
                     mask &= result
-                    self.reporter.assertion_error(assertion, result[~result].index.tolist())
+                    self.reporter.assertion_failed(assertion, result[~result].index.tolist())
         if not mask.all():
             # print(f'dropping {df.shape[0] - mask.sum()} rows')
             df = df[mask]
+            if df.empty:
+                return None
 
         has_duplicate_index = df[df.duplicated(subset=source.index, keep=False)]
         if not has_duplicate_index.empty:
@@ -128,8 +150,7 @@ class Loader:
         return self.sources[source]
     
     def matches_dtype(self, edge: compiled.Edge, col: pd.Series) -> bool:
-        if edge.many:
-            col = col.explode().dropna().infer_objects()
+        col = col.explode().dropna().infer_objects()
         if edge.type == 'String':
             return col.dtype == 'object'
         elif edge.type == 'Number':
@@ -140,21 +161,3 @@ class Loader:
             return pd.api.types.is_bool_dtype(col.dtype)
         else:
             raise Exception(f"Unknown type {edge.type}")
-    
-    def matches_cardinality(self, edge: compiled.Edge, col: pd.Series) -> pd.Series:
-        # many
-        if edge.many and edge.null:
-            return pd.Series(True, index=col.index)
-        
-        cnt = col.explode().dropna().groupby(level=0).nunique().reindex(col.index, fill_value=0)
-        # one
-        if not edge.null and not edge.many:
-            return cnt == 1
-        # more
-        elif not edge.null:
-            return cnt > 0
-        # maybe
-        elif not edge.many:
-            return cnt <= 1
-
-        raise Exception("Should not reach here")
