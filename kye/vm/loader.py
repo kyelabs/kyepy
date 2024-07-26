@@ -91,7 +91,7 @@ class Loader:
             df[col_name] = g.agg('unique' if edge.many else 'first').reindex(col.index)
         if not mask.all():
             # print(f'dropping {df.shape[0] - mask.sum()} rows')
-            df = df[mask]
+            df.drop(df[~mask].index, inplace=True)
             if df.empty:
                 return None
 
@@ -122,7 +122,7 @@ class Loader:
                     self.reporter.assertion_failed(assertion, result[~result].index.tolist())
         if not mask.all():
             # print(f'dropping {df.shape[0] - mask.sum()} rows')
-            df = df[mask]
+            df.drop(df[~mask].index, inplace=True)
             if df.empty:
                 return None
 
