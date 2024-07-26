@@ -8,7 +8,9 @@ import kye.type.types as typ
 from kye.parse.parser import Parser
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
-from kye.errors import ErrorReporter
+from kye.errors.base_reporter import ErrorReporter
+from kye.errors.compilation_errors import CompilationErrorReporter
+from kye.errors.validation_errors import ValidationErrorReporter
 from kye.type.compiler import compile
 from kye.compiled import Compiled
 from kye.vm.vm import VM
@@ -27,7 +29,7 @@ class Kye:
     
     def parse_definitions(self, source: str) -> t.Optional[ast.Script]:
         """ Parse definitions from source code """
-        self.reporter = ErrorReporter(source)
+        self.reporter = CompilationErrorReporter(source)
         parser = Parser(self.reporter)
         tree = parser.parse_definitions(source)
         if self.reporter.had_error:
@@ -47,7 +49,7 @@ class Kye:
         """ Build types from the AST """
         if tree is None:
             return None
-        self.type_builder.reporter = self.reporter
+        self.type_builder.reporter = t.cast(CompilationErrorReporter, self.reporter)
         self.type_builder.visit(tree)
         if self.reporter.had_error:
             return None
@@ -73,8 +75,7 @@ class Kye:
 
     def load_compiled(self, compiled: Compiled) -> bool:
         self.compiled = compiled
-        if not hasattr(self, 'reporter'):
-            self.reporter = ErrorReporter('')
+        self.reporter = ValidationErrorReporter()
         self.loader = Loader(self.compiled, self.reporter)
         return not self.reporter.had_error
 
@@ -124,7 +125,6 @@ class Kye:
 
     def load_df(self, source_name: str, table: pd.DataFrame):
         assert self.loader is not None
-        self.reporter.loading = (source_name, table)
         self.loader.load(source_name, table)
     
     # def validate_model(self, source_name: str):

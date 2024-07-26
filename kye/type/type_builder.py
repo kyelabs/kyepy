@@ -3,7 +3,7 @@ import typing as t
 
 import kye.parse.expressions as ast
 import kye.type.types as typ
-from kye.errors import ErrorReporter
+from kye.errors.compilation_errors import CompilationErrorReporter
 from kye.type.native_types import NATIVE_TYPES
 
 
@@ -13,7 +13,7 @@ class TypeBuilder(ast.Visitor):
     - Does not figure out the type of expressions
     - Converts expressions into it's own simplified representation
     """
-    reporter: ErrorReporter
+    reporter: CompilationErrorReporter
     this: t.Optional[typ.Type]
     types: typ.Types
     

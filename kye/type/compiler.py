@@ -2,7 +2,6 @@ from __future__ import annotations
 import typing as t
 
 import kye.type.types as typ
-from kye.errors import ErrorReporter
 from kye.vm.op import OP
 from kye.compiled import Compiled, Model, Edge, Assertion, Cmd
 
