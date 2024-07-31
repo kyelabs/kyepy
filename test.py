@@ -83,6 +83,7 @@ if __name__ == "__main__":
                 if len(expected_errors) == 0 and kye.reporter.had_error:
                     printer.failure(file, test_case['feature'], test['test'])
                     kye.reporter.report()
+                    print(error_df[error_df['unused']].drop(columns=['unused']))
                     raise Exception('Invalid when should have been valid')
 
                 # Check if each error is present

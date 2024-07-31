@@ -66,62 +66,35 @@
     Post(id) {
       id: Number
       title: String
-      authors+: String
+      author: String
       tags*: String
     }
   tests:
-    - test: allow list values
+    - test: aggregate by index and test for multiple values
       data:
         Post:
           - id: 1
-            title: "Post 1"
-            authors: 
-              - ben
-              - bob
-            tags:
-              - funny
-              - great
-    - test: allow single value lists
-      data:
-        Post:
-          - id: 1
-            title:
-              - "Post 1"
-            authors:
-              - ben
-            tags: 
-              - funny
-    - test: don't allow multi-value lists
-      data: 
-        Post:
-          - id: 1
-            title:
-              - "Post 1"
-              - "Misbehaving alternative title"
-            authors:
-              - ben
-            tags:
-              - funny
+            title: [ "Post 1" ] # Single value lists are fine
+            author: [ ben, ben ] # Duplicate values are fine
+            tags: funny
+          - id: 2
+            title: "Post 2"
+            author: bob
+            tags: [funny, great]
+          - id: 2 # Should allow entirely missing values
+          - id: 3
+            title: "Post 3"
+            author: bill
+          - id: 3
+            title: "Post 3 again" # Same post, different title, should throw an error
+            author: bill # Same post, same author is fine
+          - id: 4
+            title: ["Post 4", "Post 4 again"] # Should not allow multiple values in list
+            author: susan
       errors:
         - err: MultipleValues
           col: title
-    - test: allow mix of single or missing values
-      data:
-        Post:
-          - id: 1
-            title: "Post 1"
-            authors: ben
-          - id: 2
-            title: "Post 2"
-            authors:
-              - ben
-            tags: funny
-          - id: 3
-            title:
-              - "Post 3"
-            authors:
-              - ben
-              - bob
-            tags:
-              - funny
-              - wishlist
+          row: [3, 4]
+        - err: MultipleValues
+          col: title
+          row: [5]
