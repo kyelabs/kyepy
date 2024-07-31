@@ -29,6 +29,8 @@ class Error:
             return f"Assertion failed {self.expected or ''}"
         if self.err == 'MissingIndex':
             return f"{self.model} is missing index columns: {','.join(self.edges)}"
+        if self.err == 'NonUniqueSubIndex':
+            return f"{self.model} has non-unique sub-index: {','.join(self.edges)}"
         raise ValueError(f"Invalid error type: {self.err}")
 
 class ValidationErrorReporter(ErrorReporter):
@@ -90,6 +92,15 @@ class ValidationErrorReporter(ErrorReporter):
             rows=[],
             edges=[edge.name],
             loc=edge.loc,
+        ))
+    
+    def non_unique_sub_index(self, model: compiled.Model, sub_idx_edges: t.List[str], rows: t.List[int]):
+        self.errors.append(Error(
+            err='NonUniqueSubIndex',
+            model=model.name,
+            rows=rows,
+            edges=sub_idx_edges,
+            loc=model.loc,
         ))
     
     @property

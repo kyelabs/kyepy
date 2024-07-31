@@ -18,6 +18,26 @@
 #           - id: 0
 #           - id: 1
 #           - id: 1
+- feature: MultiIndex
+  schema: >
+    User(id)(username) {
+      id: Number
+      username: String
+    }
+  tests:
+    - test: disallow non-unique multi indexes
+      data:
+        User:
+          - id: 0
+            username: a
+          - id: 1
+            username: b # User 1 and 2 have the same username
+          - id: 2
+            username: b
+      errors:
+        - err: NonUniqueSubIndex
+          col: username
+          row: [1, 2]
 # - feature: Composite Index
 #   schema: >
 #     Date(year, month, day) {
