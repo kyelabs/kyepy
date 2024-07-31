@@ -2,6 +2,7 @@ from __future__ import annotations
 import typing as t
 from dataclasses import dataclass
 from pathlib import Path
+import itertools
 
 import pandas as pd
 
@@ -11,6 +12,11 @@ import kye.compiled as compiled
 from kye.vm.vm import VM
 
 Expr = t.List[tuple[OP, list]]
+
+def hash_columns(df: pd.DataFrame) -> pd.Series:
+    if len(df.columns) == 1:
+        return df.iloc[:, 0]
+    return df.apply(tuple, axis=1)
 
 class Loader:
     reporter: ValidationErrorReporter
@@ -125,10 +131,25 @@ class Loader:
             df.drop(df[~mask].index, inplace=True)
             if df.empty:
                 return None
-
-        has_duplicate_index = df[df.duplicated(subset=source.index, keep=False)]
-        if not has_duplicate_index.empty:
-            raise Exception(f"Index columns {source.index} must be unique")
+        
+        # Check that sub-indexes are unique to each other
+        if len(source.indexes) > 1:
+            mask = pd.Series(True, index=df.index)
+            idx = hash_columns(df[source.index])
+            if len(source.indexes) > 0:
+                for sub_idx_edges in source.indexes:
+                    sub_idx = hash_columns(df[sub_idx_edges])
+                    invalid = idx.groupby(sub_idx).nunique() != 1
+                    if invalid.any():
+                        invalid_rows = sub_idx.isin(invalid[invalid].index)
+                        rows = invalid_rows[invalid_rows].index.tolist()
+                        mask &= ~invalid_rows
+                        self.reporter.non_unique_sub_index(source, sub_idx_edges, rows)
+            if not mask.all():
+                # print(f'dropping {df.shape[0] - mask.sum()} rows')
+                df.drop(df[~mask].index, inplace=True)
+                if df.empty:
+                    return None
         
         # if not is_index_unique:
         #     non_plural_columns = [
