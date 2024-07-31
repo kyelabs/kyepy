@@ -115,10 +115,9 @@ class Loader:
                     sub_idx = hash_columns(df[sub_idx_edges])
                     invalid = idx.groupby(sub_idx).nunique() != 1
                     if invalid.any():
-                        invalid_rows = sub_idx.isin(invalid[invalid].index)
-                        rows = invalid_rows[invalid_rows].index.tolist()
-                        mask &= ~invalid_rows
-                        self.reporter.non_unique_sub_index(source, sub_idx_edges, rows)
+                        invalid_rows = pd.Series(df.index, index=sub_idx)[invalid]
+                        mask.loc[invalid_rows] = False # type: ignore
+                        self.reporter.non_unique_sub_index(source, sub_idx_edges, invalid_rows.tolist())
             if not mask.all():
                 df.drop(df[~mask].index, inplace=True)
                 if df.empty:
