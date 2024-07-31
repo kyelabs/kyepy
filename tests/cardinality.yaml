@@ -53,7 +53,7 @@
       many*: Number
     }
   tests:
-    - test: allow null value
+    - test: don't allow multiple values
       data:
         User:
           - id: 1
@@ -61,6 +61,12 @@
             optional: 0
           - id: 3
             many: 1
+          - id: 4
+            optional: [1, 2] # Don't allow multiple values
+      errors:
+        - err: MultipleValues
+          col: optional
+          row: [3]
 - feature: Multi-Value columns
   schema: >
     Post(id) {
