@@ -113,7 +113,7 @@ class ValidationErrorReporter(ErrorReporter):
         })
     
     def print_highlighted_df(self):
-        ROW_COUNT = 5
+        ROW_COUNT = 10
         if not self.had_error:
             return
         all_rows = False
@@ -126,12 +126,15 @@ class ValidationErrorReporter(ErrorReporter):
             rows.update(err.rows)
             cols.update(err.edges)
         rows = sorted(list(rows))
+        num_errors = len(rows)
         if all_rows:
             rows += self.df.head(ROW_COUNT).index.tolist()
         rows = rows[:ROW_COUNT]
         # make column order match original order of columns
         cols = [col for col in self.df.columns if col in cols]
         print(self.df.loc[rows, cols].reset_index().to_string(index=False))
+        if num_errors > len(rows):
+            print(f'... and {num_errors - len(rows)} more rows')
     
     def report(self):
         for err in self.errors:
