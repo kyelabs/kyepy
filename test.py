@@ -54,17 +54,22 @@ if __name__ == "__main__":
         if test_cases is None:
             continue
         for test_case in test_cases:
+            kye = Kye()
+            successful_compilation = kye.compile(test_case['schema'])
+            
+            # Check for successful compilation
+            if not successful_compilation:
+                printer.update_loc(file, test_case['feature'])
+                print('\n'+test_case['schema'])
+                kye.reporter.report()
+                raise Exception('Failed to compile schema')
+            compiled = kye.compiled
+            assert compiled is not None
+            
             for test in test_case['tests']:
                 if ONLY_RUN_DEBUG and not test.get('debug'):
                     continue
-                kye = Kye()
-                successful_compilation = kye.compile(test_case['schema'])
-                
-                # Check for successful compilation
-                if not successful_compilation:
-                    printer.failure(file, test_case['feature'], test['test'])
-                    kye.reporter.report()
-                    raise Exception('Failed to compile schema')
+                kye.load_compiled(compiled)
                 
                 # Load the data
                 for model_name, rows in test['data'].items():
@@ -104,3 +109,5 @@ if __name__ == "__main__":
                 # If debugging then print the errors
                 if ONLY_RUN_DEBUG:
                     kye.reporter.report()
+    if printer.loc == (None, None):
+        print('No tests found')
