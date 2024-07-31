@@ -76,31 +76,6 @@ class Loader:
         if is_missing_index_column:
             return None
 
-        # Run cardinality assertions
-        mask = pd.Series(True, index=df.index)
-        for col_name in df.columns:
-            col = df[col_name]
-            edge = source[col_name]
-            g = col.explode().dropna().groupby(level=0)
-            if not edge.many or not edge.null:
-                cnts = g.nunique().reindex(col.index, fill_value=0)
-                if not edge.many:
-                    has_many = cnts > 1
-                    if has_many.any():
-                        mask &= ~has_many
-                        self.reporter.multiple_values(source[col_name], has_many[has_many].index.tolist())
-                if not edge.null:
-                    is_null = cnts == 0
-                    if is_null.any():
-                        mask &= ~is_null
-                        self.reporter.missing_values(source[col_name], is_null[is_null].index.tolist())
-            df[col_name] = g.agg('unique' if edge.many else 'first').reindex(col.index)
-        if not mask.all():
-            # print(f'dropping {df.shape[0] - mask.sum()} rows')
-            df.drop(df[~mask].index, inplace=True)
-            if df.empty:
-                return None
-
         # Check the type of each column
         drop_columns = []
         for col_name in df.columns:
@@ -127,7 +102,6 @@ class Loader:
                     mask &= result
                     self.reporter.assertion_failed(assertion, result[~result].index.tolist())
         if not mask.all():
-            # print(f'dropping {df.shape[0] - mask.sum()} rows')
             df.drop(df[~mask].index, inplace=True)
             if df.empty:
                 return None
@@ -146,25 +120,39 @@ class Loader:
                         mask &= ~invalid_rows
                         self.reporter.non_unique_sub_index(source, sub_idx_edges, rows)
             if not mask.all():
-                # print(f'dropping {df.shape[0] - mask.sum()} rows')
                 df.drop(df[~mask].index, inplace=True)
                 if df.empty:
                     return None
+
+        # Run cardinality assertions and groupby the index
+        idx = hash_columns(df[source.index]).rename(source.name)
+        reversed_idx = pd.Series(df.index, index=idx)
+        grouped_df = pd.DataFrame(index=idx.drop_duplicates())
+        df.set_index(idx, inplace=True)
+        mask = pd.Series(True, index=grouped_df.index)
+        for col_name in df.columns:
+            col = df[col_name]
+            edge = source[col_name]
+            g = col.explode().dropna().groupby(level=0)
+            if not edge.many or not edge.null:
+                nunique = g.nunique().reindex(grouped_df.index, fill_value=0)
+                if not edge.many:
+                    has_many = nunique > 1
+                    if has_many.any():
+                        mask &= ~has_many
+                        self.reporter.multiple_values(source[col_name], reversed_idx.loc[has_many].tolist())
+                if not edge.null:
+                    is_null = nunique == 0
+                    if is_null.any():
+                        mask &= ~is_null
+                        self.reporter.missing_values(source[col_name], reversed_idx.loc[is_null].tolist())
+            grouped_df[col_name] = g.agg('unique' if edge.many else 'first')
+        df = grouped_df
+        if not mask.all():
+            df.drop(df[~mask].index, inplace=True)
+            if df.empty:
+                return None
         
-        # if not is_index_unique:
-        #     non_plural_columns = [
-        #         edge for edge in columns
-        #         if not source[edge].allows_many
-        #     ]
-        #     t = table.aggregate(
-        #         by=source.index, # type:ignore 
-        #         **{
-        #             edge: _[edge].nunique() # type: ignore
-        #             for edge in non_plural_columns
-        #         }
-        #     )
-        #     table = table.select(source.index + non_plural_columns).distinct(on=source.index)
-        #     print('hi')
         self.tables[source_name] = df
     
     def get_source(self, source: str):
