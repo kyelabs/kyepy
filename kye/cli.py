@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 # import os
 
 from kye.kye import Kye
+from kye.__about__ import __version__
 
 # def setup_readline():
 #     histfile = os.path.join(os.path.expanduser("~"), ".kye_history")
@@ -55,6 +56,7 @@ parser.add_argument('-m','--model', dest='model_name',
                     help="Model to load")
 parser.add_argument('-c','--compiled', dest='compiled_out',
                     help="Output compiled file")
+parser.add_argument('-v','--version', action='version', version=__version__)
 
 
 def main():
