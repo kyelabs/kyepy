@@ -1,6 +1,5 @@
 # Kye Validation Tool
-Kye is a validation tool in progress that allows you to define and validate
-models for your data.
+Kye is a validation tool in progress that allows you to define models to validate your data against.
 
 # Getting Started
 
@@ -9,71 +8,78 @@ models for your data.
 pip install kye
 ```
 
-### Define Models
-Models can be defined in either a `models.yaml` file or a `models.kye` file. Create your models file in the same directory as your python scripts
-
-
-#### Yaml Models
-Here is an example of a `models.yaml` file:
-```yaml
-# Define a model for each table
-# using the table name as the key
-models:
-  User:
-    # List of indexes means that
-    # both `id` and `name` should both be able
-    # to uniquely identify a `User`
-    indexes:
-      - id
-      - username
-    # Edges are the name and value type of each column
-    edges:
-      id: Number
-      username: String
-      name: String
-      # Add a `?` to the end of the column name
-      # if the value is allowed to be null
-      age?: Number
-  Post:
-    # The `index` field is a shorthand for `indexes`
-    # when there is only a single field used to identify a model
-    index: id
-    edges:
-      id: Number
-      # Coming soon is the ability to define relationships with other models
-      author: User
+### Run
+Pass the location of the kye file, the data (`.csv`, `.json` or `.jsonl`) file, and the name of the Model to evaluate the data against. If the data does not pass the model's assertions then the errors and errant data will be displayed.
+```
+kye user.kye --data users.csv --model User
 ```
 
-#### Kye Models
-Here is the same definitions as above, but as a kye script in `models.kye`
+Models are defined in a `.kye` file using the Kye language. 
+
+The Kye language can optionally be compiled into a json or yaml file. Using the `-c` flag followed by a path to a `.json` or `.yaml` file. Run the compiled file like you would a normal `.kye` file
+```
+kye user.kye -c user.kye.yaml
+kye user.kye.yaml --data users.csv --model User
+```
+
+### Kye Models
 ```kye
-model User(id)(username) {
+User(id)(username) {
   id: Number
   username: String
   name: String
   age?: Number
-}
 
-model Post(id) {
-  id: Number
-  author: User
+  assert age > 0 & age <= 120
 }
 ```
 
-### Usage in Python
-Add the `kye.validate('<Model Name>')` decorator to your python loading
-functions and library will throw an error if the return value of your
-function does not match your defined model.
+#### Models
 
-Right now the validation decorator only works with data that is returned
-as a list of dictionaries, but support for more data formats like pandas data frames will soon follow.
+The above Kye script defines a `User` table.
+Table names must be upper-cased.
 
-```python
-import requests
+#### Indexes
 
-import kye
+The name of the table is followed by its index definition.
+The `(id)(username)` means that we expect
+both the `id` or `username` columns to be able
+to uniquely identify a record.
 
-@kye.validate('User')
-def get_users():
-  return requests.get('/api/v1/users').json()
+Composite indexes are defined by listing multiple
+column names within a single set of parenthesis ex. `(id, username)`
+
+#### Columns
+
+Column names must start with a lowercase and not contain 
+spaces or other special characters. If the source data has
+column names that don't follow these rules, then you can specify
+the full column name in quotes after the column name.
 ```
+  id "User Id": Number
+```
+
+The column definitions specify the value type as `Number`, `String` or `Boolean`. More data types like date/time and user defined types are coming soon.
+
+You can specify whether the column allows null values by prefixing the colon with a `?`
+```
+age?: Number
+```
+
+You can also specify if the column allows multiple values (like an array of values) by using `+` if you expect at least one value, or `*` if it is okay to have no values.
+```
+# Expect at least one version
+versions+: String
+
+# It's okay for a post to have no tags
+tags*: String 
+```
+
+#### Assertions
+You can specify extra assertions through the `assert` keyword. Just write an expression that evaluates to true or false, and the rows that evaluate to false will be flagged. You can reference columns by their names.
+
+Expressions support the basic operations:
+- `+ - * / %` math
+- `== != >= > < <=` comparison
+- `! & | ^` logical (not, and, or, xor)
+- `()` parenthesis
