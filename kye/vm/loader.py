@@ -110,18 +110,18 @@ class Loader:
         if len(source.indexes) > 1:
             mask = pd.Series(True, index=df.index)
             idx = hash_columns(df[source.index])
-            if len(source.indexes) > 0:
-                for sub_idx_edges in source.indexes:
-                    sub_idx = hash_columns(df[sub_idx_edges])
-                    invalid = idx.groupby(sub_idx).nunique() != 1
-                    if invalid.any():
-                        invalid_rows = pd.Series(df.index, index=sub_idx)[invalid]
-                        mask.loc[invalid_rows] = False # type: ignore
-                        self.reporter.non_unique_sub_index(source, sub_idx_edges, invalid_rows.tolist())
+            for sub_idx_edges in source.indexes:
+                sub_idx = hash_columns(df[sub_idx_edges])
+                invalid = idx.groupby(sub_idx).nunique() != 1
+                if invalid.any():
+                    invalid_rows = pd.Series(df.index, index=sub_idx)[invalid]
+                    mask.loc[invalid_rows] = False # type: ignore
+                    self.reporter.non_unique_sub_index(source, sub_idx_edges, invalid_rows.tolist())
             if not mask.all():
                 df.drop(df[~mask].index, inplace=True)
                 if df.empty:
                     return None
+                
 
         # Run cardinality assertions and groupby the index
         idx = hash_columns(df[source.index]).rename(source.name)
@@ -151,6 +151,31 @@ class Loader:
             df.drop(df[~mask].index, inplace=True)
             if df.empty:
                 return None
+        
+        # Check for index conflicts
+        if len(source.indexes) > 1:
+            mask = pd.Series(True, index=df.index)
+            for idx1_id, idx2_id in itertools.combinations(range(len(source.indexes)), 2):
+                idx1 = source.indexes[idx1_id]
+                idx2 = source.indexes[idx2_id]
+                # TODO: Check if compatible index types
+                if len(idx1) != len(idx2):
+                    continue
+
+                t = pd.concat([
+                    hash_columns(df[idx1]),
+                    hash_columns(df[idx2]),
+                ])
+                t = pd.Series(t.index, index=t) # flip index/value
+                invalid = t[t.groupby(level=0).nunique() > 1]
+                if not invalid.empty:
+                    mask.loc[invalid] = False
+                    invalid_rows = reversed_idx.loc[invalid].tolist()
+                    self.reporter.index_conflict(source, list(set(idx1) | set(idx2)), invalid_rows)
+            if not mask.all():
+                df.drop(df[~mask].index, inplace=True)
+                if df.empty:
+                    return None
         
         self.tables[source_name] = df
     

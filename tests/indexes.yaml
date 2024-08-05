@@ -28,7 +28,6 @@
     }
   tests:
     - test: allow unique composite indexes
-      debug: true
       data:
         Date:
           - id: 1
@@ -70,45 +69,55 @@
         - err: NonUniqueSubIndex
           col: [year, month, day]
           row: [4, 5]
-# - feature: Conflicting index detection
-#   schema: >
-#     Employee(id)(external_id) {
-#       id: Number
-#       external_id: Number
-#     }
-#   tests:
-#     - test: dont allow ambiguous index values
-#       valid: false
-#       data:
-#         Employee:
-#           - id: 0
-#             external_id: 1000
-#           - id: 1000          # could get confused with external_id of other employee
-#             external_id: 1001
-#     - test: allow indexes to have the same value
-#       valid: true
-#       data:
-#         Employee:
-#           - id: 0
-#             external_id: 0
-# - feature: Conflicting composite index detection
-#   schema: >
-#     Foo(ax,ay)(bx,by) {
-#       ax: Number
-#       ay: Number
-#       bx: Number
-#       by: Number
-#     }
-#   tests:
-#     - test: dont allow ambiguous index values
-#       valid: false
-#       data:
-#         Foo:
-#           - key1a: 10
-#             key1b: 11
-#             key2a: 20
-#             key2b: 21
-#           - key1a: 15
-#             key1b: 16
-#             key2a: 10
-#             key2b: 11
+- feature: Conflicting index detection
+  schema: >
+    Employee(id1)(id2)(other) {
+      id1: Number
+      id2: Number
+      other: String
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      data:
+        Employee:
+          - id1: 0
+            id2: 1000
+            other: a
+          - id1: 1000   # could get confused with id2 of first row
+            id2: 1001
+            other: b
+          - id1: 2      # allow conflicts if they are not ambiguous
+            id2: 2
+            other: c
+      errors:
+        - err: IndexConflict
+          col: [id1, id2]
+          row: [0, 1]
+- feature: Conflicting composite index detection
+  schema: >
+    Foo(ax,ay)(bx,by) {
+      ax: Number
+      ay: Number
+      bx: Number
+      by: Number
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      data:
+        Foo:
+          - ax: 10
+            ay: 11
+            bx: 20
+            by: 21
+          - ax: 12
+            ay: 13
+            bx: 10 # bx/by conflicts with ax/ay of first row 
+            by: 11
+          - ax: 30 # allow conflicts if they are not ambiguous
+            ay: 31
+            bx: 30
+            by: 31
+      errors:
+        - err: IndexConflict
+          col: [ax, ay, bx, by]
+          row: [0, 1]
