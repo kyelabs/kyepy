@@ -85,9 +85,9 @@ class VM:
             return args[0] < args[1]
         elif op == OP.GT:
             return args[0] > args[1]
-        elif op == OP.LTE:
+        elif op == OP.LE:
             return args[0] <= args[1]
-        elif op == OP.GTE:
+        elif op == OP.GE:
             return args[0] >= args[1]
         elif op == OP.ADD:
             return args[0] + args[1]
