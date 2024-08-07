@@ -49,6 +49,12 @@ class TypeBuilder(ast.Visitor):
         
         expr = self.visit(edge_ast.expr)
         returns = None
+        if isinstance(expr, typ.Const):
+            returns = expr.type
+            self.this.assertions.append(typ.Assertion(
+                expr=typ.Expr(typ.Operator.EQ.edge_name, (typ.Var(edge_ast.name.lexeme), expr)),
+                loc=edge_ast.name.loc,
+            ))
         if isinstance(expr, typ.Type):
             returns = expr
             expr = None
@@ -116,7 +122,16 @@ class TypeBuilder(ast.Visitor):
         return typ.Var(edge_name)
     
     def visit_literal(self, literal_ast: ast.Literal):
-        return typ.Const(literal_ast.value)
+        type_name = None
+        if isinstance(literal_ast.value, (int, float)):
+            type_name = 'Number'
+        elif isinstance(literal_ast.value, str):
+            type_name = 'String'
+        elif isinstance(literal_ast.value, bool):
+            type_name = 'Boolean'
+        else:
+            raise NotImplementedError('Literal type not implemented')
+        return typ.Const(literal_ast.value, self.types[type_name])
     
     def visit_binary(self, binary_ast: ast.Binary):
         left = self.visit(binary_ast.left)

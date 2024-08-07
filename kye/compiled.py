@@ -102,7 +102,10 @@ class Edge():
         if self.title:
             data['title'] = self.title
         if self.expr:
-            data['expr'] = self.expr
+            data['expr'] = [
+                cmd.to_dict()
+                for cmd in self.expr
+            ]
         if self.many:
             data['many'] = True
         if self.null:

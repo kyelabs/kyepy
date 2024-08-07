@@ -61,6 +61,8 @@ class VM:
     def run_command(self, op, args):
         if op == OP.COL:
             return self.get_column(args[0])
+        if op == OP.VAL:
+            return pd.Series(args[0], index=self.df.index)
         elif op == OP.STR:
             return args[0].astype(str)
         elif op == OP.NA:

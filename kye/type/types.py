@@ -60,10 +60,12 @@ class Expr:
 
 class Const(Expr):
     value: t.Any
+    type: Type
 
-    def __init__(self, value: t.Any):
+    def __init__(self, value: t.Any, type: Type):
         super().__init__('const', [])
         self.value = value
+        self.type = type
 
     def __repr__(self):
         return repr(self.value)

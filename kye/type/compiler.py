@@ -63,6 +63,9 @@ def compile_expr( expr: typ.Expr) -> t.Iterator[Cmd]:
     if isinstance(expr, typ.Var):
         yield Cmd(op=OP.COL, args=[ expr.name ])
         return
+    if isinstance(expr, typ.Const):
+        yield Cmd(op=OP.VAL, args=[ expr.value ])
+        return
     assert expr.name.startswith('$')
     op = OP[expr.name[1:].upper()]
     args = []
