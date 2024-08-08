@@ -51,13 +51,14 @@ class TypeBuilder(ast.Visitor):
         returns = None
         if isinstance(expr, typ.Const):
             returns = expr.type
-            self.this.assertions.append(typ.Assertion(
-                expr=typ.Expr(typ.Operator.EQ.edge_name, (typ.Var(edge_ast.name.lexeme), expr)),
-                loc=edge_ast.name.loc,
-            ))
         if isinstance(expr, typ.Type):
             returns = expr
             expr = None
+        if returns is not None:
+            for assertion in returns.assertions:
+                self.this.assertions.append(
+                    assertion.replace_this_with(typ.Var(edge_ast.name.lexeme))
+                )
         
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
@@ -75,6 +76,8 @@ class TypeBuilder(ast.Visitor):
     
     def visit_type(self, type_ast: ast.Type):
         value = self.visit(type_ast.expr)
+        if isinstance(value, typ.Const):
+            value = value.type
         assert isinstance(value, typ.Type)
         type = value.clone()
         type.name = type_ast.name.lexeme
@@ -131,7 +134,13 @@ class TypeBuilder(ast.Visitor):
             type_name = 'Boolean'
         else:
             raise NotImplementedError('Literal type not implemented')
-        return typ.Const(literal_ast.value, self.types[type_name])
+        type = self.types[type_name].clone()
+        const = typ.Const(literal_ast.value, type)
+        type.assertions.append(typ.Assertion(
+            expr=typ.Expr(typ.Operator.EQ.edge_name, (typ.This(), const)),
+            loc=literal_ast.token.loc,
+        ))
+        return const
     
     def visit_binary(self, binary_ast: ast.Binary):
         left = self.visit(binary_ast.left)

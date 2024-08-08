@@ -55,6 +55,9 @@ class Expr:
         self.name = name
         self.args = tuple(args)
     
+    def replace_this_with(self, new_this: Expr) -> Expr:
+        return self.__class__(self.name, (arg.replace_this_with(new_this) for arg in self.args))
+    
     def __repr__(self):
         return f"{self.name}({', '.join(repr(arg) for arg in self.args)})"
 
@@ -66,6 +69,9 @@ class Const(Expr):
         super().__init__('const', [])
         self.value = value
         self.type = type
+    
+    def replace_this_with(self, new_this: Expr) -> Expr:
+        return self.__class__(self.value, self.type)
 
     def __repr__(self):
         return repr(self.value)
@@ -79,6 +85,16 @@ class Var(Expr):
 
     def __repr__(self):
         return f"Var({self.name!r})"
+
+class This(Expr):
+    def __init__(self):
+        super().__init__('this', [])
+    
+    def replace_this_with(self, new_this: Expr) -> Expr:
+        return new_this
+
+    def __repr__(self):
+        return "This()"
 
 
 class Indexes:
@@ -125,6 +141,12 @@ class Edge:
 class Assertion:
     expr: Expr
     loc: t.Optional[Location]
+    
+    def replace_this_with(self, new_this: Expr) -> Assertion:
+        return Assertion(
+            expr=self.expr.replace_this_with(new_this),
+            loc=self.loc,
+        )
 
 class Type:
     name: str

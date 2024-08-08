@@ -40,11 +40,14 @@ def compile_type( type: typ.Type):
 
 def compile_edge(model_name: str, edge: typ.Edge) -> Edge:
     assert edge.returns is not None
+    type_name = edge.returns.name
+    if edge.returns.parent:
+        type_name = edge.returns.ancestors[-1].name
     return Edge(
         model=model_name,
         name=edge.name,
         title=edge.title,
-        type=edge.returns.name,
+        type=type_name,
         expr=list(compile_expr(edge.expr)) if edge.expr else None,
         many=edge.allows_many,
         null=edge.allows_null,

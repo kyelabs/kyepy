@@ -108,7 +108,7 @@ if __name__ == "__main__":
                 printer.failure(test_case['feature'], test['test'])
                 kye.reporter.report()
                 print(error_df[error_df['unused']].drop(columns=['unused']))
-                raise Exception('Found unexpected errors')
+                raise Exception('Unused errors')
 
             # Success!
             printer.success(test_case['feature'], test['test'])

@@ -122,10 +122,11 @@
           col: [ax, ay, bx, by]
           row: [0, 1]
 - feature: Basic schema checks
-  schema: > 
+  schema: >
+    BooleanAlias: Boolean
     User(id) {
       id: Number
-      admin: Boolean
+      admin: BooleanAlias
       name?: String
     }
   tests:
@@ -481,22 +482,26 @@
         - err: MultipleValues
           col: title
           row: [5]
-- feature: Equals Constant
+- feature: Type Aliases
   schema: >
-    User(id) {
+    ConstAlias: "ALIAS_CONST"
+    Model(id) {
       id: Number
-      type?: "USER"
+      direct_const?: "DIRECT_CONST"
+      alias_const?: ConstAlias
     }
   tests:
     - test: equals constant
       data:
-        User:
+        Model:
           - id: 1 
-            type: "USER"
+            direct_const: "DIRECT_CONST"
+            alias_const: "ALIAS_CONST"
           - id: 2 # allows for missing
           - id: 3 # errors on not matching
-            type: "ADMIN"
+            direct_const: "WRONG_DIRECT_CONST"
+            alias_const: "WRONG_ALIAS_CONST"
       errors:
         - err: AssertionFailed
-          col: type
+          col: [direct_const, alias_const]
           row: 2
