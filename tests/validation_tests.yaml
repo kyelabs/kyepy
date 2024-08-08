@@ -1,0 +1,502 @@
+- feature: MultiIndex
+  schema: >
+    User(id)(username) {
+      id: Number
+      username: String
+    }
+  tests:
+    - test: disallow non-unique multi indexes
+      data:
+        User:
+          - id: 0
+            username: a
+          - id: 1
+            username: b # User 1 and 2 have the same username
+          - id: 2
+            username: b
+      errors:
+        - err: NonUniqueSubIndex
+          col: username
+          row: [1, 2]
+- feature: Composite Index
+  schema: >
+    Date(id)(year, month, day) {
+      id: Number
+      year: Number
+      month: Number
+      day: Number
+    }
+  tests:
+    - test: allow unique composite indexes
+      data:
+        Date:
+          - id: 1
+            year: 2000
+            month: 1
+            day: 1
+          - id: 1
+            year: 2001 # different year
+            month: 1
+            day: 1
+          - id: 1
+            year: 2000
+            month: 2   # different month
+            day: 1
+          - id: 1
+            year: 2000
+            month: 1  
+            day: 2     # different day
+          - id: 2
+            year: 2010
+            month: 1
+            day: 1
+          - id: 3      # duplicate date
+            year: 2010
+            month: 1
+            day: 1
+          - id: 4     # nothing wrong with duplicate
+            year: 2020
+            month: 1
+            day: 1
+          - id: 4     # nothing wrong with duplicate
+            year: 2020
+            month: 1
+            day: 1
+      errors:
+        - err: NonUniqueSubIndex
+          col: id
+          row: [0, 1, 2, 3]
+        - err: NonUniqueSubIndex
+          col: [year, month, day]
+          row: [4, 5]
+- feature: Conflicting index detection
+  schema: >
+    Employee(id1)(id2)(other) {
+      id1: Number
+      id2: Number
+      other: String
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      data:
+        Employee:
+          - id1: 0
+            id2: 1000
+            other: a
+          - id1: 1000   # could get confused with id2 of first row
+            id2: 1001
+            other: b
+          - id1: 2      # allow conflicts if they are not ambiguous
+            id2: 2
+            other: c
+      errors:
+        - err: IndexConflict
+          col: [id1, id2]
+          row: [0, 1]
+- feature: Conflicting composite index detection
+  schema: >
+    Foo(ax,ay)(bx,by) {
+      ax: Number
+      ay: Number
+      bx: Number
+      by: Number
+    }
+  tests:
+    - test: dont allow ambiguous index values
+      data:
+        Foo:
+          - ax: 10
+            ay: 11
+            bx: 20
+            by: 21
+          - ax: 12
+            ay: 13
+            bx: 10 # bx/by conflicts with ax/ay of first row 
+            by: 11
+          - ax: 30 # allow conflicts if they are not ambiguous
+            ay: 31
+            bx: 30
+            by: 31
+      errors:
+        - err: IndexConflict
+          col: [ax, ay, bx, by]
+          row: [0, 1]
+- feature: Basic schema checks
+  schema: > 
+    User(id) {
+      id: Number
+      admin: Boolean
+      name?: String
+    }
+  tests:
+    - test: basic type checking
+      data:
+        User:
+          - id: 0
+            admin: false
+          - id: not_a_number
+            admin: false
+          - id: 0
+            admin: not_a_boolean
+      errors:
+        - err: InvalidType
+          col: id
+        - err: InvalidType
+          col: admin
+    - test: ignore entirely null columns
+      data:
+        User:
+          - id: 0
+            name: null
+          - id: 1
+            name: null
+# - feature: Number Formatting
+#   schema: >
+#     Numbers(id) {
+#       id: Number
+#       thousands?: Number<,>
+#       max_whole?: Number<3>
+#       integer?: Number<.0>
+#       min_whole?: Number<.-2>
+#       min_decimal?: Number<-2>
+#     }
+#   tests:
+#     - test: allow numeric types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: 123456
+#             max_whole: 123.456
+#             integer: 123
+#             min_whole: 100.000
+#             min_decimal: 000.006
+#           - id: 1
+#             thousands: -123456
+#             max_whole: -123.456
+#             integer: -123
+#             min_whole: -100.000
+#             min_decimal: -000.006
+#           - id: 2
+#             thousands: 0
+#             max_whole: 0
+#             integer: 0
+#             min_whole: 0
+#             min_decimal: 0
+#     - test: allow string types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: '123,456'
+#             max_whole: '123.456'
+#             integer: '123.0'
+#             min_whole: '100.000'
+#             min_decimal: '000.006'
+#           - id: 1
+#             thousands: '-123,456'
+#             max_whole: '-123.456'
+#             integer: '-123.0'
+#             min_whole: '-100.000'
+#             min_decimal: '-000.006'
+#           - id: 2
+#             thousands: '0'
+#             max_whole: '0'
+#             integer: '0'
+#             min_whole: '0'
+#             min_decimal: '0'
+#           - id: 3
+#             thousands: '000,000'
+#             max_whole: '0000.0000'
+#             integer: '0000.0000'
+#             min_whole: '0000.0000'
+#             min_decimal: '0000.0000'
+#     - test: allow mixed types
+#       valid: true
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: 123456
+#             max_whole: 123.45678
+#             integer: 12345.0
+#             min_whole: 100.000
+#             min_decimal: 000.001
+#           - id: 1
+#             thousands: '123,456'
+#             max_whole: '123.456'
+#             integer: '123'
+#             min_whole: '100.000'
+#             min_decimal: '000.006'
+#     - test: catch bad thousands
+#       valid: false
+#       data: 
+#         Numbers:
+#           - id: 0
+#             thousands: '1,0000'
+#     - test: catch integer dtype when has decimal
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             integer: 1.1
+#     - test: catch past max whole numeric
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             max_whole: 4321
+#     - test: catch past max whole string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             max_whole: '4321'
+#     - test: catch non-integer string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             integer: '0.1234'
+#     # - test: catch past min whole string
+#     #   valid: false
+#     #   data:
+#     #     Numbers:
+#     #       - id: 0
+#     #         max_whole: '120'
+#     - test: catch past min decimal string
+#       valid: false
+#       data:
+#         Numbers:
+#           - id: 0
+#             min_decimal: '0.012'
+- feature: Required columns
+  schema: >
+    User(id)(name) {
+      id: Number
+      name: String
+      required: Boolean
+    }
+  tests:
+    - test: all columns defined is valid
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: True
+    - test: allows missing column
+      data:
+        User:
+          - id: 0
+            name: bob
+    - test: missing index columns
+      data:
+        User:
+          - required: True
+          - required: False
+      errors:
+        - err: MissingIndex
+          col: [id, name]
+    - test: missing partial index
+      data:
+        User:
+          - id: 0
+            required: True
+      errors:
+        - err: MissingIndex
+          col: name
+    - test: missing value in row
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: True
+          - id: 1
+            name: sally
+      errors:
+        - err: MissingValue
+          col: required
+          row: 1
+- feature: Optional columns
+  schema: >
+    User(id) {
+      id: Number
+      optional?: Number
+      many*: Number
+    }
+  tests:
+    - test: don't allow multiple values
+      data:
+        User:
+          - id: 1
+          - id: 2
+            optional: 0
+          - id: 3
+            many: 1
+          - id: 4
+            optional: [1, 2] # Don't allow multiple values
+      errors:
+        - err: MultipleValues
+          col: optional
+          row: [3]
+- feature: Multi-Value columns
+  schema: >
+    Post(id) {
+      id: Number
+      title: String
+      author: String
+      tags*: String
+    }
+  tests:
+    - test: aggregate by index and test for multiple values
+      data:
+        Post:
+          - id: 1
+            title: [ "Post 1" ] # Single value lists are fine
+            author: [ ben, ben ] # Duplicate values are fine
+            tags: funny
+          - id: 2
+            title: "Post 2"
+            author: bob
+            tags: [funny, great]
+          - id: 2 # Should allow entirely missing values
+          - id: 3
+            title: "Post 3"
+            author: bill
+          - id: 3
+            title: "Post 3 again" # Same post, different title, should throw an error
+            author: bill # Same post, same author is fine
+          - id: 4
+            title: ["Post 4", "Post 4 again"] # Should not allow multiple values in list
+            author: susan
+      errors:
+        - err: MultipleValues
+          col: title
+          row: [3, 4]
+        - err: MultipleValues
+          col: title
+          row: [5]
+- feature: Required columns
+  schema: >
+    User(id)(name) {
+      id: Number
+      name: String
+      required: Boolean
+    }
+  tests:
+    - test: all columns defined is valid
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: True
+    - test: allows missing column
+      data:
+        User:
+          - id: 0
+            name: bob
+    - test: missing index columns
+      data:
+        User:
+          - required: True
+          - required: False
+      errors:
+        - err: MissingIndex
+          col: [id, name]
+    - test: missing partial index
+      data:
+        User:
+          - id: 0
+            required: True
+      errors:
+        - err: MissingIndex
+          col: name
+    - test: missing value in row
+      data:
+        User:
+          - id: 0
+            name: bob
+            required: True
+          - id: 1
+            name: sally
+      errors:
+        - err: MissingValue
+          col: required
+          row: 1
+- feature: Optional columns
+  schema: >
+    User(id) {
+      id: Number
+      optional?: Number
+      many*: Number
+    }
+  tests:
+    - test: don't allow multiple values
+      data:
+        User:
+          - id: 1
+          - id: 2
+            optional: 0
+          - id: 3
+            many: 1
+          - id: 4
+            optional: [1, 2] # Don't allow multiple values
+      errors:
+        - err: MultipleValues
+          col: optional
+          row: [3]
+- feature: Multi-Value columns
+  schema: >
+    Post(id) {
+      id: Number
+      title: String
+      author: String
+      tags*: String
+    }
+  tests:
+    - test: aggregate by index and test for multiple values
+      data:
+        Post:
+          - id: 1
+            title: [ "Post 1" ] # Single value lists are fine
+            author: [ ben, ben ] # Duplicate values are fine
+            tags: funny
+          - id: 2
+            title: "Post 2"
+            author: bob
+            tags: [funny, great]
+          - id: 2 # Should allow entirely missing values
+          - id: 3
+            title: "Post 3"
+            author: bill
+          - id: 3
+            title: "Post 3 again" # Same post, different title, should throw an error
+            author: bill # Same post, same author is fine
+          - id: 4
+            title: ["Post 4", "Post 4 again"] # Should not allow multiple values in list
+            author: susan
+      errors:
+        - err: MultipleValues
+          col: title
+          row: [3, 4]
+        - err: MultipleValues
+          col: title
+          row: [5]
+- feature: Equals Constant
+  schema: >
+    User(id) {
+      id: Number
+      type?: "USER"
+    }
+  tests:
+    - test: equals constant
+      data:
+        User:
+          - id: 1 
+            type: "USER"
+          - id: 2 # allows for missing
+          - id: 3 # errors on not matching
+            type: "ADMIN"
+      errors:
+        - err: AssertionFailed
+          col: type
+          row: 2
