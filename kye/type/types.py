@@ -55,23 +55,15 @@ class Expr:
         self.name = name
         self.args = tuple(args)
     
-    def replace_this_with(self, new_this: Expr) -> Expr:
-        return self.__class__(self.name, (arg.replace_this_with(new_this) for arg in self.args))
-    
     def __repr__(self):
         return f"{self.name}({', '.join(repr(arg) for arg in self.args)})"
 
 class Const(Expr):
     value: t.Any
-    type: Type
 
-    def __init__(self, value: t.Any, type: Type):
+    def __init__(self, value: t.Any):
         super().__init__('const', [])
         self.value = value
-        self.type = type
-    
-    def replace_this_with(self, new_this: Expr) -> Expr:
-        return self.__class__(self.value, self.type)
 
     def __repr__(self):
         return repr(self.value)
@@ -89,9 +81,6 @@ class Var(Expr):
 class This(Expr):
     def __init__(self):
         super().__init__('this', [])
-    
-    def replace_this_with(self, new_this: Expr) -> Expr:
-        return new_this
 
     def __repr__(self):
         return "This()"
@@ -141,12 +130,6 @@ class Edge:
 class Assertion:
     expr: Expr
     loc: t.Optional[Location]
-    
-    def replace_this_with(self, new_this: Expr) -> Assertion:
-        return Assertion(
-            expr=self.expr.replace_this_with(new_this),
-            loc=self.loc,
-        )
 
 class Type:
     name: str
@@ -156,7 +139,6 @@ class Type:
     edge_order: t.List[str]
     filters: t.List[Expr]
     assertions: t.List[Assertion]
-    is_const: bool = False
     
     def __init__(self, name: str, source: t.Optional[str], loc: t.Optional[Location] = None):
         self.name = name
@@ -167,7 +149,6 @@ class Type:
         self.edge_order = []
         self.filters = []
         self.assertions = []
-        self.is_const = False
         
     def clone(self) -> t.Self:
         child = deepcopy(self)

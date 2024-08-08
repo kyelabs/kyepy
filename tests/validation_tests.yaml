@@ -482,26 +482,47 @@
         - err: MultipleValues
           col: title
           row: [5]
-- feature: Type Aliases
-  schema: >
-    ConstAlias: "ALIAS_CONST"
-    Model(id) {
-      id: Number
-      direct_const?: "DIRECT_CONST"
-      alias_const?: ConstAlias
-    }
-  tests:
-    - test: equals constant
-      data:
-        Model:
-          - id: 1 
-            direct_const: "DIRECT_CONST"
-            alias_const: "ALIAS_CONST"
-          - id: 2 # allows for missing
-          - id: 3 # errors on not matching
-            direct_const: "WRONG_DIRECT_CONST"
-            alias_const: "WRONG_ALIAS_CONST"
-      errors:
-        - err: AssertionFailed
-          col: [direct_const, alias_const]
-          row: 2
+# - feature: Type Aliases
+#   schema: >
+#     ConstAlias: "ALIAS_CONST"
+#     Model(id) {
+#       id: Number
+#       direct_const?: "DIRECT_CONST"
+#       alias_const?: ConstAlias
+#     }
+#   tests:
+#     - test: equals constant
+#       data:
+#         Model:
+#           - id: 1 
+#             direct_const: "DIRECT_CONST"
+#             alias_const: "ALIAS_CONST"
+#           - id: 2 # allows for missing
+#           - id: 3 # errors on not matching
+#             direct_const: "WRONG_DIRECT_CONST"
+#             alias_const: "WRONG_ALIAS_CONST"
+#       errors:
+#         - col: [direct_const, alias_const]
+#           row: 2
+# - feature: Inline Enums
+#   schema: >
+#     Model(id) {
+#       id: Number
+#       inline_enum: "ENUM1" | "ENUM2" | "ENUM3"
+#     }
+#   tests:
+#     - test: inline enum
+#       debug: true
+#       data:
+#         Model:
+#           - id: 1
+#             inline_enum: "ENUM1"
+#           - id: 2
+#             inline_enum: "ENUM2"
+#           - id: 3
+#             inline_enum: "ENUM3"
+#           - id: 4
+#             inline_enum: "ENUM4"
+#       errors:
+#         - col: inline_enum
+#           row: 3
