@@ -19,7 +19,7 @@ class Error:
     expected: t.Optional[str] = None
     
     def message(self):
-        if self.err == 'WrongType':
+        if self.err == 'InvalidType':
             return f"Expected {self.model}.{self.edges[0]} to be of type '{self.expected}'"
         if self.err == 'MultipleValues':
             return f"Expected {self.model}.{self.edges[0]} to not have more than one value"
@@ -51,7 +51,7 @@ class ValidationErrorReporter(ErrorReporter):
 
     def wrong_type(self, edge: compiled.Edge):
         self.errors.append(Error(
-            err='WrongType',
+            err='InvalidType',
             model=edge.model,
             rows=[],
             edges=[edge.name],

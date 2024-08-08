@@ -184,6 +184,8 @@ class Loader:
     
     def matches_dtype(self, edge: compiled.Edge, col: pd.Series) -> bool:
         col = col.explode().dropna().infer_objects()
+        if col.empty:
+            return True
         if edge.type == 'String':
             return col.dtype == 'object'
         elif edge.type == 'Number':

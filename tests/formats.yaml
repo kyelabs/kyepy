@@ -1,28 +1,32 @@
-# - feature: Basic type checking
-#   schema: > 
-#     User(id) {
-#       id: Number
-#       admin: Boolean
-#     }
-#   tests:
-#     - test: allow good types
-#       valid: true
-#       data:
-#         User:
-#           - id: 0
-#             admin: false
-#     - test: not a Number
-#       valid: false
-#       data:
-#         User:
-#           - id: not_a_number
-#             admin: false
-#     - test: not a Boolean
-#       valid: false
-#       data:
-#         User:
-#           - id: 0
-#             admin: not_a_boolean
+- feature: Basic schema checks
+  schema: > 
+    User(id) {
+      id: Number
+      admin: Boolean
+      name?: String
+    }
+  tests:
+    - test: basic type checking
+      data:
+        User:
+          - id: 0
+            admin: false
+          - id: not_a_number
+            admin: false
+          - id: 0
+            admin: not_a_boolean
+      errors:
+        - err: InvalidType
+          col: id
+        - err: InvalidType
+          col: admin
+    - test: ignore entirely null columns
+      data:
+        User:
+          - id: 0
+            name: null
+          - id: 1
+            name: null
 # - feature: Number Formatting
 #   schema: >
 #     Numbers(id) {

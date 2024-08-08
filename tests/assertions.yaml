@@ -6,7 +6,6 @@
     }
   tests:
     - test: equals constant
-      debug: true
       data:
         User:
           - id: 1 
