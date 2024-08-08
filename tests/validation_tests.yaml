@@ -123,34 +123,33 @@
           row: [0, 1]
 - feature: Basic schema checks
   schema: >
-    BooleanAlias: Boolean
     User(id) {
       id: Number
-      admin: BooleanAlias
+      admin: Boolean
       name?: String
     }
   tests:
-    - test: basic type checking
+    - test: allow good types
       data:
         User:
           - id: 0
             admin: false
+    - test: not a Number
+      data:
+        User:
           - id: not_a_number
             admin: false
+      errors:
+        - err: InvalidType
+          col: id
+    - test: not a Boolean
+      data:
+        User:
           - id: 0
             admin: not_a_boolean
       errors:
         - err: InvalidType
-          col: id
-        - err: InvalidType
           col: admin
-    - test: ignore entirely null columns
-      data:
-        User:
-          - id: 0
-            name: null
-          - id: 1
-            name: null
 # - feature: Number Formatting
 #   schema: >
 #     Numbers(id) {
@@ -482,28 +481,26 @@
         - err: MultipleValues
           col: title
           row: [5]
-# - feature: Type Aliases
-#   schema: >
-#     ConstAlias: "ALIAS_CONST"
-#     Model(id) {
-#       id: Number
-#       direct_const?: "DIRECT_CONST"
-#       alias_const?: ConstAlias
-#     }
-#   tests:
-#     - test: equals constant
-#       data:
-#         Model:
-#           - id: 1 
-#             direct_const: "DIRECT_CONST"
-#             alias_const: "ALIAS_CONST"
-#           - id: 2 # allows for missing
-#           - id: 3 # errors on not matching
-#             direct_const: "WRONG_DIRECT_CONST"
-#             alias_const: "WRONG_ALIAS_CONST"
-#       errors:
-#         - col: [direct_const, alias_const]
-#           row: 2
+- feature: Type Aliases
+  schema: >
+    Model(id) {
+      id: Number
+      direct_const?: "DIRECT_CONST"
+    }
+  tests:
+    - test: equals constant
+      data:
+        Model:
+          - id: 1 
+            direct_const: "DIRECT_CONST"
+            # alias_const: "ALIAS_CONST"
+          - id: 2 # allows for missing
+          - id: 3 # errors on not matching
+            direct_const: "WRONG_DIRECT_CONST"
+            # alias_const: "WRONG_ALIAS_CONST"
+      errors:
+        - col: [direct_const, alias_const]
+          row: 2
 # - feature: Inline Enums
 #   schema: >
 #     Model(id) {

@@ -6,6 +6,7 @@ import pandas as pd
 import kye.parse.expressions as ast
 import kye.type.types as typ
 from kye.parse.parser import Parser
+from kye.parse.desugar import Desugar
 from kye.type.type_builder import TypeBuilder
 from kye.vm.loader import Loader
 from kye.errors.base_reporter import ErrorReporter
@@ -32,6 +33,7 @@ class Kye:
         self.reporter = CompilationErrorReporter(source)
         parser = Parser(self.reporter)
         tree = parser.parse_definitions(source)
+        Desugar().visit(tree)
         if self.reporter.had_error:
             return None
         return tree

@@ -129,7 +129,9 @@ class Location:
     def end(self):
         return self.start + self.length
 
-@dataclass(eq=True, frozen=True)
+NULL_LOCATION = Location(-1, -1, -1, 0)
+
+@dataclass
 class Token:
     type: TokenType
     lexeme: str
@@ -150,32 +152,32 @@ class Stmt(Node):
 class Expr(Node):
     pass
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Index(Node):
     paren: Token
     names: t.Tuple[Token, ...]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Block(Node):
     bracket: Token
     statements: t.Tuple[Stmt, ...]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Script(Node):
     statements: t.Tuple[Stmt, ...]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Model(Stmt):
     name: Token
     indexes: t.Tuple[Index, ...]
     body: Block
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Type(Stmt):
     name: Token
     expr: Expr
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Edge(Stmt):
     name: Token
     title: t.Optional[str]
@@ -183,59 +185,69 @@ class Edge(Stmt):
     cardinality: Cardinality
     expr: Expr
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Assert(Stmt):
     keyword: Token
     expr: Expr
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Binary(Expr):
     left: Expr
     operator: Token
     right: Expr
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Unary(Expr):
     operator: Token
     right: Expr
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Literal(Expr):
     token: Token
     value: t.Any
+    
+    @property
+    def type(self):
+        if self.token.type == TokenType.STRING:
+            return 'String'
+        if self.token.type == TokenType.NUMBER:
+            return 'Number'
+        if self.token.type == TokenType.BOOLEAN:
+            return 'Boolean'
+        raise ValueError(f"Unknown literal type: {self.token.type}")
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class TypeIdentifier(Expr):
     name: Token
     format: t.Optional[Token]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class EdgeIdentifier(Expr):
     name: Token
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Call(Expr):
     object: Expr
     paren: Token
     arguments: t.Tuple[Expr, ...]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Get(Expr):
     object: Expr
     dot: Token
     name: Token
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Filter(Expr):
     object: Expr
     bracket: Token
     conditions: t.Tuple[Expr, ...]
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class Select(Expr):
     object: Expr
     body: Block
 
-@dataclass(eq=True, frozen=True)
+@dataclass
 class This(Expr):
     keyword: Token
