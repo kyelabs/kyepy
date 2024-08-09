@@ -114,6 +114,10 @@ class TokenType(enum.Enum):
     @property
     def is_comparison(self):
         return self in (TokenType.EQ, TokenType.NE, TokenType.GT, TokenType.GE, TokenType.LT, TokenType.LE)
+    
+    @property
+    def is_logical(self) -> bool:
+        return self in (TokenType.AND, TokenType.OR, TokenType.NOT)
 
 @dataclass(eq=True, frozen=True, slots=True)
 class Location:

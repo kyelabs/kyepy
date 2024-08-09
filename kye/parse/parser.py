@@ -95,6 +95,13 @@ class Transformer(lark.Transformer):
     or_exp = _binary
     is_exp = _binary
     
+    @lark.v_args(inline=True)
+    def unary_exp(self, operator, value):
+        return ast.Unary(
+            operator=operator,
+            right=value,
+        )
+    
     def statements(self, children: t.List[Ast]):
         return ast.Script(tuple(find_children(children, ast.Stmt)))
 
@@ -183,6 +190,9 @@ class Transformer(lark.Transformer):
         return ast.EdgeIdentifier(
             name=edge
         )
+    
+    def paren_exp(self, children: t.List[Ast]):
+        return get_child(children, ast.Expr)
     
     def filter_exp(self, children: t.List[Ast]):
         (object, *arguments) = find_children(children, ast.Expr)

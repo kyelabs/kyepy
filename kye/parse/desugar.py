@@ -12,10 +12,10 @@ def token(type: ast.TokenType, value: t.Optional[str] = None):
 
 def literal(value: t.Union[int, float, str, bool]):
     type = None
-    if isinstance(value, (int, float)):
-        type = ast.TokenType.NUMBER
-    elif isinstance(value, bool):
+    if isinstance(value, bool):
         type = ast.TokenType.BOOLEAN
+    elif isinstance(value, (int, float)):
+        type = ast.TokenType.NUMBER
     elif isinstance(value, str):
         type = ast.TokenType.STRING
     else:
@@ -33,6 +33,33 @@ def assert_(expr: ast.Expr):
 
 def add_assertion(model: ast.Model, expr: ast.Expr):
     model.body.statements = model.body.statements + (assert_(expr),)
+
+def create_assertion(expr: ast.Expr, edge: str) -> t.Tuple[ast.Expr, str]:
+    """
+    Replace expressions within logical operators with equivalency
+        `"a"` => `edge == "a"`
+        `!a` => `edge != a`
+        `a & b` => `edge == a & edge == b`
+    """
+    if isinstance(expr, ast.Binary) and expr.operator.type.is_logical:
+        expr.left, left_type = create_assertion(expr.left, edge)
+        expr.right, right_type = create_assertion(expr.right, edge)
+        assert left_type == right_type
+        return expr, left_type
+    if isinstance(expr, ast.Unary) and expr.operator.type == ast.TokenType.NOT:
+        right, right_type = create_assertion(expr.right, edge)
+        return ast.Binary(
+            left=edge_identifier(edge),
+            operator=token(ast.TokenType.NE),
+            right=expr.right,
+        ), right_type
+    if isinstance(expr, ast.Literal):
+        return ast.Binary(
+            left=edge_identifier(edge),
+            operator=token(ast.TokenType.EQ),
+            right=expr,
+        ), expr.type
+    raise Exception(f'Unable to resolve assertion for {expr}')
 
 class Desugar(ast.Visitor):
     refs: t.Set[str]
@@ -87,13 +114,9 @@ class Desugar(ast.Visitor):
         edge_ast.expr = self.visit(edge_ast.expr)
         assert isinstance(edge_ast.expr, ast.Expr)
         if not isinstance(edge_ast.expr, ast.TypeIdentifier):
-            if isinstance(edge_ast.expr, ast.Literal):
-                add_assertion(self.model, ast.Binary(
-                    left=edge_identifier(edge_ast.name.lexeme),
-                    operator=token(ast.TokenType.EQ),
-                    right=edge_ast.expr,
-                ))
-                edge_ast.expr = type_identifier(edge_ast.expr.type)
+            assert_expr, expr_type = create_assertion(edge_ast.expr, edge_ast.name.lexeme)
+            add_assertion(self.model, assert_expr)
+            edge_ast.expr = type_identifier(expr_type)
         return edge_ast
 
     def visit_assert(self, assert_ast: ast.Assert):
@@ -121,6 +144,10 @@ class Desugar(ast.Visitor):
             if binary_ast.operator.type == ast.TokenType.NE:
                 return literal(left.value != right.value)
         return binary_ast
+
+    def visit_unary(self, unary_ast: ast.Unary):
+        unary_ast.right = self.visit(unary_ast.right)
+        return unary_ast
     
     def visit_type_identifier(self, type_ast: ast.TypeIdentifier):
         type_name = type_ast.name.lexeme

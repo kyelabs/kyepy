@@ -504,25 +504,24 @@
       errors:
         - col: [direct_const, alias_const]
           row: 2
-# - feature: Inline Enums
-#   schema: >
-#     Model(id) {
-#       id: Number
-#       inline_enum: "ENUM1" | "ENUM2" | "ENUM3"
-#     }
-#   tests:
-#     - test: inline enum
-#       debug: true
-#       data:
-#         Model:
-#           - id: 1
-#             inline_enum: "ENUM1"
-#           - id: 2
-#             inline_enum: "ENUM2"
-#           - id: 3
-#             inline_enum: "ENUM3"
-#           - id: 4
-#             inline_enum: "ENUM4"
-#       errors:
-#         - col: inline_enum
-#           row: 3
+- feature: Logical Constants
+  schema: >
+    Model(id) {
+      id: Number
+      inline_enum: ("ENUM1" | "ENUM2") & !"ENUM3"
+    }
+  tests:
+    - test: inline enum
+      data:
+        Model:
+          - id: 1
+            inline_enum: "ENUM1"
+          - id: 2
+            inline_enum: "ENUM2"
+          - id: 3
+            inline_enum: "ENUM3"
+          - id: 4
+            inline_enum: "ENUM4"
+      errors:
+        - col: inline_enum
+          row: [2, 3]

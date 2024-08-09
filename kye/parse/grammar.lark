@@ -63,7 +63,7 @@ UNARY_OP: "!" | "~"
           | literal
 
 ?atom_exp: identifier
-         | "(" exp ")"
+         | "(" exp ")"                              -> paren_exp
          | atom_exp "[" _comma_delimited{ exp } "]" -> filter_exp
          | atom_exp "(" _comma_delimited{ exp } ")" -> call_exp
          | atom_exp block                           -> select_exp
