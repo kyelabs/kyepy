@@ -62,16 +62,14 @@ def compile_assertion(model_name: str, assertion: typ.Assertion) -> Assertion:
         loc=str(assertion.loc) if assertion.loc else None
     )
 
-def compile_expr( expr: typ.Expr) -> t.Iterator[Cmd]:
-    if isinstance(expr, typ.Var):
-        yield Cmd(op=OP.COL, args=[ expr.name ])
-        return
-    assert expr.name.startswith('$')
-    op = OP[expr.name[1:].upper()]
+def compile_expr( cmd: typ.Cmd) -> t.Iterator[Cmd]:
     args = []
-    for arg in expr.args:
-        if isinstance(arg, typ.Const):
-            args.append(arg.value)
+    for arg in cmd.args:
+        if isinstance(arg, typ.Cmd):
+            if arg.op == OP.VAL:
+                args.append(arg.args[0])
+            else:
+                yield from compile_expr(arg)
         else:
-            yield from compile_expr(arg)
-    yield Cmd(op=op, args=args)
+            args.append(arg)
+    yield Cmd(op=cmd.op, args=args)

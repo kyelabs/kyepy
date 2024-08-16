@@ -3,88 +3,23 @@ import typing as t
 from dataclasses import dataclass
 from copy import deepcopy
 from functools import cached_property
-import enum
 
 import kye.parse.expressions as ast
 from kye.parse.expressions import Location
+from kye.vm.op import OP
 
-class Operator(enum.Enum):
-    SUB = '-'
-    ADD = '+'
-    MUL = '*'
-    DIV = '/'
-    MOD = '%'
-    INV = "~"
+Literal = t.Union[str, int, float, bool]
 
-    NOT = "!"
-    NE = "!="
-    EQ = "=="
-    GT = ">"
-    GE = ">="
-    LT = "<"
-    LE = "<="
-    
-    AND = "&"
-    OR = "|"
-    XOR = "^"
-    
-    IN = "in"
-    IS = "is"
-    
-    @property
-    def edge_name(self):
-        return '$' + self.name.lower()
-    
-    @property
-    def is_unary(self):
-        return self in (Operator.INV, Operator.NOT)
-    
-    @property
-    def is_mathematical(self):
-        return self in (Operator.SUB, Operator.ADD, Operator.MUL, Operator.DIV, Operator.MOD)
-    
-    @property
-    def is_comparison(self):
-        return self in (Operator.EQ, Operator.NE, Operator.GT, Operator.GE, Operator.LT, Operator.LE)
+class Cmd:
+    op: OP
+    args: t.Tuple[t.Union[Cmd,Literal], ...]
 
-class Expr:
-    name: str
-    args: t.Tuple[Expr, ...]
-
-    def __init__(self, name: str, args: t.Iterable[Expr]):
-        self.name = name
+    def __init__(self, op: OP, args: t.Iterable[t.Union[Cmd,Literal]]):
+        self.op = op
         self.args = tuple(args)
     
     def __repr__(self):
-        return f"{self.name}({', '.join(repr(arg) for arg in self.args)})"
-
-class Const(Expr):
-    value: t.Any
-
-    def __init__(self, value: t.Any):
-        super().__init__('const', [])
-        self.value = value
-
-    def __repr__(self):
-        return repr(self.value)
-
-class Var(Expr):
-    name: str
-
-    def __init__(self, name: str):
-        super().__init__('var', [])
-        self.name = name
-
-    def __repr__(self):
-        return f"Var({self.name!r})"
-
-class This(Expr):
-    def __init__(self):
-        super().__init__('this', [])
-
-    def __repr__(self):
-        return "This()"
-
+        return f"{self.op}({', '.join(repr(arg) for arg in self.args)})"
 
 class Indexes:
     tokens: t.Dict[str, t.List[ast.Token]]
@@ -123,12 +58,12 @@ class Edge:
     model: Type
     title: t.Optional[str]
     returns: t.Optional[Type]
-    expr: t.Optional[Expr]
+    expr: t.Optional[Cmd]
     loc: t.Optional[Location]
 
 @dataclass(frozen=True)
 class Assertion:
-    expr: Expr
+    expr: Cmd
     loc: t.Optional[Location]
 
 class Type:
@@ -137,7 +72,7 @@ class Type:
     parent: t.Optional[Type]
     edges: t.Dict[str, Edge]
     edge_order: t.List[str]
-    filters: t.List[Expr]
+    filters: t.List[Cmd]
     assertions: t.List[Assertion]
     
     def __init__(self, name: str, source: t.Optional[str], loc: t.Optional[Location] = None):

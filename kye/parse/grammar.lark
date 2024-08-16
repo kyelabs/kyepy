@@ -56,7 +56,7 @@ MULTIPLICATION_OP: "*" | "/" | "%"
 ADDITION_OP: "+" | "-"
 
 ?unary_exp: value_exp
-          | UNARY_OP value_exp
+          | UNARY_OP unary_exp
 UNARY_OP: "!" | "~"
 
 ?value_exp: atom_exp
@@ -75,6 +75,7 @@ identifier: TYPE FORMAT? -> type_identifier
 literal: NUMBER
        | STRING
        | BOOLEAN
+       | REGEX
 
 TYPE: /[A-Z]+[a-z][a-zA-Z0-9]*/
 EDGE: /[a-z_]+[a-z_A-Z0-9]*/
@@ -92,6 +93,7 @@ NUMBER: ["+"|"-"] (FLOAT | INT)
 BOOLEAN: "TRUE" | "FALSE"
 
 FORMAT: "<" /.*?/ ">"
+REGEX: "/" /.*?/ "/"
 
 %ignore WS
 %ignore COMMENT

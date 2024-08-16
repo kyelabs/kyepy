@@ -64,12 +64,12 @@ class Cardinality(enum.Enum):
 
 class TokenType(enum.Enum):
     # Single-character tokens.
-    LEFT_PAREN = "("
-    RIGHT_PAREN = ")"
-    LEFT_BRACE = "{"
-    RIGHT_BRACE = "}"
-    LEFT_SQUARE = "["
-    RIGHT_SQUARE = "]"
+    LPAREN = "("
+    RPAREN = ")"
+    LBRACE = "{"
+    RBRACE = "}"
+    LSQUARE = "["
+    RSQUARE = "]"
     COMMA = ","
     DOT = "."
     MINUS = "-"
@@ -98,6 +98,7 @@ class TokenType(enum.Enum):
     STRING = "STRING"
     NUMBER = "NUMBER"
     BOOLEAN = "BOOLEAN"
+    REGEX = "REGEX"
 
     # Keywords.
     NULL = "null"
@@ -219,6 +220,11 @@ class Literal(Expr):
         if self.token.type == TokenType.BOOLEAN:
             return 'Boolean'
         raise ValueError(f"Unknown literal type: {self.token.type}")
+
+@dataclass
+class Regex(Expr):
+    token: Token
+    pattern: str
 
 @dataclass
 class TypeIdentifier(Expr):

@@ -103,6 +103,8 @@ class VM:
             return args[0] % args[1]
         elif op == OP.CONCAT:
             return args[0] + args[1]
+        elif op == OP.MATCHES:
+            return args[0].str.contains(args[1], regex=True)
         elif op == OP.COUNT:
             return groupby_index(args[0]).nunique()
         else:

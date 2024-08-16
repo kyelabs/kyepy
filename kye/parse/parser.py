@@ -46,7 +46,7 @@ def get_token(nodes: t.List[Ast], type: ast.TokenType) -> ast.Token:
 
 def parse_token(token: lark.Token):
     token_type = None
-    if token.type in ('NUMBER', 'STRING', 'BOOLEAN', 'FORMAT', 'EDGE', 'TYPE'):
+    if token.type in ('NUMBER', 'STRING', 'BOOLEAN', 'FORMAT', 'EDGE', 'TYPE', 'REGEX'):
         token_type = ast.TokenType(token.type)
     else:
         token_type = ast.TokenType(token)
@@ -107,13 +107,13 @@ class Transformer(lark.Transformer):
 
     def block(self, children: t.List[Ast]):
         return ast.Block(
-            bracket=get_token(children, ast.TokenType.LEFT_BRACE),
+            bracket=get_token(children, ast.TokenType.LBRACE),
             statements=tuple(find_children(children, ast.Stmt)),
         )
     
     def index(self, children: t.List[Ast]):
         return ast.Index(
-            paren=get_token(children, ast.TokenType.LEFT_PAREN),
+            paren=get_token(children, ast.TokenType.LPAREN),
             names=tuple(find_tokens(children, ast.TokenType.EDGE)),
         )
 
@@ -126,6 +126,11 @@ class Transformer(lark.Transformer):
             value = token.lexeme == 'TRUE'
         elif token.type == ast.TokenType.STRING:
             value = token.lexeme[1:-1]
+        elif token.type == ast.TokenType.REGEX:
+            return ast.Regex(
+                token=token,
+                pattern=token.lexeme[1:-1],
+            )
         else:
             raise Exception(f'Unknown token type: {token.type}({token.lexeme})')
         return ast.Literal(
@@ -198,7 +203,7 @@ class Transformer(lark.Transformer):
         (object, *arguments) = find_children(children, ast.Expr)
         return ast.Filter(
             object=object,
-            bracket=get_token(children, ast.TokenType.LEFT_SQUARE),
+            bracket=get_token(children, ast.TokenType.LSQUARE),
             conditions=tuple(arguments),
         )
 
@@ -206,7 +211,7 @@ class Transformer(lark.Transformer):
         (callee, *arguments) = find_children(children, ast.Expr)
         return ast.Call(
             object=callee,
-            paren=get_token(children, ast.TokenType.LEFT_PAREN),
+            paren=get_token(children, ast.TokenType.LPAREN),
             arguments=tuple(arguments),
         )
     

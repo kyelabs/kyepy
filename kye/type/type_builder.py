@@ -5,7 +5,23 @@ import kye.parse.expressions as ast
 import kye.type.types as typ
 from kye.errors.compilation_errors import CompilationErrorReporter
 from kye.type.native_types import NATIVE_TYPES
+from kye.vm.op import OP
 
+TOKEN_TO_OP = {
+    ast.TokenType.PLUS: OP.ADD,
+    ast.TokenType.MINUS: OP.SUB,
+    ast.TokenType.STAR: OP.MUL,
+    ast.TokenType.SLASH: OP.DIV,
+    ast.TokenType.AND: OP.AND,
+    ast.TokenType.OR: OP.OR,
+    ast.TokenType.EQ: OP.EQ,
+    ast.TokenType.NE: OP.NE,
+    ast.TokenType.GT: OP.GT,
+    ast.TokenType.GE: OP.GE,
+    ast.TokenType.LT: OP.LT,
+    ast.TokenType.LE: OP.LE,
+    ast.TokenType.NOT: OP.NOT,
+}
 
 class TypeBuilder(ast.Visitor):
     """
@@ -79,7 +95,7 @@ class TypeBuilder(ast.Visitor):
         assert self.this is not None
         # assert typ.has_compatible_source(obj, self.this)
         expr = self.visit(assert_ast.expr)
-        assert isinstance(expr, typ.Expr)
+        assert isinstance(expr, typ.Cmd)
         assertion = typ.Assertion(
             expr=expr,
             loc=assert_ast.keyword.loc,
@@ -113,42 +129,52 @@ class TypeBuilder(ast.Visitor):
                 self.this[edge_name].expr is not None:
             return self.this[edge_name].expr
 
-        return typ.Var(edge_name)
+        return typ.Cmd(OP.COL, [edge_name])
     
     def visit_literal(self, literal_ast: ast.Literal):
-        return typ.Const(literal_ast.value)
+        return typ.Cmd(OP.VAL, [literal_ast.value])
     
     def visit_binary(self, binary_ast: ast.Binary):
         left = self.visit(binary_ast.left)
         right = self.visit(binary_ast.right)
-        if not isinstance(left, typ.Expr) or not isinstance(right, typ.Expr):
+        if not isinstance(left, typ.Cmd) or not isinstance(right, typ.Cmd):
             raise NotImplementedError('Binary operations not yet implemented for types')
-        op = typ.Operator(binary_ast.operator.lexeme).edge_name
-        return typ.Expr(op, (left, right))
+        
+        op = TOKEN_TO_OP[binary_ast.operator.type]
+        return typ.Cmd(op, (left, right))
 
     def visit_unary(self, unary_ast: ast.Unary):
         right = self.visit(unary_ast.right)
-        if not isinstance(typ.Expr, right):
+        if not isinstance(right, typ.Cmd):
             raise NotImplementedError('Unary operations not yet implemented for types')
-        return typ.Expr(unary_ast.operator.lexeme, (right,))
+        op = TOKEN_TO_OP[unary_ast.operator.type]
+        return typ.Cmd(op, (right,))
 
     def visit_get(self, get_ast: ast.Get):
-        obj = self.visit(get_ast.object)
-        edge = get_ast.name.lexeme
-        if isinstance(obj, typ.Type):
-            raise NotImplementedError('Get operations not yet implemented for types')
-        return typ.Expr(edge, (obj,))
+        # obj = self.visit(get_ast.object)
+        # edge = get_ast.name.lexeme
+        # if edge == 'matches':
+        #     return type.Cmd(OP.MATCHES, (obj, get_ast.))
+        # if isinstance(obj, typ.Type):
+        raise NotImplementedError('Get operations not yet implemented')
 
     def visit_call(self, call_ast: ast.Call):
         arguments = call_ast.arguments
         if isinstance(call_ast.object, (ast.TypeIdentifier, ast.EdgeIdentifier)):
             edge = call_ast.object.name.lexeme
-        elif isinstance(call_ast.object, ast.Get):
-            edge = call_ast.object.name.lexeme
-            arguments = (call_ast.object.object,) + arguments
+        # elif isinstance(call_ast.object, ast.Get):
+        #     edge = call_ast.object.name.lexeme
+        #     arguments = (call_ast.object.object,) + arguments
         else:
             raise NotImplementedError('cannot call an expression')
+
+        # Visit the arguments
         args = [self.visit(arg) for arg in arguments]
         if any(isinstance(arg, typ.Type) for arg in args):
             raise NotImplementedError('Call operations not yet implemented for types')
-        return typ.Expr(edge, args)
+
+        if edge == 'matches':
+            assert len(arguments) == 2
+            return typ.Cmd(OP.MATCHES, args)
+        
+        raise NotImplementedError('Call operations not yet implemented')

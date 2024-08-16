@@ -29,6 +29,9 @@ class OP(Enum):
     MUL =        auto(), 2, 'num'
     DIV =        auto(), 2, 'num'
     MOD =        auto(), 2, 'num'
+    
+    # string functions
+    MATCHES =    auto(), 2, 'str'
     CONCAT =     auto(), 2, 'str'
 
     # Aggregates

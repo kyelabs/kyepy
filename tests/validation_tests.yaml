@@ -525,3 +525,37 @@
       errors:
         - col: inline_enum
           row: [2, 3]
+- feature: Boolean Assertion
+  schema: >
+    Model(id) {
+      id: Number
+      bool: Boolean
+      assert bool
+      assert !!bool
+    }
+  tests:
+    - test: boolean assertion
+      debug: true
+      data:
+        Model:
+          - id: 1
+            bool: True
+- feature: Regex
+  schema: >
+    Model(id) {
+      id: Number
+      regex: /a+/
+    }
+  tests:
+    - test: regex
+      data:
+        Model:
+          - id: 1
+            regex: "a"
+          - id: 2
+            regex: "aa"
+          - id: 4
+            regex: "b"
+      errors:
+        - col: regex
+          row: 2

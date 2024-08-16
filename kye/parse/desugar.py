@@ -41,6 +41,15 @@ def create_assertion(expr: ast.Expr, edge: str) -> t.Tuple[ast.Expr, str]:
         `!a` => `edge != a`
         `a & b` => `edge == a & edge == b`
     """
+    if isinstance(expr, ast.Regex):
+        return ast.Call(
+            object=edge_identifier('matches'),
+            paren=token(ast.TokenType.LPAREN),
+            arguments=(
+                edge_identifier(edge),
+                literal(expr.pattern),
+            ),
+        ), 'String'
     if isinstance(expr, ast.Binary) and expr.operator.type.is_logical:
         expr.left, left_type = create_assertion(expr.left, edge)
         expr.right, right_type = create_assertion(expr.right, edge)
@@ -163,3 +172,6 @@ class Desugar(ast.Visitor):
     
     def visit_literal(self, literal_ast: ast.Literal):
         return literal_ast
+
+    def visit_regex(self, regex_ast: ast.Regex):
+        return regex_ast
