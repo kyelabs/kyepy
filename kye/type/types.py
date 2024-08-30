@@ -22,23 +22,16 @@ class Cmd:
         return f"{self.op}({', '.join(repr(arg) for arg in self.args)})"
 
 class Indexes:
-    tokens: t.Dict[str, t.List[ast.Token]]
-    sets: t.List[t.Tuple]
+    sets: t.List[t.Tuple[str, ...]]
     edges: t.List[str]
     
-    def __init__(self, indexes: t.Iterable[ast.Index]):
-        self.ast = {}
+    def __init__(self, indexes: t.Iterable[t.Iterable[str]]):
         self.sets = []
         edges = set()
 
         for index in indexes:
-            items = tuple(token.lexeme for token in index.names)
-            self.sets.append(items)
-            for token in index.names:
-                if not token.lexeme in self.ast:
-                    self.ast[token.lexeme] = []
-                self.ast[token.lexeme].append(token)
-                edges.add(token.lexeme)
+            self.sets.append(tuple(index))
+            edges.update(index)
         
         self.edges = sorted(edges)
     

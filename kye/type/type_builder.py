@@ -52,7 +52,10 @@ class TypeBuilder(ast.Visitor):
         model = typ.Model(
             name=model_ast.name.lexeme,
             source=model_ast.name.lexeme,
-            indexes=typ.Indexes(model_ast.indexes),
+            indexes=typ.Indexes([
+                [index.lexeme for index in index_ast.names]
+                for index_ast in model_ast.indexes
+            ]),
             loc=model_ast.name.loc,
         )
         self.define(model)
@@ -72,7 +75,10 @@ class TypeBuilder(ast.Visitor):
         edge = typ.Edge(
             name=edge_ast.name.lexeme,
             title=edge_ast.title,
-            indexes=typ.Indexes(edge_ast.params),
+            indexes=typ.Indexes([
+                [index.lexeme for index in index_ast.names]
+                for index_ast in edge_ast.params
+            ]),
             allows_null=edge_ast.cardinality.allows_null,
             allows_many=edge_ast.cardinality.allows_many,
             model=self.this,
