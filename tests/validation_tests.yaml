@@ -142,6 +142,11 @@
       errors:
         - err: InvalidType
           col: id
+    - test: string to number
+      data:
+        User:
+          - id: "1"
+            admin: false
     - test: not a Boolean
       data:
         User:

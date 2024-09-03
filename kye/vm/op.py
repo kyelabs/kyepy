@@ -1,3 +1,5 @@
+from __future__ import annotations
+import typing as t
 from enum import Enum, auto
 
 class OP(Enum):
@@ -6,7 +8,7 @@ class OP(Enum):
     VAL =        auto(), 1, 'any' # Load constant
 
     # Type conversion
-    STR =        auto(), 1 # Convert to string
+    CAST =        auto(), 2, 'str' # Convert to type
 
     # Unary
     NA =         auto(), 1
@@ -69,7 +71,7 @@ class OP(Enum):
                 raise ValueError(f'Invalid signature: {sig_arg}')
         return True
 
-def parse_command(cmd) -> tuple[OP, list]:
+def parse_command(cmd: t.Any) -> tuple[OP, list]:
     op = None
     args = []
     if isinstance(cmd, str):

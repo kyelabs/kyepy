@@ -7,10 +7,25 @@
           "expr": [
             { "len": null }
           ]
+        },
+        "Number": {
+          "type": "Number",
+          "expr": [
+            { "cast": "float" }
+          ]
         }
       }
     },
-    "Number": {},
+    "Number": {
+      "edges": {
+        "String": {
+          "type": "String",
+          "expr": [
+            { "cast": "str" }
+          ]
+        }
+      }
+    },
     "Boolean": {}
   },
   "models": {}

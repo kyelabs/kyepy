@@ -12,5 +12,8 @@ class KyeRuntimeError(RuntimeError):
         super().__init__(message)
         self.token = token
 
+class KyeValueError(ValueError):
+    pass
+
 class ParserError(Exception):
     pass

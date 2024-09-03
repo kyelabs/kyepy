@@ -5,6 +5,7 @@ import numpy as np
 
 from kye.vm.op import OP
 from kye.compiled import Cmd
+from kye.errors.exceptions import KyeValueError
 
 class Stack:
     def __init__(self):
@@ -63,8 +64,11 @@ class VM:
             return self.get_column(args[0])
         if op == OP.VAL:
             return pd.Series(args[0], index=self.df.index)
-        elif op == OP.STR:
-            return args[0].astype(str)
+        elif op == OP.CAST:
+            try:
+                return args[0].astype(args[1])
+            except ValueError as e:
+                raise KyeValueError(f'Failed to cast column: {e}')
         elif op == OP.NA:
             return args[0].isnull()
         elif op == OP.DEF:
