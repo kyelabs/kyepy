@@ -16,7 +16,7 @@ def compile(types: typ.Types) -> Compiled:
             else:
                 compile_type(type)
 
-    return Compiled(models=models)
+    return Compiled(types={},models=models)
 
 def compile_model(type: typ.Model) -> Model:
     return Model(

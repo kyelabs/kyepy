@@ -7,7 +7,7 @@ from kye.errors.base_reporter import ErrorReporter
 
 if t.TYPE_CHECKING:
     from kye.parse.expressions import Token
-    import kye.compiled as compiled
+    import kye.compiled as c
 
 def get_line_pos(source: str, pos: int) -> t.Tuple[int, int, int]:
     line_num = source[:pos].count("\n") + 1

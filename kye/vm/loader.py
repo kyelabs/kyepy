@@ -8,7 +8,7 @@ import pandas as pd
 
 from kye.errors.validation_errors import ValidationErrorReporter
 from kye.vm.op import OP, parse_command
-import kye.compiled as compiled
+import kye.compiled as c
 from kye.vm.vm import VM
 
 Expr = t.List[tuple[OP, list]]
@@ -21,12 +21,12 @@ def hash_columns(df: pd.DataFrame) -> pd.Series:
 class Loader:
     reporter: ValidationErrorReporter
     tables: t.Dict[str, pd.DataFrame]
-    sources: compiled.Compiled
+    sources: c.Compiled
     
-    def __init__(self, compiled: compiled.Compiled, reporter: ValidationErrorReporter):
+    def __init__(self, compiled: c.Compiled, reporter: ValidationErrorReporter):
         self.reporter = reporter
         self.tables = {}
-        self.sources = compiled
+        self.sources = c.native_types() | compiled
     
     def load(self, source_name: str, df: pd.DataFrame):
         if source_name in self.tables:
@@ -42,6 +42,7 @@ class Loader:
         # Check if is a known model
         assert source_name in self.sources, f"Source '{source_name}' not found"
         source = self.sources[source_name]
+        assert isinstance(source, c.Model), f"Source '{source_name}' is not a model"
         
         # Conform the table columns to our model edges
         #   - rename columns that use titles
@@ -182,7 +183,7 @@ class Loader:
     def get_source(self, source: str):
         return self.sources[source]
     
-    def matches_dtype(self, edge: compiled.Edge, col: pd.Series) -> bool:
+    def matches_dtype(self, edge: c.Edge, col: pd.Series) -> bool:
         col = col.explode().dropna().infer_objects()
         if col.empty:
             return True

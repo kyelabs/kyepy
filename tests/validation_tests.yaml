@@ -535,7 +535,6 @@
     }
   tests:
     - test: boolean assertion
-      debug: true
       data:
         Model:
           - id: 1

@@ -1,0 +1,17 @@
+{
+  "types": {
+    "String": {
+      "edges": {
+        "length": {
+          "type": "Number",
+          "expr": [
+            { "len": null }
+          ]
+        }
+      }
+    },
+    "Number": {},
+    "Boolean": {}
+  },
+  "models": {}
+}

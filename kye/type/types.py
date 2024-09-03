@@ -68,7 +68,11 @@ class Type:
     filters: t.List[Cmd]
     assertions: t.List[Assertion]
     
-    def __init__(self, name: str, source: t.Optional[str], loc: t.Optional[Location] = None):
+    def __init__(self,
+                 name: str,
+                 source: t.Optional[str],
+                 loc: t.Optional[Location] = None
+                 ):
         self.name = name
         self.source = source
         self.loc = loc
@@ -119,7 +123,12 @@ class Model(Type):
     source: str
     indexes: Indexes
     
-    def __init__(self, name, source, indexes, loc=None):
+    def __init__(self,
+                 name: str,
+                 source: str,
+                 indexes: Indexes,
+                 loc: t.Optional[Location]=None
+                 ):
         assert source is not None, "Model source must not be None"
         super().__init__(name, source, loc)
         self.indexes = indexes

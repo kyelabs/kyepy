@@ -7,7 +7,7 @@ import pandas as pd
 from kye.errors.base_reporter import ErrorReporter
 
 if t.TYPE_CHECKING:
-    import kye.compiled as compiled
+    import kye.compiled as c
 
 @dataclass
 class Error:
@@ -49,7 +49,7 @@ class ValidationErrorReporter(ErrorReporter):
     def had_error(self):
         return len(self.errors) > 0
 
-    def wrong_type(self, edge: compiled.Edge):
+    def wrong_type(self, edge: c.Edge):
         self.errors.append(Error(
             err='InvalidType',
             model=edge.model,
@@ -59,7 +59,7 @@ class ValidationErrorReporter(ErrorReporter):
             expected=edge.type,
         ))
     
-    def multiple_values(self, edge: compiled.Edge, rows: t.List[int]):
+    def multiple_values(self, edge: c.Edge, rows: t.List[int]):
         self.errors.append(Error(
             err='MultipleValues',
             model=edge.model,
@@ -68,7 +68,7 @@ class ValidationErrorReporter(ErrorReporter):
             loc=edge.loc,
         ))
     
-    def missing_values(self, edge: compiled.Edge, rows: t.List[int]):
+    def missing_values(self, edge: c.Edge, rows: t.List[int]):
         self.errors.append(Error(
             err='MissingValue',
             model=edge.model,
@@ -77,7 +77,7 @@ class ValidationErrorReporter(ErrorReporter):
             loc=edge.loc,
         ))
     
-    def assertion_failed(self, assertion: compiled.Assertion, rows: t.List[int]):
+    def assertion_failed(self, assertion: c.Assertion, rows: t.List[int]):
         self.errors.append(Error(
             err='AssertionFailed',
             model=assertion.model,
@@ -87,7 +87,7 @@ class ValidationErrorReporter(ErrorReporter):
             expected=assertion.msg,
         ))
     
-    def missing_index(self, edge: compiled.Edge):
+    def missing_index(self, edge: c.Edge):
         self.errors.append(Error(
             err='MissingIndex',
             model=edge.model,
@@ -96,7 +96,7 @@ class ValidationErrorReporter(ErrorReporter):
             loc=edge.loc,
         ))
     
-    def non_unique_sub_index(self, model: compiled.Model, sub_idx_edges: t.List[str], rows: t.List[int]):
+    def non_unique_sub_index(self, model: c.Model, sub_idx_edges: t.List[str], rows: t.List[int]):
         self.errors.append(Error(
             err='NonUniqueSubIndex',
             model=model.name,
@@ -105,7 +105,7 @@ class ValidationErrorReporter(ErrorReporter):
             loc=model.loc,
         ))
     
-    def index_conflict(self, model: compiled.Model, sub_idx_edges: t.List[str], rows: t.List[int]):
+    def index_conflict(self, model: c.Model, sub_idx_edges: t.List[str], rows: t.List[int]):
         self.errors.append(Error(
             err='IndexConflict',
             model=model.name,
