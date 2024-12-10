@@ -155,14 +155,14 @@ class Loader:
             col = df[col_name]
             edge = model[col_name]
             g = col.explode().dropna().groupby(level=0)
-            if not edge.many or not edge.null:
+            if not edge.many or not edge.none:
                 nunique = g.nunique().reindex(grouped_df.index, fill_value=0)
                 if not edge.many:
                     has_many = nunique > 1
                     if has_many.any():
                         mask &= ~has_many
                         self.reporter.multiple_values(model[col_name], reversed_idx.loc[has_many].tolist())
-                if not edge.null:
+                if not edge.none:
                     is_null = nunique == 0
                     if is_null.any():
                         mask &= ~is_null

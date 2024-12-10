@@ -6,10 +6,10 @@ import kye.parse.expressions as ast
 
 NATIVE_TYPES: typ.Types = {}
 
-def edge(output, allows_null=False, allows_many=False):
+def edge(output, allows_none=False, allows_many=False):
     def edge_wrapper(fn):
         fn.__edge__ = {
-            'allows_null': allows_null,
+            'allows_none': allows_none,
             'allows_many': allows_many,
             'output': output,
         }
@@ -32,7 +32,7 @@ class NativeType:
                     name=name,
                     title=None,
                     indexes=typ.Indexes([]),
-                    allows_null=edge_attr['allows_null'],
+                    allows_none=edge_attr['allows_none'],
                     allows_many=edge_attr['allows_many'],
                     model=this,
                     returns=NATIVE_TYPES[edge_attr['output']],

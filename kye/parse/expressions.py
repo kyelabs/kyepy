@@ -55,7 +55,7 @@ class Cardinality(enum.Enum):
     MORE = '+'
     
     @property
-    def allows_null(self):
+    def allows_none(self):
         return self in (Cardinality.MAYBE, Cardinality.MANY)
     
     @property

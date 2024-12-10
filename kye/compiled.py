@@ -71,7 +71,7 @@ class Assertion:
 class Edge():
     model: str
     name: str
-    null: bool
+    none: bool
     many: bool
     type: str
     title: t.Optional[str]
@@ -84,7 +84,7 @@ class Edge():
             model=model,
             name=name,
             title=data.get('title'),
-            null=data.get('null', False),
+            none=data.get('none', False),
             many=data.get('many', False),
             type=data['type'],
             expr=[
@@ -107,8 +107,8 @@ class Edge():
             ]
         if self.many:
             data['many'] = True
-        if self.null:
-            data['null'] = True
+        if self.none:
+            data['none'] = True
         if self.loc:
             data['loc'] = str(self.loc)
         return data
@@ -116,12 +116,12 @@ class Edge():
     @cached_property
     def cardinality(self) -> str:
         if self.many:
-            if self.null:
+            if self.none:
                 return 'many'
             else:
                 return 'more'
         else:
-            if self.null:
+            if self.none:
                 return 'maybe'
             else:
                 return 'one'

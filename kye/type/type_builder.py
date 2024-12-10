@@ -79,7 +79,7 @@ class TypeBuilder(ast.Visitor):
                 [index.lexeme for index in index_ast.names]
                 for index_ast in edge_ast.params
             ]),
-            allows_null=edge_ast.cardinality.allows_null,
+            allows_none=edge_ast.cardinality.allows_none,
             allows_many=edge_ast.cardinality.allows_many,
             model=self.this,
             returns=returns,

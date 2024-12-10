@@ -46,7 +46,7 @@ class Indexes:
 class Edge:
     name: str
     indexes: Indexes
-    allows_null: bool
+    allows_none: bool
     allows_many: bool
     model: Type
     title: t.Optional[str]

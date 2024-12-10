@@ -50,7 +50,7 @@ def compile_edge(model_name: str, edge: typ.Edge) -> Edge:
         type=type_name,
         expr=list(compile_expr(edge.expr)) if edge.expr else None,
         many=edge.allows_many,
-        null=edge.allows_null,
+        none=edge.allows_none,
         loc=str(edge.loc) if edge.loc else None
     )
 
