@@ -195,9 +195,17 @@ class Model():
     
     @staticmethod
     def from_dict(model_name: str, data: dict) -> Model:
+        indexes = data.get('indexes', [])
+        if 'index' in data:
+            indexes = [ data['index'] ]
+        indexes = [
+            [ edge ] if isinstance(edge, str) else edge
+            for edge in indexes
+        ]
+        
         return Model(
             name=model_name,
-            indexes=data['indexes'],
+            indexes=indexes,
             edges={
                 edge_name: Edge.from_dict(model_name, edge_name, edge)
                 for edge_name, edge in data['edges'].items()
@@ -209,14 +217,25 @@ class Model():
             loc=data.get('loc')
         )
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict:        
+        indexes: t.List[t.Union[str, t.List[str]]] = [
+            edge if len(edge) > 1 else edge[0]
+            for edge in self.indexes
+        ]
+        
         compiled = {
-            'indexes': self.indexes,
+            'index': indexes[0],
+            'indexes': indexes,
             'edges': {
                 edge.name: edge.to_dict()
                 for edge in self.edges.values()
-            },
+            }
         }
+        if len(indexes) == 1:
+            del compiled['indexes']
+        else:
+            del compiled['index']
+        
         if len(self.assertions) > 0:
             compiled['assertions'] = [
                 assertion.to_dict()
