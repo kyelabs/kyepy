@@ -130,6 +130,7 @@ class Edge():
 class Type():
     name: str
     parent: t.Optional[str]
+    format: t.Optional[str]
     conditions: t.Optional[Expr]
     edges: t.Dict[str, Edge]
     assertions: t.List[Assertion]
@@ -140,6 +141,7 @@ class Type():
         return Type(
             name=name,
             parent=data.get('parent'),
+            format=data.get('format'),
             conditions=[
                 Cmd.from_dict(cmd)
                 for cmd in data['conditions']
@@ -159,6 +161,8 @@ class Type():
         compiled = {}
         if self.parent:
             compiled['parent'] = self.parent
+        if self.format:
+            compiled['format'] = self.format
         if self.conditions:
             compiled['conditions'] = [
                 condition.to_dict()
@@ -252,11 +256,23 @@ class Model():
             for edge in index:
                 index_edges.add(edge)
         return list(index_edges)
+    
+    @cached_property
+    def edge_titles(self) -> t.Dict[str, str]:
+        return {
+            edge.title: edge
+            for edge in self.edges.values()
+            if edge.title
+        }
 
     def __getitem__(self, key: str) -> Edge:
+        if key in self.edge_titles:
+            return self.edge_titles[key]
         return self.edges[key]
     
     def __contains__(self, key: str) -> bool:
+        if key in self.edge_titles:
+            return True
         return key in self.edges
 
 @dataclass(frozen=True)
